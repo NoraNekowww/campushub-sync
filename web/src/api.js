@@ -35,10 +35,17 @@ export function setToken(value) {
 }
 
 export class ApiError extends Error {
-  constructor(message, status) {
+  /**
+   * `detail` keeps the structured body FastAPI sent, when there was one: the
+   * 教务 / 微北洋 import routes answer `{kind, message, detail, status}` so the
+   * caller can branch (e.g. `kind === 'captcha'` → 让用户手填一张图) instead of
+   * having to parse Chinese prose out of the message.
+   */
+  constructor(message, status, detail = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.detail = detail
   }
 }
 
@@ -62,30 +69,34 @@ async function request(path, { method = 'GET', body, headers = {}, raw = false }
     body: body ? (isForm ? body : JSON.stringify(body)) : undefined,
   })
 
-  if (response.status === 401 || response.status === 403) {
-    let detail = '需要登录或访问令牌'
+  /**
+   * FastAPI's `detail` is either a plain string or a richer object/dict — the
+   * 教务 import routes use `{kind, message, detail, status}`. Surface both so a
+   * caller can show `error.message` and still branch on `error.detail.kind`.
+   */
+  async function readError(fallback) {
+    let message = fallback
+    let structured = null
     try {
       const payload = await response.json()
-      if (typeof payload.detail === 'string') detail = payload.detail
+      structured = payload?.detail ?? null
+      if (typeof structured === 'string') message = structured
+      else if (Array.isArray(structured)) {
+        message = structured.map((item) => item?.msg || JSON.stringify(item)).join('；')
+      } else if (structured && typeof structured === 'object') {
+        message = structured.message || structured.detail || JSON.stringify(structured)
+      } else if (structured != null) message = String(structured)
     } catch (error) {
-      /* keep default */
+      /* keep the fallback text */
     }
-    throw new ApiError(detail, response.status)
+    return new ApiError(message, response.status, structured)
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    throw await readError('需要登录或访问令牌')
   }
   if (!response.ok) {
-    let detail = response.statusText
-    try {
-      const payload = await response.json()
-      detail =
-        typeof payload.detail === 'string'
-          ? payload.detail
-          : Array.isArray(payload.detail)
-            ? payload.detail.map((item) => item.msg || JSON.stringify(item)).join('；')
-            : JSON.stringify(payload.detail)
-    } catch (error) {
-      /* keep statusText */
-    }
-    throw new ApiError(detail, response.status)
+    throw await readError(response.statusText)
   }
   if (raw) return response
   if (response.status === 204) return null
@@ -148,4 +159,10 @@ export const api = {
   tjuServerSync: () => request('/tju/sync', { method: 'POST' }),
   tjuImport: (payload) => request('/tju/import', { method: 'POST', body: payload }),
   tjuClearImport: () => request('/tju/import', { method: 'DELETE' }),
+  /* --------------------------------------------- 教务系统（CAS 直连，主路径）*/
+  jwStatus: () => request('/tju/jw/status'),
+  jwImport: (payload) => request('/tju/jw/import', { method: 'POST', body: payload }),
+  jwCaptcha: () => request('/tju/jw/captcha', { method: 'POST' }),
+  jwRefresh: () => request('/tju/jw/refresh', { method: 'POST' }),
+  jwForget: () => request('/tju/jw/credentials', { method: 'DELETE' }),
 }

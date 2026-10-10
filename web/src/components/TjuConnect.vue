@@ -2,14 +2,7 @@
   <div class="space-y-3 border-t border-slate-100 pt-3 dark:border-slate-800" data-testid="tju-connect">
     <header class="flex flex-wrap items-center gap-2">
       <GraduationCap :size="14" class="text-brand-600 dark:text-brand-400" />
-      <h3 class="text-xs font-semibold">课表导入（微北洋）</h3>
-      <span
-        v-if="hasLocalToken"
-        class="chip border-transparent bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300"
-        title="令牌存在这台设备的 localStorage 里，可用「高级」里的「忘记本机登录」清除"
-      >
-        本机已记住登录
-      </span>
+      <h3 class="text-xs font-semibold">课表导入（教务系统）</h3>
       <span
         class="chip border-transparent"
         :class="
@@ -20,15 +13,46 @@
       >
         {{ imported ? `已导入 ${meta.courses ?? 0} 门课` : '未导入' }}
       </span>
-      <span v-if="credentials.has_token" class="chip border-transparent bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">
-        凭据 {{ credentials.token_hint || '已保存' }}
+      <span
+        v-if="jw.credentials_saved"
+        class="chip border-transparent bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300"
+        title="服务器上保存了教务凭据，用来免密刷新课表；可在「高级」里删除"
+      >
+        教务凭据已存服务器
+      </span>
+      <span
+        v-if="hasLocalToken"
+        class="chip border-transparent bg-slate-100 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300"
+        title="本机还留着微北洋令牌，可用「高级」里的「忘记本机登录」清除"
+      >
+        本机有微北洋令牌
       </span>
     </header>
 
     <p class="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-      <b>校园网内点一次下面的按钮就行。</b>登录发生在你面前的浏览器里，密码不会上传到服务器；
-      本机只记住微北洋返回的令牌（可随时清除），所以之后不必再输密码。
+      <b>填「学号 + 教务系统密码」点一次就行。</b>这条链路在服务器上直连教务系统
+      （<code>sso.tju.edu.cn</code> 统一身份认证 → <code>classes.tju.edu.cn/eams</code>，公网可达，
+      <b>不需要待在校园网里</b>）：验证码服务器先替你识别，认不出来时才让你手填一张图。
+      密码会保存在服务器上用于以后自动刷新课表，随时可以在「高级」里删掉。
     </p>
+
+    <div class="grid grid-cols-2 gap-2">
+      <input
+        v-model="form.username"
+        class="input text-xs"
+        data-testid="jw-account"
+        placeholder="学号"
+        autocomplete="username"
+      />
+      <input
+        v-model="form.password"
+        class="input text-xs"
+        type="password"
+        data-testid="jw-password"
+        placeholder="教务系统密码"
+        autocomplete="current-password"
+      />
+    </div>
 
     <button
       class="btn-primary w-full !py-2 text-sm"
@@ -40,17 +64,69 @@
       {{ busy ? '正在导入…' : imported ? '更新课表（一键）' : '一键导入课表' }}
     </button>
 
+    <!-- 服务器 OCR 没认出验证码时，才让用户手填一次 -->
+    <div
+      v-if="captcha.image"
+      class="space-y-2 rounded-xl bg-amber-50 p-2.5 dark:bg-amber-500/10"
+      data-testid="jw-captcha"
+    >
+      <p class="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
+        教务系统这次要求人工验证码（服务器自动识别没通过）。照着下图填，再点「提交并导入」：
+      </p>
+      <div class="flex items-center gap-2">
+        <img
+          :src="captcha.image"
+          alt="教务系统验证码"
+          class="h-[52px] rounded border border-amber-200 bg-white"
+          data-testid="jw-captcha-img"
+        />
+        <input
+          v-model="captcha.code"
+          class="input w-24 text-center font-mono text-sm"
+          maxlength="6"
+          placeholder="4 位字符"
+          data-testid="jw-captcha-code"
+        />
+        <button class="btn-primary !py-1.5 text-xs" :disabled="busy" @click="submitCaptcha">
+          提交并导入
+        </button>
+      </div>
+    </div>
+
     <!-- ------------------------------------------------ advanced / escape hatches -->
     <details class="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/50">
-      <summary class="cursor-pointer text-[11px] font-semibold">高级：凭据 / 令牌 / 服务器抓取 / 清除</summary>
+      <summary class="cursor-pointer text-[11px] font-semibold">
+        高级：微北洋直连 / 教务凭据 / 粘贴导入 / 清除
+      </summary>
+
+      <!-- -------------------------------------- 兜底 ①：校园网里浏览器直连微北洋 -->
+      <div class="mt-2 space-y-2 rounded-xl bg-white p-2.5 dark:bg-slate-900/40">
+        <p class="label">兜底 ①：校园网里用本机浏览器直连微北洋</p>
+        <p class="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+          微北洋接口只对校园网开放，而且这是跨站请求（浏览器 CORS 会拦），官方
+          <code>get_classes</code> 现在还会对所有账号回「学期解析失败」——所以只当兜底。
+          密码只留在本机页面内存里，不上传服务器。
+        </p>
+        <button
+          class="btn-ghost !py-1.5 text-xs"
+          data-testid="tju-mw-oneclick"
+          :disabled="busy"
+          @click="mwOneClick"
+        >
+          <Globe :size="13" /> 浏览器直连微北洋（一键）
+        </button>
+        <p v-if="hasLocalToken" class="text-[11px] text-slate-400">
+          本机已记住微北洋令牌，点上面这个按钮连密码都不用填。
+        </p>
+      </div>
 
       <div class="mt-2 space-y-2">
         <!-- ------------------------------------------------------- credentials -->
         <div class="space-y-2 rounded-xl bg-white p-2.5 dark:bg-slate-900/40">
-          <p class="label">服务器上的凭据（可选：让服务器替你试一次）</p>
+          <p class="label">兜底 ②：把微北洋凭据存在服务器上（可选，让服务器替你试一次）</p>
           <div class="grid grid-cols-2 gap-2">
             <input v-model="form.username" class="input text-xs" data-testid="tju-account" placeholder="学号（如 30212xxxxx）" autocomplete="username" />
-            <input v-model="form.password" class="input text-xs" type="password" placeholder="微北洋密码" autocomplete="current-password" />
+            <input v-model="form.password" class="input text-xs" type="password" placeholder="微北洋密码（注意：教务密码是上面那个框）" autocomplete="current-password" />
           </div>
           <div class="flex flex-wrap gap-2">
             <button class="btn-ghost !py-1.5 text-xs" data-testid="tju-save-credentials" :disabled="busy" @click="savePassword">
@@ -62,8 +138,11 @@
             <button v-if="hasLocalToken" class="btn-ghost !py-1.5 text-xs" :disabled="busy" @click="forgetLocalToken">
               <Trash2 :size="13" /> 忘记本机登录
             </button>
+            <button v-if="jw.credentials_saved" class="btn-ghost !py-1.5 text-xs" data-testid="jw-forget" :disabled="busy" @click="forgetJwCredentials">
+              <Trash2 :size="13" /> 删除教务凭据（服务器）
+            </button>
             <button v-if="credentials.has_token" class="btn-ghost !py-1.5 text-xs" :disabled="busy" @click="forgetCredentials">
-              <Trash2 :size="13" /> 删除服务器凭据
+              <Trash2 :size="13" /> 删除微北洋凭据
             </button>
           </div>
           <div v-if="showToken" class="flex gap-2">
@@ -102,7 +181,7 @@
 
     <!-- ------------------------------------------------------------- manual -->
     <details class="rounded-xl bg-slate-50 p-2.5 text-[11px] dark:bg-slate-800/50">
-      <summary class="cursor-pointer font-semibold">手动兜底（浏览器拦截 / CORS 时用）</summary>
+      <summary class="cursor-pointer font-semibold">手动兜底（微北洋：浏览器拦截 / CORS 时用）</summary>
       <ol class="mt-2 list-decimal space-y-1.5 pl-4 text-slate-600 dark:text-slate-300">
         <li>
           复制登录链接并在校园网内打开，页面会返回 JSON；把其中的 <code>token</code>
@@ -133,6 +212,10 @@
     <p v-if="meta.updated_at" class="text-[11px] text-slate-400">
       接口数据时间：{{ meta.updated_at }} · 学期码 {{ meta.term || '—' }} · 第一周周一 {{ meta.term_start || '—' }}
     </p>
+    <p v-if="jw.last_import?.at" class="text-[11px] text-slate-400" data-testid="jw-last-import">
+      教务最近一次导入：{{ jw.last_import.at }} · {{ jw.last_import.courses ?? 0 }} 门课 /
+      {{ jw.last_import.slots ?? 0 }} 个时段<template v-if="jw.credentials_saved"> · 凭据已存服务器</template>
+    </p>
   </div>
 </template>
 
@@ -141,7 +224,10 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { Globe, GraduationCap, LogIn, RefreshCw, Server, Trash2, Upload } from 'lucide-vue-next'
 import { api } from '../api'
 import {
+  forgetJw,
+  jwImport,
   loadConfig,
+  loadJwStatus,
   notify,
   readTjuToken,
   rememberTjuToken,
@@ -172,6 +258,10 @@ const snippet = ref('')
 const localToken = ref(readTjuToken())
 
 const form = reactive({ username: '', password: '', token: '' })
+/* 服务器上的教务凭据状态（credentials_saved / username / last_import），来自 /tju/jw/status。 */
+const jw = ref({})
+/* 教务系统的图形验证码：服务器 OCR 认不出来时才用得上。 */
+const captcha = reactive({ image: '', code: '', id: '' })
 
 const credentials = computed(() => props.tju?.credentials || {})
 const meta = computed(() => props.tju?.import_meta || {})
@@ -180,6 +270,7 @@ const hasLocalToken = computed(() => Boolean(localToken.value))
 
 onMounted(async () => {
   localToken.value = readTjuToken()
+  await loadJwMeta()
   try {
     loginUrlPreview.value = await signedUrl('/v1/auth/token/get', { twtuname: '<学号>', twtpasswd: '<密码>' })
   } catch (error) {
@@ -201,13 +292,139 @@ async function refreshConfig() {
   await loadConfig()
 }
 
-/* ------------------------------------------------- 一键导入（主路径）*/
+/* --------------------------------------- 一键导入（主路径：教务系统 CAS）*/
+
+/** 读一次「服务器上有没有教务凭据 / 上次导入结果」（响应里永远没有密码）。 */
+async function loadJwMeta() {
+  const info = await loadJwStatus()
+  jw.value = info?.detail || {}
+  return jw.value
+}
+
+/** 服务器 OCR 没认出验证码时，取一张真图让用户手填。 */
+async function loadCaptchaImage() {
+  try {
+    const info = await api.jwCaptcha()
+    captcha.image = info?.detail?.image || ''
+    captcha.id = info?.detail?.captcha_id || ''
+    captcha.code = ''
+  } catch (error) {
+    say(`验证码拉不下来：${error?.message || '未知错误'}`, 'danger')
+  }
+}
+
+/** 把教务链路的报错翻成人话，并区分「要验证码」和「账号密码错」。 */
+async function reportJwError(error) {
+  const detail = error?.detail || {}
+  const kind = detail.kind || ''
+  if (kind === 'captcha') {
+    say('教务系统要求验证码：服务器自动识别没通过，下面这张图填一下就能继续。', 'warn')
+    await loadCaptchaImage()
+    return
+  }
+  if (kind === 'auth_required') {
+    say('学号或密码不对 —— 这里要的是「教务系统 / 统一身份认证」的密码，不是微北洋的。', 'danger')
+    return
+  }
+  say(detail.message || error?.message || '导入失败', 'danger')
+}
+
+/**
+ * 一次点击走完：服务器登录教务系统（CAS）→ 抓课表 → 导入 → 同步。
+ * 不依赖校园网、不需要本机令牌。要人工验证码时把图显示出来，填完点「提交并导入」。
+ */
+async function oneClick() {
+  const username = form.username.trim()
+  if (!username || !form.password) {
+    say('先填「学号 + 教务系统密码」（教务系统 = 统一身份认证那套，不是微北洋密码），再点这个按钮。', 'warn')
+    return
+  }
+  busy.value = true
+  status.value = ''
+  captcha.image = ''
+  captcha.code = ''
+  try {
+    say('① 正在服务器上登录教务系统…', 'warn')
+    const result = await jwImport({
+      username,
+      password: form.password,
+      save: true,
+      run_sync: true,
+      via: 'cas',
+      week: props.semester?.current_week || null,
+    })
+    const info = result?.detail?.import || {}
+    say(result?.message || `已导入 ${info.courses || 0} 门课`, 'ok')
+    notify(result?.message || '课表已导入', 'ok')
+    if (result?.detail?.warning) say(`${result.message}｜${result.detail.warning}`, 'warn')
+    form.password = ''
+    await loadJwMeta()
+    localToken.value = readTjuToken()
+  } catch (error) {
+    await reportJwError(error)
+  } finally {
+    busy.value = false
+  }
+}
+
+/** 手填验证码后继续（沿用页面内存里的密码，不写 localStorage）。 */
+async function submitCaptcha() {
+  const username = form.username.trim()
+  if (!captcha.code.trim()) {
+    say('先把图里的字符填上。', 'warn')
+    return
+  }
+  if (!username || !form.password) {
+    say('密码框空了：再填一次学号 + 教务密码，然后点「一键导入课表」。', 'warn')
+    return
+  }
+  busy.value = true
+  try {
+    const result = await jwImport({
+      username,
+      password: form.password,
+      save: true,
+      run_sync: true,
+      via: 'cas',
+      week: props.semester?.current_week || null,
+      captcha: captcha.code.trim(),
+      captcha_id: captcha.id,
+    })
+    const info = result?.detail?.import || {}
+    say(result?.message || `已导入 ${info.courses || 0} 门课`, 'ok')
+    notify(result?.message || '课表已导入', 'ok')
+    captcha.image = ''
+    captcha.code = ''
+    form.password = ''
+    await loadJwMeta()
+  } catch (error) {
+    await reportJwError(error)
+  } finally {
+    busy.value = false
+  }
+}
+
+/** 删掉服务器上保存的教务凭据（已导入的课表保留）。 */
+async function forgetJwCredentials() {
+  busy.value = true
+  try {
+    const result = await forgetJw()
+    say(result?.message || '已删除服务器上的教务凭据', 'ok')
+    await loadJwMeta()
+  } catch (error) {
+    fail(error, '删除失败')
+  } finally {
+    busy.value = false
+  }
+}
+
+/* -------------------------------------------- 兜底：本机浏览器直连微北洋 */
 /**
  * 一次点击走完：本机令牌 → （需要时）学号密码换令牌 → 抓课表 → 导入 → 同步。
  * 密码只留在页面内存里（不写 localStorage、不发服务器），关掉页面即消失。
  * 抓到令牌后就地记住，所以之后每次都是「一键」，不需要再输密码。
  */
-async function oneClick() {
+async function mwOneClick() {
   if (!readTjuToken() && (!form.username || !form.password)) {
     say('先填「学号 + 微北洋密码」，再点这个按钮（登录只在你本机完成，密码不上传）', 'warn')
     return
@@ -227,7 +444,13 @@ async function oneClick() {
     await loadConfig()
   } catch (error) {
     if (error instanceof TwtError && (error.kind === 'cors' || error.kind === 'campus')) {
-      say('现在连不上校园网接口。回到校园网（或连学校 WiFi / VPN）后再点一次这个按钮就行；也可以用下面「高级」里的粘贴导入。', 'warn')
+      say(
+        '微北洋这条路没成：它的接口只对校园网开放，而且还是跨站请求（浏览器 CORS 会拦）。' +
+          '如果人已经在校园网里还这样，那就是 CORS 拦的，不是网络问题 —— ' +
+          '请直接用上面的「一键导入课表」（走教务系统，服务器直连，不需要校园网），' +
+          '或者在本块里粘贴课表 JSON。',
+        'warn',
+      )
     } else if (error instanceof TwtError && error.kind === 'credentials') {
       localToken.value = ''
       say('本机记住的登录已失效，请重新填一次密码再点按钮。', 'warn')

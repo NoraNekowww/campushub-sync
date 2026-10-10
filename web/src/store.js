@@ -522,16 +522,32 @@ export async function tjuBrowserImport({ token = '', username = '', password = '
 }
 
 /**
- * 打开 App 时静默续一次课表：本机有令牌、已经导入过、距上次成功超过 maxAgeHours 才真发请求；
- * 失败（多半是不在校园网）静默放弃，retryMinutes 内不再重试，不打扰用户。
+ * 打开 App 时静默续一次课表：距上次成功超过 maxAgeHours、且距上次尝试超过 retryMinutes 才真发请求。
+ * 优先走**服务器上的教务凭据**（不用校园网）；没有才退回本机微北洋令牌。失败静默放弃，不打扰用户。
  */
 export async function autoRefreshTju({ maxAgeHours = 6, retryMinutes = 30 } = {}) {
   if (typeof window === 'undefined') return null
-  if (!readTjuToken()) return null
   if (!state.config?.tju?.import_meta?.courses) return null
   const now = Date.now()
   if (now - readStamp(TJU_TRY_KEY) < retryMinutes * 60 * 1000) return null
   if (now - readStamp(TJU_IMPORT_KEY) < maxAgeHours * 3600 * 1000) return null
+
+  // 教务系统（CAS）在服务器上跑，不依赖校园网 —— 有凭据就用它。
+  const jw = await loadJwStatus()
+  if (jw?.credentials_saved) {
+    try {
+      const result = await jwRefresh()
+      const courses = result?.detail?.import?.courses
+      if (courses) notify(`课表已自动更新（${courses} 门）`, 'ok')
+      return courses
+    } catch (error) {
+      writeStamp(TJU_TRY_KEY)
+      return null
+    }
+  }
+
+  // 兜底：本机微北洋令牌（只有校园网里能成，失败就安静地算了）。
+  if (!readTjuToken()) return null
   try {
     const { courses } = await tjuBrowserImport({})
     if (courses) notify(`课表已自动更新（${courses} 门）`, 'ok')
@@ -539,6 +555,56 @@ export async function autoRefreshTju({ maxAgeHours = 6, retryMinutes = 30 } = {}
   } catch (error) {
     return null
   }
+}
+
+/* --------------------------------------- 教务系统（CAS 直连，主路径）*/
+
+/*
+ * 这两条路的区别（决定了普通用户到底能不能用）：
+ *
+ *   微北洋 open.twt.edu.cn  —— 只对校园网开放，而且是**浏览器跨站请求**，会被 CORS 拦；
+ *                              官方那条 get_classes 现在还对所有账号回「学期解析失败」。
+ *                              → 校园网里也经常失败，只能当兜底。
+ *   教务系统 sso.tju.edu.cn —— 统一身份认证，**公网可达**（海外 VPS 实测能到），
+ *                              classes.tju.edu.cn/eams 同样可达。所以放在服务器上跑：
+ *                              不受校园网、浏览器跨站限制，只要学号 + 教务密码
+ *                              （+ 一次图形验证码，服务器先替你 OCR）。
+ */
+
+/** 服务器上有没有存着教务凭据 / 上次导入结果（不含任何密码）。 */
+export async function loadJwStatus() {
+  try {
+    return await api.jwStatus()
+  } catch (error) {
+    return null
+  }
+}
+
+/**
+ * 用学号 + 教务密码导入课表（服务器直连 CAS）。
+ * 需要人工验证码时抛 ApiError，`error.detail.kind === 'captcha'`。
+ */
+export async function jwImport(payload) {
+  const result = await api.jwImport(payload)
+  writeStamp(TJU_IMPORT_KEY)
+  writeStamp(TJU_TRY_KEY)
+  await Promise.all([loadConfig(), refresh({ silent: true })])
+  return result
+}
+
+/** 用服务器上已保存的教务凭据免密续一次（不需要校园网、不需要本机令牌）。 */
+export async function jwRefresh() {
+  const result = await api.jwRefresh()
+  writeStamp(TJU_IMPORT_KEY)
+  writeStamp(TJU_TRY_KEY)
+  await Promise.all([loadConfig(), refresh({ silent: true })])
+  return result
+}
+
+export async function forgetJw() {
+  const result = await api.jwForget()
+  await loadConfig()
+  return result
 }
 
 /* -------------------------------------------------------------- filtering */

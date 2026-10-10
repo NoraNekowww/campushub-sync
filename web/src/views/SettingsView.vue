@@ -593,8 +593,10 @@ const onboarding = computed(() => [
   },
   {
     key: 'tju',
-    title: '② 连我的教务（微北洋）',
-    hint: tjuConnected.value ? '已连上，课表会自己同步进来' : '用自己的教务账号登录一次，课表就进来了',
+    title: '② 连我的教务（教务系统）',
+    hint: tjuConnected.value
+      ? '已连上，课表会自己同步进来'
+      : '填一次学号 + 教务系统密码（统一身份认证那套），课表就进来了',
     done: tjuConnected.value,
     target: 'tju-section',
   },
