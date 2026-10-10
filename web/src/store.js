@@ -5,6 +5,7 @@
 import { reactive } from 'vue'
 import { api, ApiError, getToken, isAuthError, setToken } from './api'
 import { dayKey, todayKey } from './utils/datetime'
+import { browserClasstable, browserLogin, TwtError } from './twt-sign'
 
 const THEME_KEY = 'campushub.theme'
 const LOOKAHEAD_DAYS = 60
@@ -40,6 +41,8 @@ export const state = reactive({
   authBusy: false,
   authError: '',
   authNotice: '',
+  /* 图形验证码最近一次拉取失败的原因（只在提示语里露面，方便诊断）。 */
+  captchaError: '',
   forceAuth: false,
   customEditor: { open: false, event: null },
 })
@@ -248,10 +251,13 @@ export function register(username, password, inviteCode, displayName, captcha) {
 export async function loadCaptcha() {
   try {
     const payload = await api.captcha()
+    state.captchaError = ''
     return payload?.enabled === false ? null : payload
   } catch (error) {
     // A captcha we cannot load must not block the form: the server still
     // enforces it, and the user retries once the network is back.
+    // 记下失败原因，登录页会把它显示在提示里（否则只有「没有图」这一种症状）。
+    state.captchaError = error?.message || '网络错误'
     return null
   }
 }
@@ -441,6 +447,99 @@ export const hasToken = () => Boolean(getToken())
 
 /** Raw token for pre-filling the settings input. */
 export const getTokenSafe = () => getToken()
+
+/* ------------------------------------------------ 微北洋课表（一键导入）*/
+
+/*
+ * 课表接口 open.twt.edu.cn 只对校园网开放，所以抓取必须发生在**用户自己的浏览器**里：
+ * 服务器只拿到最终 JSON，密码从不经过服务器。本机只记住微北洋返回的令牌（可清除），
+ * 于是「一键导入」与「打开 App 自动续一次」都不用重新输密码。
+ */
+const TJU_TOKEN_KEY = 'campushub.twt.token'
+const TJU_IMPORT_KEY = 'campushub.twt.lastImport'
+const TJU_TRY_KEY = 'campushub.twt.lastTry'
+
+export function readTjuToken() {
+  try {
+    return localStorage.getItem(TJU_TOKEN_KEY) || ''
+  } catch (error) {
+    return ''
+  }
+}
+
+/** 传空串 = 忘掉本机登录（换账号、令牌失效时用）。 */
+export function rememberTjuToken(token) {
+  try {
+    if (token) localStorage.setItem(TJU_TOKEN_KEY, token)
+    else localStorage.removeItem(TJU_TOKEN_KEY)
+  } catch (error) {
+    /* 隐私模式写不了 localStorage —— 退化成每次都输密码，不影响功能 */
+  }
+}
+
+const readStamp = (key) => {
+  try {
+    return Number(localStorage.getItem(key) || 0) || 0
+  } catch (error) {
+    return 0
+  }
+}
+const writeStamp = (key) => {
+  try {
+    localStorage.setItem(key, String(Date.now()))
+  } catch (error) {
+    /* 同上 */
+  }
+}
+
+/**
+ * 在用户浏览器里抓课表并导入：有令牌就直接用，否则用学号+密码换一个令牌。
+ * 成功后刷新本地 config，调用方随后跑一次 runSync() 就能看到新日程。
+ */
+export async function tjuBrowserImport({ token = '', username = '', password = '' } = {}) {
+  let live = token || readTjuToken()
+  if (!live) {
+    if (!username || !password) {
+      throw new TwtError('需要学号 + 微北洋密码（只在你本机用，不会上传）', 'credentials')
+    }
+    live = await browserLogin(username, password)
+  }
+  rememberTjuToken(live)
+  let payload
+  try {
+    payload = await browserClasstable(live)
+  } catch (error) {
+    writeStamp(TJU_TRY_KEY)
+    // 令牌过期/被踢：本机的记录立刻作废，下次用密码重来，避免一直撞墙。
+    if (error instanceof TwtError && error.kind === 'credentials') rememberTjuToken('')
+    throw error
+  }
+  const result = await api.tjuImport({ payload, source: 'browser' })
+  writeStamp(TJU_IMPORT_KEY)
+  writeStamp(TJU_TRY_KEY)
+  await Promise.all([loadConfig(), refresh({ silent: true })])
+  return { result, courses: payload?.data?.data?.length ?? 0 }
+}
+
+/**
+ * 打开 App 时静默续一次课表：本机有令牌、已经导入过、距上次成功超过 maxAgeHours 才真发请求；
+ * 失败（多半是不在校园网）静默放弃，retryMinutes 内不再重试，不打扰用户。
+ */
+export async function autoRefreshTju({ maxAgeHours = 6, retryMinutes = 30 } = {}) {
+  if (typeof window === 'undefined') return null
+  if (!readTjuToken()) return null
+  if (!state.config?.tju?.import_meta?.courses) return null
+  const now = Date.now()
+  if (now - readStamp(TJU_TRY_KEY) < retryMinutes * 60 * 1000) return null
+  if (now - readStamp(TJU_IMPORT_KEY) < maxAgeHours * 3600 * 1000) return null
+  try {
+    const { courses } = await tjuBrowserImport({})
+    if (courses) notify(`课表已自动更新（${courses} 门）`, 'ok')
+    return courses
+  } catch (error) {
+    return null
+  }
+}
 
 /* -------------------------------------------------------------- filtering */
 

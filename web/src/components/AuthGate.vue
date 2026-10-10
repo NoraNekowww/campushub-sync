@@ -110,7 +110,7 @@
               data-testid="auth-captcha-refresh"
               class="shrink-0 overflow-hidden rounded-xl border border-slate-300 bg-slate-100 dark:border-slate-700"
               :title="captchaHint"
-              @click="refreshCaptcha"
+              @click="refreshCaptcha()"
             >
               <!-- The challenge is an SVG string we render ourselves, so there is
                    no third-party script (and no reCAPTCHA-style DNS that fails
@@ -223,21 +223,44 @@ const captchaHint = computed(
   () => captchaError.value || '看不清就点图换一张 · 5 分钟内有效',
 )
 
-/** Pull a fresh challenge; the answer lives only inside the signed token. */
-async function refreshCaptcha() {
+/**
+ * Pull a fresh challenge; the answer lives only inside the signed token.
+ *
+ * 失败不能把图留空：一次网络抖动（校园网切换、服务端 5xx、切前台）就自动重试一次，
+ * 仍然失败才提示，并把原因写进提示里 —— 否则用户看到的是「有输入框、没有图」。
+ */
+async function refreshCaptcha(attempt = 0) {
   captchaLoading.value = true
   captchaError.value = ''
   captchaAnswer.value = ''
-  const payload = await loadCaptcha()
-  captchaLoading.value = false
-  if (payload?.svg) {
-    captchaSvg.value = payload.svg
-    captchaToken.value = payload.token || ''
-    return
+  try {
+    const payload = await loadCaptcha()
+    if (payload?.svg) {
+      captchaSvg.value = payload.svg
+      captchaToken.value = payload.token || ''
+      return
+    }
+    if (attempt < 1) {
+      await new Promise((resolve) => setTimeout(resolve, 600))
+      return await refreshCaptcha(attempt + 1)
+    }
+    captchaSvg.value = ''
+    captchaToken.value = ''
+    if (captchaRequired.value) {
+      const why = state.captchaError ? `（${state.captchaError}）` : ''
+      captchaError.value = `验证码加载失败${why}，点图重试 · 或换个窗口打开`
+    }
+  } catch (error) {
+    if (attempt < 1) {
+      await new Promise((resolve) => setTimeout(resolve, 600))
+      return await refreshCaptcha(attempt + 1)
+    }
+    captchaSvg.value = ''
+    captchaToken.value = ''
+    if (captchaRequired.value) captchaError.value = '验证码加载失败，点图重试 · 或换个窗口打开'
+  } finally {
+    captchaLoading.value = false
   }
-  captchaSvg.value = ''
-  captchaToken.value = ''
-  if (captchaRequired.value) captchaError.value = '验证码加载失败，点图重试'
 }
 
 // `state.accounts` usually lands after mount (it comes from /auth/session), so

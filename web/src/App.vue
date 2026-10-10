@@ -42,6 +42,7 @@ import EventEditor from './components/EventEditor.vue'
 import SettingsView from './views/SettingsView.vue'
 import WeekView from './views/WeekView.vue'
 import {
+  autoRefreshTju,
   bootstrap,
   fetchSession,
   initConnectivity,
@@ -70,5 +71,7 @@ onMounted(async () => {
   initConnectivity()
   await fetchSession()
   bootstrap()
+  // 打开 App 时静默续一次课表（本机记住了微北洋令牌、且上次抓取超过 6 小时才会真的发请求）。
+  autoRefreshTju()
 })
 </script>

@@ -2,7 +2,14 @@
   <div class="space-y-3 border-t border-slate-100 pt-3 dark:border-slate-800" data-testid="tju-connect">
     <header class="flex flex-wrap items-center gap-2">
       <GraduationCap :size="14" class="text-brand-600 dark:text-brand-400" />
-      <h3 class="text-xs font-semibold">微北洋直连（学号登录 / 令牌）</h3>
+      <h3 class="text-xs font-semibold">课表导入（微北洋）</h3>
+      <span
+        v-if="hasLocalToken"
+        class="chip border-transparent bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300"
+        title="令牌存在这台设备的 localStorage 里，可用「高级」里的「忘记本机登录」清除"
+      >
+        本机已记住登录
+      </span>
       <span
         class="chip border-transparent"
         :class="
@@ -19,46 +26,66 @@
     </header>
 
     <p class="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-      登录可以由服务器完成；但课表接口 <code>open.twt.edu.cn</code> <b>只对校园网开放</b>，
-      所以课表要由你面前的浏览器（连着校园网时）去取。两条路都给你：
+      <b>校园网内点一次下面的按钮就行。</b>登录发生在你面前的浏览器里，密码不会上传到服务器；
+      本机只记住微北洋返回的令牌（可随时清除），所以之后不必再输密码。
     </p>
 
-    <!-- ------------------------------------------------------- credentials -->
-    <div class="space-y-2 rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/50">
-      <p class="label">1 · 账号 / 令牌</p>
-      <div class="grid grid-cols-2 gap-2">
-        <input v-model="form.username" class="input text-xs" data-testid="tju-account" placeholder="学号（如 30212xxxxx）" autocomplete="username" />
-        <input v-model="form.password" class="input text-xs" type="password" placeholder="微北洋密码" autocomplete="current-password" />
-      </div>
-      <div class="flex flex-wrap gap-2">
-        <button class="btn-primary !py-1.5 text-xs" data-testid="tju-save-credentials" :disabled="busy" @click="savePassword">
-          <LogIn :size="13" /> 保存凭据（服务器登录）
-        </button>
-        <button class="btn-ghost !py-1.5 text-xs" :disabled="busy" @click="showToken = !showToken">
-          {{ showToken ? '收起令牌输入' : '改用令牌' }}
-        </button>
-        <button v-if="credentials.has_token" class="btn-ghost !py-1.5 text-xs" :disabled="busy" @click="forgetCredentials">
-          <Trash2 :size="13" /> 删除凭据
-        </button>
-      </div>
-      <div v-if="showToken" class="flex gap-2">
-        <input v-model="form.token" class="input font-mono text-xs" placeholder="粘贴微北洋 token" autocomplete="off" />
-        <button class="btn-ghost shrink-0 !py-1.5 text-xs" :disabled="busy" @click="saveToken">保存令牌</button>
-      </div>
-    </div>
+    <button
+      class="btn-primary w-full !py-2 text-sm"
+      data-testid="tju-oneclick"
+      :disabled="busy"
+      @click="oneClick"
+    >
+      <RefreshCw :size="14" />
+      {{ busy ? '正在导入…' : imported ? '更新课表（一键）' : '一键导入课表' }}
+    </button>
 
-    <!-- ------------------------------------------------------------ fetches -->
-    <div class="flex flex-wrap gap-2">
-      <button class="btn-ghost !py-1.5 text-xs" data-testid="tju-browser-fetch" :disabled="busy" @click="browserFetch">
-        <Globe :size="13" /> 在我的浏览器里抓取（校园网）
-      </button>
-      <button class="btn-ghost !py-1.5 text-xs" data-testid="tju-server-sync" :disabled="busy" @click="serverSync">
-        <Server :size="13" /> 让服务器试着抓
-      </button>
-      <button class="btn-ghost !py-1.5 text-xs" :disabled="busy || !imported" @click="clearImport">
-        <Trash2 :size="13" /> 清除已导入课表
-      </button>
-    </div>
+    <!-- ------------------------------------------------ advanced / escape hatches -->
+    <details class="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/50">
+      <summary class="cursor-pointer text-[11px] font-semibold">高级：凭据 / 令牌 / 服务器抓取 / 清除</summary>
+
+      <div class="mt-2 space-y-2">
+        <!-- ------------------------------------------------------- credentials -->
+        <div class="space-y-2 rounded-xl bg-white p-2.5 dark:bg-slate-900/40">
+          <p class="label">服务器上的凭据（可选：让服务器替你试一次）</p>
+          <div class="grid grid-cols-2 gap-2">
+            <input v-model="form.username" class="input text-xs" data-testid="tju-account" placeholder="学号（如 30212xxxxx）" autocomplete="username" />
+            <input v-model="form.password" class="input text-xs" type="password" placeholder="微北洋密码" autocomplete="current-password" />
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button class="btn-ghost !py-1.5 text-xs" data-testid="tju-save-credentials" :disabled="busy" @click="savePassword">
+              <LogIn :size="13" /> 保存到服务器
+            </button>
+            <button class="btn-ghost !py-1.5 text-xs" :disabled="busy" @click="showToken = !showToken">
+              {{ showToken ? '收起令牌输入' : '改用令牌' }}
+            </button>
+            <button v-if="hasLocalToken" class="btn-ghost !py-1.5 text-xs" :disabled="busy" @click="forgetLocalToken">
+              <Trash2 :size="13" /> 忘记本机登录
+            </button>
+            <button v-if="credentials.has_token" class="btn-ghost !py-1.5 text-xs" :disabled="busy" @click="forgetCredentials">
+              <Trash2 :size="13" /> 删除服务器凭据
+            </button>
+          </div>
+          <div v-if="showToken" class="flex gap-2">
+            <input v-model="form.token" class="input font-mono text-xs" placeholder="粘贴微北洋 token" autocomplete="off" />
+            <button class="btn-ghost shrink-0 !py-1.5 text-xs" :disabled="busy" @click="saveToken">保存到本机</button>
+          </div>
+        </div>
+
+        <!-- ------------------------------------------------------------ fetches -->
+        <div class="flex flex-wrap gap-2">
+          <button class="btn-ghost !py-1.5 text-xs" data-testid="tju-browser-fetch" :disabled="busy" @click="browserFetch">
+            <Globe :size="13" /> 浏览器抓取（旧入口）
+          </button>
+          <button class="btn-ghost !py-1.5 text-xs" data-testid="tju-server-sync" :disabled="busy" @click="serverSync">
+            <Server :size="13" /> 让服务器试着抓
+          </button>
+          <button class="btn-ghost !py-1.5 text-xs" :disabled="busy || !imported" @click="clearImport">
+            <Trash2 :size="13" /> 清除已导入课表
+          </button>
+        </div>
+      </div>
+    </details>
 
     <p
       v-if="status"
@@ -111,9 +138,16 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { Globe, GraduationCap, LogIn, Server, Trash2, Upload } from 'lucide-vue-next'
+import { Globe, GraduationCap, LogIn, RefreshCw, Server, Trash2, Upload } from 'lucide-vue-next'
 import { api } from '../api'
-import { loadConfig, notify, runSync } from '../store'
+import {
+  loadConfig,
+  notify,
+  readTjuToken,
+  rememberTjuToken,
+  runSync,
+  tjuBrowserImport,
+} from '../store'
 import {
   browserClasstable,
   browserLogin,
@@ -134,14 +168,18 @@ const statusKind = ref('warn')
 const pasted = ref('')
 const loginUrlPreview = ref('生成中…')
 const snippet = ref('')
+/* 本机记住的微北洋令牌（localStorage）—— 有它才能「一键」和「打开 App 自动续」。 */
+const localToken = ref(readTjuToken())
 
 const form = reactive({ username: '', password: '', token: '' })
 
 const credentials = computed(() => props.tju?.credentials || {})
 const meta = computed(() => props.tju?.import_meta || {})
 const imported = computed(() => Boolean(meta.value?.courses))
+const hasLocalToken = computed(() => Boolean(localToken.value))
 
 onMounted(async () => {
+  localToken.value = readTjuToken()
   try {
     loginUrlPreview.value = await signedUrl('/v1/auth/token/get', { twtuname: '<学号>', twtpasswd: '<密码>' })
   } catch (error) {
@@ -161,6 +199,51 @@ function fail(error, fallback) {
 
 async function refreshConfig() {
   await loadConfig()
+}
+
+/* ------------------------------------------------- 一键导入（主路径）*/
+/**
+ * 一次点击走完：本机令牌 → （需要时）学号密码换令牌 → 抓课表 → 导入 → 同步。
+ * 密码只留在页面内存里（不写 localStorage、不发服务器），关掉页面即消失。
+ * 抓到令牌后就地记住，所以之后每次都是「一键」，不需要再输密码。
+ */
+async function oneClick() {
+  if (!readTjuToken() && (!form.username || !form.password)) {
+    say('先填「学号 + 微北洋密码」，再点这个按钮（登录只在你本机完成，密码不上传）', 'warn')
+    return
+  }
+  const needsLogin = !readTjuToken()
+  busy.value = true
+  status.value = ''
+  try {
+    if (needsLogin) say('① 正在你本机登录微北洋…', 'warn')
+    const { courses } = await tjuBrowserImport({
+      username: needsLogin ? form.username.trim() : '',
+      password: needsLogin ? form.password : '',
+    })
+    localToken.value = readTjuToken()
+    say(`已导入 ${courses} 门课，正在同步到日历…`, 'ok')
+    await runSync()
+    await loadConfig()
+  } catch (error) {
+    if (error instanceof TwtError && (error.kind === 'cors' || error.kind === 'campus')) {
+      say('现在连不上校园网接口。回到校园网（或连学校 WiFi / VPN）后再点一次这个按钮就行；也可以用下面「高级」里的粘贴导入。', 'warn')
+    } else if (error instanceof TwtError && error.kind === 'credentials') {
+      localToken.value = ''
+      say('本机记住的登录已失效，请重新填一次密码再点按钮。', 'warn')
+    } else {
+      fail(error, '导入失败')
+    }
+  } finally {
+    busy.value = false
+  }
+}
+
+/** 换账号 / 换设备前清掉本机令牌；下次会重新用学号密码登录。 */
+function forgetLocalToken() {
+  rememberTjuToken('')
+  localToken.value = ''
+  say('已忘记本机登录：下次会重新用学号 / 密码登录。', 'ok')
 }
 
 /* ------------------------------------------------------------ credentials */
