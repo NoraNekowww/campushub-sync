@@ -10,7 +10,7 @@ from icalendar import Alarm, Calendar
 from icalendar import Event as ICalEvent
 from icalendar import Timezone, TimezoneStandard
 
-from ..models import Event, EventStatus, Source
+from ..models import Event, Source
 from ..timeutil import as_aware, get_tz
 
 PRODID = "-//CampusHub Sync//nzlab.online//CN"
@@ -68,7 +68,15 @@ def _alarms(event: Event) -> list[Alarm]:
     return alarms
 
 
-def event_to_vevent(event: Event, tz_name: str = "Asia/Shanghai") -> ICalEvent:
+def event_to_vevent(
+    event: Event, tz_name: str = "Asia/Shanghai", *, cancelled: bool = False
+) -> ICalEvent:
+    """一条 VEVENT。
+
+    ``cancelled=True`` 生成「撤下」墓碑：``STATUS:CANCELLED`` + 不挂闹钟。
+    用户删掉或刚划掉的日程在订阅日历里发这一条，客户端才会把已经取过的条目删掉 ——
+    订阅源里单纯「不再出现」的条目，不少客户端会一直留着。
+    """
     tz = get_tz(tz_name)
     start = as_aware(event.start_time)
     assert start is not None
@@ -96,15 +104,22 @@ def event_to_vevent(event: Event, tz_name: str = "Asia/Shanghai") -> ICalEvent:
     if description:
         component.add("DESCRIPTION", description)
     component.add("CATEGORIES", ["DDL"] if event.is_deadline else ["课程"])
-    component.add(
-        "STATUS", "COMPLETED" if event.status == EventStatus.completed.value else "CONFIRMED"
-    )
+    if cancelled:
+        component.add("STATUS", "CANCELLED")
+        component.add("SEQUENCE", 1)
+    else:
+        # RFC 5545 只给 VEVENT 定义了 TENTATIVE/CONFIRMED/CANCELLED —— 已完成的日程
+        # 用 CONFIRMED（"COMPLETED" 是 VTODO 的状态，放进 VEVENT 是无效值，客户端会
+        # 当成坏条目丢掉），真实状态另放 X-CAMPUSHUB-STATUS。
+        component.add("STATUS", "CONFIRMED")
+        component.add("X-CAMPUSHUB-STATUS", event.status)
     component.add("PRIORITY", int(event.priority or 5))
     component.add("TRANSP", "TRANSPARENT" if event.is_deadline else "OPAQUE")
     component.add("X-CAMPUSHUB-SOURCE", event.source)
     component.add("X-CAMPUSHUB-ID", event.id)
-    for alarm in _alarms(event):
-        component.add_component(alarm)
+    if not cancelled:
+        for alarm in _alarms(event):
+            component.add_component(alarm)
     return component
 
 
@@ -114,6 +129,7 @@ def build_calendar(
     calendar_name: str = "CampusHub 日程",
     tz_name: str = "Asia/Shanghai",
     now: Optional[datetime] = None,
+    tombstones: Iterable[Event] = (),
 ) -> Calendar:
     calendar = Calendar()
     calendar.add("PRODID", PRODID)
@@ -126,6 +142,8 @@ def build_calendar(
     calendar.add_component(_timezone_component(tz_name))
     for event in events:
         calendar.add_component(event_to_vevent(event, tz_name=tz_name))
+    for event in tombstones:
+        calendar.add_component(event_to_vevent(event, tz_name=tz_name, cancelled=True))
     return calendar
 
 
@@ -134,8 +152,11 @@ def calendar_bytes(
     *,
     calendar_name: str = "CampusHub 日程",
     tz_name: str = "Asia/Shanghai",
+    tombstones: Iterable[Event] = (),
 ) -> bytes:
-    return build_calendar(events, calendar_name=calendar_name, tz_name=tz_name).to_ical()
+    return build_calendar(
+        events, calendar_name=calendar_name, tz_name=tz_name, tombstones=tombstones
+    ).to_ical()
 
 
 def feed_etag(events: Iterable[Event]) -> str:
@@ -155,6 +176,7 @@ def feed_etag(events: Iterable[Event]) -> str:
                     (event.end_time.isoformat() if event.end_time else ""),
                     event.updated_at.isoformat() if as_aware(event.updated_at) else "",
                     event.status,
+                    "hidden" if event.hidden else "shown",
                     event.title,
                 )
             ).encode("utf-8")

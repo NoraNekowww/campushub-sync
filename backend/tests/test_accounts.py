@@ -133,9 +133,9 @@ def test_only_admins_see_the_member_list(accounts_env):
 
             assert admin.get("/api/auth/users").status_code == 200
             assert bob_client.get("/api/auth/users").status_code == 403
-            # a plain member reads the timeline but cannot mutate it
+            # a plain member reads AND writes their own timeline (多租户：各写各的空间)
             assert bob_client.get("/api/events").status_code == 200
-            assert bob_client.post("/api/sync").status_code == 401
+            assert bob_client.post("/api/sync").status_code == 200
 
 
 def test_admin_session_can_write(accounts_env):

@@ -69,12 +69,16 @@ export function ingestUrlToken() {
   }
 }
 
-export function notify(text, tone = 'info') {
-  state.toast = { text, tone }
+/**
+ * 弹一条提示。``options.action`` 可以带一个按钮（比如删除后的「撤销」）。
+ */
+export function notify(text, tone = 'info', options = {}) {
+  const { action = null, duration = 3200 } = options
+  state.toast = { text, tone, action }
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => {
     state.toast = null
-  }, 3200)
+  }, duration)
 }
 
 /* ------------------------------------------------------------------ theme */
@@ -303,14 +307,64 @@ export async function saveCustomEvent(payload) {
 }
 
 export async function removeCustomEvent(id) {
+  const target = state.events.find((item) => item.id === id)
   try {
     await api.deleteEvent(id)
     closeCustomEditor()
-    notify('日程已删除', 'info')
+    notify(`已移除${target ? `「${target.title}」` : '这条日程'}`, 'info', {
+      action: { label: '撤销', run: () => restoreEvent(id) },
+      duration: 6000,
+    })
     await refresh({ silent: true })
     return true
   } catch (error) {
     notify(error.message || '删除失败', 'danger')
+    return false
+  }
+}
+
+/* ------------------------------------------------------- 删除（可撤销） */
+
+/**
+ * 右滑删除日程。
+ *
+ * 删掉 = 软删除：这条日程从时间线、以及对外订阅的日历（ICS）里一起消失，
+ * 同步也不会再把它拉回来。所以撤销只要把 hidden 抹掉。
+ */
+export async function removeEvent(event) {
+  const index = state.events.findIndex((item) => item.id === event.id)
+  const snapshot = index >= 0 ? state.events[index] : null
+  if (index >= 0) state.events.splice(index, 1) // 先动 UI，失败再放回去
+
+  try {
+    await api.deleteEvent(event.id)
+    notify(removedText(event), 'info', {
+      action: { label: '撤销', run: () => restoreEvent(event.id, event.title) },
+      duration: 6000,
+    })
+    await refresh({ silent: true })
+    return true
+  } catch (error) {
+    if (snapshot) state.events.splice(index, 0, snapshot)
+    notify(error.message || '删除失败', 'danger')
+    return false
+  }
+}
+
+function removedText(event) {
+  if (event.source === 'microsoft_todo') return `已从日历移除：「${event.title}」（微软待办里的任务还在）`
+  return `已移除「${event.title}」`
+}
+
+/** 撤销删除：恢复回时间线与订阅日历。 */
+export async function restoreEvent(id, title = '') {
+  try {
+    await api.patchEvent(id, { hidden: false })
+    notify(title ? `已恢复「${title}」` : '已恢复', 'info')
+    await refresh({ silent: true })
+    return true
+  } catch (error) {
+    notify(error.message || '恢复失败', 'danger')
     return false
   }
 }

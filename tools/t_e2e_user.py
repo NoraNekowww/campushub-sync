@@ -12,8 +12,11 @@ from __future__ import annotations
 import inspect
 import sys
 
+from sqlmodel import select
+
 from app import accounts
 from app.db import session_scope
+from app.models import Event
 
 USERNAME = "e2echeck"
 PASSWORD = "E2eCheck!2026"
@@ -33,9 +36,13 @@ def main() -> int:
             if not existing:
                 print("cleanup: 没有临时账号，无需处理")
                 return 0
+            # 连它自己名下的日程一起清掉：右滑删除的用例会在库里留几条
+            rows = session.exec(select(Event).where(Event.user_id == existing.id)).all()
+            for row in rows:
+                session.delete(row)
             session.delete(existing)
             session.commit()
-            print(f"cleanup: 已删除临时账号 {USERNAME} (#{existing.id})")
+            print(f"cleanup: 已删除临时账号 {USERNAME} (#{existing.id}) 及它的 {len(rows)} 条日程")
             return 0
 
         if existing:

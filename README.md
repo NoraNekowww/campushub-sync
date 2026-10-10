@@ -66,10 +66,17 @@ campushub-sync/
 ├── tools/
 │   ├── make_icons.py               # 零依赖生成 PWA 图标
 │   ├── smoke_test.py               # 对运行中的实例做 34 项端到端检查
+│   ├── check-feed-hide.py          # 线上自检：删一条日程 → 订阅日历里消失 + 墓碑（跑完自动撤销）
+│   ├── encrypt_kv_secrets.py       # 凭据迁移/巡检（--check / --dry-run）
+│   ├── t_e2e_user.py               # 建/删临时账号（--cleanup 连它的日程一起清）
 │   └── visual/                     # puppeteer-core + 系统 Edge 的无头校验
 │       ├── verify-ui.mjs           # 三个视图的 23 项 UI 检查
 │       ├── verify-auth.mjs         # 登录墙 → 注册 → 持久化 → 退出（13 项）
 │       └── verify-portal.mjs       # 线上门户账号区 + /schedule/ 联动（16 项）
+├── web/tools/                      # 前端侧的线上校验（同一套 headless Edge 套路）
+│   ├── verify-swipe-delete.mjs     # 卡片左右滑动删除 + 撤销 + 划掉未被手势吃掉
+│   ├── verify-tju-ui.mjs           # 真账号回归：教务绑定面板
+│   └── verify-panel.mjs            # 设置页渲染 + 底部反馈链接
 ├── Dockerfile  docker-compose.yml  .dockerignore  .env.example
 └── README.md
 ```
@@ -216,9 +223,9 @@ GET  /v1/classtable?t=<ms>&sign=<…>&app_key=<…>     头: Authorization: Bear
 | GET | `/api/health` | 公开 | 存活探针 |
 | GET | `/api/events` | 读令牌 | 参数 `start_date` `end_date`（含当天）`source` `status` `limit` `offset` |
 | POST | `/api/events` | 管理令牌 | 新建 `source=custom` 事件 |
-| PATCH | `/api/events/{id}` | 管理令牌 | 改标题/时间/`status`（打勾完成） |
-| DELETE | `/api/events/{id}` | 管理令牌 | 删除 |
-| GET | `/api/subscribe/calendar.ics?token=…` | 订阅令牌 | RFC 5545 订阅源，带 `VEVENT`+`VALARM`，支持 `If-None-Match`/304 |
+| PATCH | `/api/events/{id}` | 管理令牌 | 改标题/时间/`status`（打勾完成）/`hidden`（软删除开关，`false` 即撤销删除） |
+| DELETE | `/api/events/{id}` | 管理令牌 | **软删除**：把日程从时间线与订阅日历里拿掉（返回体里 `hidden: true`），可撤销；不再拒绝外部来源 |
+| GET | `/api/subscribe/calendar.ics?token=…` | 订阅令牌 | RFC 5545 订阅源，带 `VEVENT`+`VALARM`，支持 `If-None-Match`/304；默认**只发站长自己的**、且**不含已划掉/已删除**的日程（见下） |
 | POST | `/api/sync` | 管理令牌 | 手动触发同步，返回 `fetched/created/updated/pruned` |
 | GET | `/api/status` | 读令牌 | 健康、上次同步、各连接器状态、统计计数 |
 | GET | `/api/config` | 读令牌 | 前端初始化配置（订阅地址、周期、是否演示模式） |
@@ -239,6 +246,22 @@ GET  /v1/classtable?t=<ms>&sign=<…>&app_key=<…>     头: Authorization: Bear
 | POST | `/api/auth/password` | 登录账号 | 修改自己的密码 |
 | GET | `/api/auth/users` | 管理员 | 成员列表 |
 | PATCH | `/api/auth/users/{id}` | 管理员 | 停用/启用成员、调整角色 |
+
+### 日程能划掉、能删掉，系统日历里就跟着消失
+
+- **划掉（打勾）**：`PATCH /api/events/{id} {"status":"completed"}` —— 时间线里保留（带删除线，
+  可再勾回来），但**订阅出去的日历里默认不再出现**。
+- **删掉**：`DELETE /api/events/{id}` 是**软删除**（`hidden=true`），不再是物理删除 ——
+  课表里的课、微软待办的任务也能删（以前会 409），删了之后同步不会把它拉回来
+  （会一并置 `local_override`），撤销 = `PATCH {"hidden": false}`。
+- **为什么还发一条 `STATUS:CANCELLED`**：订阅源里「单纯不再出现」的条目，部分客户端会
+  一直留着；对 45 天内删掉/刚划掉的日程再发一条同 `UID` 的 `STATUS:CANCELLED` 墓碑，
+  客户端才会真的把它从手机日历里删掉。响应头 `X-Event-Count` / `X-Cancelled-Count`
+  分别给出「可见」与「墓碑」条数。
+- **只发站长自己的**：订阅令牌是站长（owner）的，feed 只导出他名下的日程；多租户之后
+  别人的课表不会混进他的手机日历。想要「已完成也留着」用 `?include_completed=true`。
+- `STATUS:CONFIRMED` 是 VEVENT 唯一说得通的「在办」状态（RFC 5545 的 `COMPLETED` 只属于
+  VTODO，塞进 VEVENT 客户端多半直接丢掉）。
 
 ### 三种凭据与权限
 

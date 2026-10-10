@@ -13,6 +13,7 @@
         :key="`overdue-${event.id}`"
         :event="event"
         @toggle="toggleCompleted"
+        @remove="removeEvent"
       />
     </section>
 
@@ -43,6 +44,7 @@
         :key="event.id"
         :event="event"
         @toggle="toggleCompleted"
+        @remove="removeEvent"
       />
     </section>
 
@@ -64,12 +66,12 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { AlertTriangle, KeyRound, RefreshCw } from 'lucide-vue-next'
 import EmptyState from '../components/EmptyState.vue'
 import EventCard from '../components/EventCard.vue'
 import SkeletonList from '../components/SkeletonList.vue'
-import { filterEvents, refresh, state, toggleCompleted } from '../store'
+import { filterEvents, notify, refresh, removeEvent, state, toggleCompleted } from '../store'
 import { groupByDay, todayKey } from '../utils/datetime'
 
 const today = todayKey()
@@ -96,5 +98,17 @@ const emptyMessage = computed(() => {
   if (state.authRequired) return '后端已开启访问保护，填写 ADMIN_TOKEN 后即可同步与修改。'
   if (!state.online) return '正在显示离线缓存，恢复网络后会自动刷新。'
   return '没有课程，也没有临近的 DDL。点右上角同步看看。'
+})
+
+/* 触摸屏上「卡片可以左右滑开删掉」不是自明的，第一次用提示一次。 */
+onMounted(() => {
+  if (!window.matchMedia?.('(pointer: coarse)')?.matches) return
+  try {
+    if (localStorage.getItem('campushub.swipe-hint')) return
+    localStorage.setItem('campushub.swipe-hint', '1')
+  } catch {
+    return
+  }
+  setTimeout(() => notify('左滑或右滑日程卡片，可以把它删掉', 'info', { duration: 5000 }), 1200)
 })
 </script>

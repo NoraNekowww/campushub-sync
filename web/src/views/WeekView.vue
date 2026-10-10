@@ -101,6 +101,7 @@
         :key="`ddl-${event.id}`"
         :event="event"
         @toggle="toggleCompleted"
+        @remove="removeEvent"
       />
     </section>
 
@@ -117,7 +118,7 @@ import { ChevronLeft, ChevronRight, ListTodo } from 'lucide-vue-next'
 import EmptyState from '../components/EmptyState.vue'
 import EventCard from '../components/EventCard.vue'
 import { api } from '../api'
-import { state, toggleCompleted } from '../store'
+import { removeEvent, state, toggleCompleted } from '../store'
 import { dayKey, minutesOfDay, timeLabel, todayKey, weekWindow } from '../utils/datetime'
 
 const DAY_START = 8 * 60 // 08:00

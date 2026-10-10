@@ -58,6 +58,9 @@ class Event(SQLModel, table=True):
     reminder_minutes: Optional[int] = None
     all_day: bool = False
     local_override: bool = Field(default=False, index=True)
+    #: 用户「删掉」了这条日程。软删除：不再出现在时间线/订阅日历里，且同步不会把它拉回来
+    #: （隐藏时一并置 ``local_override``，见 ``services.events.hide_event``）。
+    hidden: bool = Field(default=False, index=True)
 
     updated_at: datetime
     completed_at: Optional[datetime] = None

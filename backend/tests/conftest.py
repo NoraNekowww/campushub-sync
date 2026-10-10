@@ -27,8 +27,15 @@ os.environ.update(
         "TJU_MODE": "disabled",
         "TJU_ICS_PATH": "",
         "LOG_LEVEL": "WARNING",
+        # 图形验证码在测试里关掉：注册用例不该依赖「认出 SVG 里的字」
+        "CAPTCHA_ENABLED": "false",
     }
 )
+
+#: 测试用的 owner 账号：多租户之后时间线按账号隔离，只有 owner 存在时共享管理员
+#: 令牌（旧用法）才解析得出身份。
+OWNER_USERNAME = "owner"
+OWNER_PASSWORD = "owner-correct-horse"
 
 
 def pytest_sessionfinish(session, exitstatus):  # noqa: ANN001
@@ -62,6 +69,26 @@ def clean_state():
     get_settings.cache_clear()
 
 
+def _bootstrap_owner() -> None:
+    """建出第一个账号（= owner / admin），让共享管理员令牌解析得出身份。
+
+    只在真的用到 ``admin_headers`` 的用例里懒创建 —— 别的用例（比如注册那一批）
+    要靠「第一个账号」是它自己建的。
+    """
+    from app import accounts
+    from app.db import session_scope
+
+    with session_scope() as session:
+        if accounts.owner(session) is None:
+            accounts.create_user(session, OWNER_USERNAME, OWNER_PASSWORD)
+
+
+@pytest.fixture()
+def owner_account() -> tuple[str, str]:
+    _bootstrap_owner()
+    return (OWNER_USERNAME, OWNER_PASSWORD)
+
+
 @pytest.fixture()
 def settings():
     from app.config import get_settings
@@ -81,6 +108,7 @@ def client():
 
 @pytest.fixture()
 def admin_headers() -> dict[str, str]:
+    _bootstrap_owner()
     return {"X-Admin-Token": "test-admin"}
 
 

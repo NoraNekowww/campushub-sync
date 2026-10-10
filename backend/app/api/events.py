@@ -261,6 +261,7 @@ async def update_event(
         description=payload.description,
         location=payload.location,
         reminder_minutes=payload.reminder_minutes,
+        hidden=payload.hidden,
     )
     if event is None:
         raise HTTPException(status_code=404, detail="event not found")
@@ -279,22 +280,28 @@ async def update_event(
     return out
 
 
-@router.delete("/{event_id}", status_code=http_status.HTTP_204_NO_CONTENT)
-def delete_event(
+@router.delete("/{event_id}", response_model=EventOut)
+async def delete_event(
     event_id: str,
     session: Session = Depends(get_session),
     user: User = Depends(timeline_owner),
-) -> None:
+) -> EventOut:
+    """删除一条日程 —— 对任何来源都走「软删除」（隐藏）。
+
+    以前这里对外部事件直接 409（"删了下次同步还会回来"）。现在改成隐藏 +
+    ``local_override``：时间线、统计、订阅日历里立刻消失，同步也不会再把它拉回来，
+    而且用户能撤销（``PATCH {"hidden": false}``）。
+
+    微软待办来源的任务只在本站隐藏，不去动微软那边 —— 远程删除不可逆，留在
+    待办 App 里由用户自己决定。
+    """
     event = session.get(Event, event_id)
     if event is None or event.user_id != user.id:
         raise HTTPException(status_code=404, detail="event not found")
-    if event.source != Source.custom.value:
-        raise HTTPException(
-            status_code=http_status.HTTP_409_CONFLICT,
-            detail="only locally created events can be deleted; external events reappear on sync",
-        )
-    session.delete(event)
+    event_service.set_hidden(session, event_id, True)
     session.commit()
+    session.refresh(event)
+    return EventOut.from_event(event, tz=get_settings().timezone)
 
 
 @router.get("/{event_id}/debug", include_in_schema=False, dependencies=[Depends(timeline_owner)])

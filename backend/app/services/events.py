@@ -62,8 +62,16 @@ def query_events(
     limit: int = 500,
     offset: int = 0,
     user_id: Optional[int] = None,
+    include_hidden: bool = False,
 ) -> tuple[list[Event], int]:
+    """时间线/订阅日历的查询入口。
+
+    ``hidden``（用户右滑删掉 / 划掉后要移除的）默认不出现在任何列表里；
+    只有订阅日历为了给客户端「撤下」墓碑（``STATUS:CANCELLED``）才显式带上它。
+    """
     conditions = []
+    if not include_hidden:
+        conditions.append(col(Event.hidden) == False)  # noqa: E712
     if user_id is not None:
         conditions.append(col(Event.user_id) == user_id)
     if start is not None:
@@ -100,6 +108,7 @@ def patch_event(
     description: Optional[str] = None,
     location: Optional[str] = None,
     reminder_minutes: Optional[int] = None,
+    hidden: Optional[bool] = None,
 ) -> Optional[Event]:
     """User edits are sticky: ``local_override`` stops the next sync clobbering them."""
     event = session.get(Event, event_id)
@@ -119,6 +128,9 @@ def patch_event(
         if value is not None and getattr(event, field) != value:
             setattr(event, field, value)
             changed = True
+    if hidden is not None and bool(hidden) != bool(event.hidden):
+        event.hidden = bool(hidden)
+        changed = True
     if changed:
         event.local_override = True
         event.updated_at = utcnow()
@@ -126,9 +138,22 @@ def patch_event(
     return event
 
 
+def set_hidden(session: Session, event_id: str, hidden: bool = True) -> Optional[Event]:
+    """软删除 / 恢复。
+
+    「删除」对来源是外部的事件（课表、微软待办）不能真删 —— 下一次同步会把它原样
+    拉回来。所以这里做的是：隐藏 + ``local_override``（同步的受保护字段，见
+    ``sync_engine.upsert_events``），于是它从时间线和订阅日历里消失，并且同步
+    也再不会把它挖出来。用户后悔时 ``set_hidden(..., False)`` 就恢复。
+    """
+    return patch_event(session, event_id, hidden=hidden)
+
+
 def event_counts(session: Session, user_id: Optional[int] = None) -> dict[str, int]:
     now = utcnow()
-    scope = [col(Event.user_id) == user_id] if user_id is not None else []
+    scope = [col(Event.hidden) == False]  # noqa: E712  # 软删除的不计入任何统计
+    if user_id is not None:
+        scope.append(col(Event.user_id) == user_id)
     horizon = now + timedelta(days=7)
 
     def count(*conditions) -> int:
@@ -190,8 +215,8 @@ def reconcile_source(
         conditions.append(col(Event.user_id) == user_id)
     rows = session.exec(select(Event).where(*conditions)).all()
     for row in rows:
-        if row.id in keep_ids or row.local_override:
-            continue
+        if row.id in keep_ids or row.local_override or row.hidden:
+            continue  # 用户改过的、或他自己删掉（隐藏）的都留着
         session.delete(row)
         removed += 1
     return removed

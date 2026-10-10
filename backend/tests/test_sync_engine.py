@@ -111,9 +111,11 @@ def test_engine_without_connectors_reports_hint(settings):
     import asyncio
 
     outcome = asyncio.run(engine.run(trigger="test"))
-    assert outcome.ok is False
+    # 没配任何连接器是「没事可做」，不是失败：记一条提示，但 run 仍然算成功
+    assert outcome.ok is True
     assert "connector" in (outcome.message or "")
+    assert outcome.fetched == 0
     assert outcome.run_id is not None
     # the run is still recorded for /api/status
     last = engine.last_run()
-    assert last is not None and last.ok is False
+    assert last is not None and last.ok is True

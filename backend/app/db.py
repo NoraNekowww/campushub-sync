@@ -210,7 +210,11 @@ def adopt_legacy_keys(namespace: str, prefixes: Sequence[str]) -> int:
 def ensure_columns(settings: Optional[Settings] = None) -> list[str]:
     """Tiny SQLite migration: ``create_all`` never adds a column to a live table."""
     engine = get_engine(settings)
-    additions = (("events", "user_id", "INTEGER"),)
+    additions = (
+        ("events", "user_id", "INTEGER"),
+        # 软删除标记：0 = 正常；1 = 用户划掉/删掉了这条日程
+        ("events", "hidden", "BOOLEAN NOT NULL DEFAULT 0"),
+    )
     applied: list[str] = []
     with engine.begin() as conn:
         for table, column, ddl in additions:

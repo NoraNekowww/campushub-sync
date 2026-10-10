@@ -148,11 +148,12 @@ class SyncEngine:
             outcome.run_id = run_id
 
             scopes = self._scopes()
-            if not scopes:
+            if not any(connectors for _user_id, connectors in scopes):
+                # 一个连接器都没有 = 没东西可同步，不算失败；只给一条提示，
+                # 免得用户刚注册、还没绑任何账号就看到「同步失败」。
                 outcome.message = (
                     "no connector enabled — set MS_CLIENT_ID / TJU_MODE or DEMO_MODE=1"
                 )
-                outcome.ok = False
                 self._close_run(run_id, outcome, started)
                 return outcome
 

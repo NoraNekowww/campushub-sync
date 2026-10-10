@@ -30,6 +30,8 @@ class EventOut(BaseModel):
     reminder_minutes: Optional[int] = None
     all_day: bool = False
     local_override: bool = False
+    #: 用户划掉/删掉（软删除）的日程：不再出现在时间线与订阅日历里
+    hidden: bool = False
     updated_at: datetime
     completed_at: Optional[datetime] = None
     periods: Optional[list[int]] = None  # 真实节次 [起, 止]（1 起），教务事件才有
@@ -59,6 +61,7 @@ class EventOut(BaseModel):
             reminder_minutes=event.reminder_minutes,
             all_day=event.all_day,
             local_override=event.local_override,
+            hidden=bool(event.hidden),
             updated_at=local(event.updated_at),  # type: ignore[arg-type]
             completed_at=local(event.completed_at),
             periods=_periods_from_raw(event.raw_dict()),
@@ -99,6 +102,8 @@ class EventPatchIn(BaseModel):
     description: Optional[str] = None
     location: Optional[str] = None
     reminder_minutes: Optional[int] = None
+    #: 软删除开关：``true`` = 从日历里拿掉（等同 DELETE），``false`` = 恢复（撤销）
+    hidden: Optional[bool] = None
 
 
 class MsTaskIn(BaseModel):

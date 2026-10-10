@@ -125,13 +125,18 @@ ssh root@nzlab.online 'cd /var/www/schedule && tar xzf /tmp/rel.tar.gz && bash d
 ```bash
 # 后端测试（本机）
 cd campushub-sync && .venv/Scripts/python.exe -m pytest backend -q
-#   预期：新增的 9 个凭据加密测试（tests/test_secretbox.py）全绿；
-#   另有 20 个失败是**账号体系改造前**写的旧用例，与本次改动前的失败集合逐字一致
-#   （`/api/status` 等已改为「需登录会话」，用例还按「有 ADMIN_TOKEN 就够」写的 —— 见第 8 节）
+#   预期：全绿（106 项）。tests/conftest.py 里两件事让旧用例重新跑得动：
+#     ① CAPTCHA_ENABLED=false —— 注册用例不该去认 SVG 里的字；
+#     ② admin_headers 懒建一个 owner 账号 —— 时间线按账号隔离后，共享管理员令牌
+#        只有 owner 存在时才解析得出身份（别改成全局 autouse：注册那几个用例要靠
+#        「第一个账号是它自己建的」）。
 
-# 线上端到端检查（在开发机跑，会开 headless Edge）
+# 线上端到端检查（在开发机跑，会开 headless Edge；账号临时建、跑完删）
 cd tools/visual && node verify-tju-panel.mjs      # 线上设置页 + 微北洋面板 + 无控制台报错
 node verify-ui.mjs / verify-auth.mjs / verify-portal.mjs
+cd web && USERNAME_E2E=e2echeck PASSWORD_E2E=... node tools/verify-swipe-delete.mjs
+#   ↑ 逐条断言「拖开 → 删除按钮真的露出来（命中测试）→ 点删除 → 卡片消失 + 服务端 hidden=true
+#     → 提示条带撤销 → 点撤销 → 卡片回来」，顺带回归「点划掉还能用」
 bash deploy/verify-tju-live.sh                    # 线上接口连通性
 ```
 
@@ -146,8 +151,10 @@ bash deploy/verify-tju-live.sh                    # 线上接口连通性
    现为 `enc1:<keyid>:<Fernet token>`；密钥是 `data/credential.key`（0600，会自动生成）—— **跟数据库一起备份，
    不要改**，改了日志会出现 `key mismatch`，已存凭据要用户重填。巡检：
    `tools/encrypt_kv_secrets.py --check`。
-7. **20 个旧测试待更新**：账号体系改造后 `/api/status`、`/api/events` 等已要求登录会话，
-   `tests/test_api.py`、`test_sync_engine.py`、`test_tju_api.py` 里 20 个用例还按「有 ADMIN_TOKEN 就够」写。
-   线上功能实测正常，是测试没跟上 —— 下次动这块时顺手改掉。
+7. **右滑删除 + 划掉/删除不进系统日历**（2026-10-11 已上线）：`Event.hidden` 软删除；
+   卡片左右拖开露出「删除」，提示条带「撤销」。订阅 feed 默认只发站长自己的、且剔除
+   `completed`/`hidden`，另发 `STATUS:CANCELLED` 墓碑。线上自检（会挑一条自己的日程删掉再撤销，
+   数据原样）：`ssh host 'cd /var/www/schedule && venv/bin/python -' < tools/check-feed-hide.py`。
+   **注意**：`X-CANCELLED-COUNT` 不该长期上涨 —— 涨了说明有东西被反复划掉/删掉。
 8. 可选：现在卡片文案写明「密码存在服务器（已加密）」，如要做更高隐私，可加「不保存密码、每次刷新输一次」模式。
 9. 注册闸门：`ALLOW_OPEN_REGISTRATION` / `REGISTRATION_INVITE_CODE` 控制门户能不能自助注册；用户管理在 `/api/auth/users`（`nzs` 是 admin）。

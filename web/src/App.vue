@@ -25,7 +25,19 @@
       leave-to-class="translate-y-2 opacity-0"
     >
       <div v-if="state.toast" class="pointer-events-none fixed inset-x-0 bottom-24 z-40 flex justify-center px-4">
-        <div class="toast" :class="toastClass">{{ state.toast.text }}</div>
+        <div class="toast pointer-events-auto flex items-center gap-2" :class="toastClass">
+          <span>{{ state.toast.text }}</span>
+          <button
+            v-if="state.toast.action"
+            type="button"
+            class="shrink-0 rounded-lg border border-current px-2 py-0.5 text-xs font-semibold
+                   opacity-90 transition-opacity hover:opacity-100"
+            data-testid="toast-action"
+            @click="runToastAction"
+          >
+            {{ state.toast.action.label }}
+          </button>
+        </div>
       </div>
     </Transition>
   </div>
@@ -64,7 +76,15 @@ const toastClass = computed(() => {
   return 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
 })
 
-/* 左右滑动切页已移除：课表自己就要横向滚动，手势会打架（用户明确要求删掉）。 */
+/* 左右滑动切页已移除：课表自己就要横向滚动，手势会打架（用户明确要求删掉）。
+   横向手势只用在日程卡片上：左右拖开 = 露出删除按钮（EventCard.vue）。 */
+
+/* 提示条上的动作按钮（比如删除后的「撤销」）：点一下就跑，然后收起提示。 */
+async function runToastAction() {
+  const action = state.toast?.action
+  state.toast = null
+  if (action?.run) await action.run()
+}
 
 onMounted(async () => {
   initTheme()

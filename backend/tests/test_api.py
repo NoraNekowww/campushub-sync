@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from icalendar import Calendar
+
+from app import accounts
+from app.db import session_scope
+from app.models import Event
 
 
 def test_health_is_public(client):
@@ -114,15 +118,46 @@ def test_custom_event_lifecycle(client, admin_headers):
     )
     assert bad.status_code == 422
 
-    assert client.delete(f"/api/events/{body['id']}", headers=admin_headers).status_code == 204
-    assert client.get(f"/api/events/{body['id']}", headers=admin_headers).status_code == 404
+    # 删掉 = 软删除（从日历里拿掉，可撤销），不是物理删
+    deleted = client.delete(f"/api/events/{body['id']}", headers=admin_headers)
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json()["hidden"] is True
+    assert client.get(f"/api/events/{body['id']}", headers=admin_headers).json()["hidden"] is True
+    listing = client.get("/api/events", headers=admin_headers).json()
+    assert all(item["id"] != body["id"] for item in listing["items"])
+
+    restored = client.patch(
+        f"/api/events/{body['id']}", json={"hidden": False}, headers=admin_headers
+    )
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["hidden"] is False
+    listing = client.get("/api/events", headers=admin_headers).json()
+    assert any(item["id"] == body["id"] for item in listing["items"])
 
 
-def test_external_events_cannot_be_deleted(client, admin_headers):
+def test_external_event_delete_is_a_permanent_local_hide(client, admin_headers):
+    """右滑删掉课表/待办来的日程：本地隐藏，且下一次同步不会把它拉回来。"""
     client.post("/api/sync", headers=admin_headers)
     event = client.get("/api/events", headers=admin_headers).json()["items"][0]
+    assert event["source"] != "custom"
+
     response = client.delete(f"/api/events/{event['id']}", headers=admin_headers)
-    assert response.status_code == 409
+    assert response.status_code == 200, response.text
+    assert response.json()["hidden"] is True
+
+    client.post("/api/sync", headers=admin_headers)
+    listed = {item["id"] for item in client.get("/api/events", headers=admin_headers).json()["items"]}
+    assert event["id"] not in listed
+
+    # 撤销：恢复后又能看见
+    assert (
+        client.patch(
+            f"/api/events/{event['id']}", json={"hidden": False}, headers=admin_headers
+        ).status_code
+        == 200
+    )
+    listed = {item["id"] for item in client.get("/api/events", headers=admin_headers).json()["items"]}
+    assert event["id"] in listed
 
 
 def test_status_and_config(client, admin_headers):
@@ -179,11 +214,116 @@ def test_calendar_feed_requires_token_and_emits_ics(client, admin_headers):
     assert cached.status_code == 304
 
 
+def _feed(client, **params):
+    query = "&".join(f"{key}={value}" for key, value in params.items())
+    url = "/api/subscribe/calendar.ics?token=test-sub"
+    if query:
+        url = f"{url}&{query}"
+    response = client.get(url)
+    assert response.status_code == 200, response.text
+    return Calendar.from_ical(response.content)
+
+
+def _feed_ids(calendar, status=None):
+    """feed 里出现的事件 id（可按 STATUS 过滤）。"""
+    ids = set()
+    for component in calendar.walk("VEVENT"):
+        if status is not None and str(component.get("STATUS")) != status:
+            continue
+        ids.add(str(component["X-CAMPUSHUB-ID"]))
+    return ids
+
+
+def test_completed_and_deleted_events_leave_the_feed(client, admin_headers):
+    """划掉的、删掉的日程都不该出现在订阅出去的日历里。
+
+    划掉/删掉只发一条 ``STATUS:CANCELLED`` 墓碑（同一个 UID），客户端才会把它从
+    手机日历里删掉 —— 订阅源里单纯「不再出现」的条目，有些客户端会一直留着。
+    """
+    created = client.post(
+        "/api/events",
+        json={
+            "title": "交实验报告",
+            "start_time": "2026-10-20T23:00:00",
+            "is_deadline": True,
+            "reminder_minutes": 60,
+        },
+        headers=admin_headers,
+    )
+    assert created.status_code == 201, created.text
+    event_id = created.json()["id"]
+
+    assert event_id in _feed_ids(_feed(client), "CONFIRMED")
+
+    # 划掉 → 默认不再出现在日历里，并回一条墓碑
+    done = client.patch(
+        f"/api/events/{event_id}", json={"status": "completed"}, headers=admin_headers
+    )
+    assert done.status_code == 200, done.text
+    calendar = _feed(client)
+    assert event_id not in _feed_ids(calendar, "CONFIRMED")
+    assert event_id in _feed_ids(calendar, "CANCELLED")
+
+    # 勾回来 → 又出现
+    client.patch(
+        f"/api/events/{event_id}", json={"status": "pending"}, headers=admin_headers
+    )
+    assert event_id in _feed_ids(_feed(client), "CONFIRMED")
+
+    # 划掉后「还想留在日历里」：显式 include_completed=true
+    client.patch(
+        f"/api/events/{event_id}", json={"status": "completed"}, headers=admin_headers
+    )
+    assert event_id in _feed_ids(_feed(client, include_completed="true"), "CONFIRMED")
+
+    # 删掉（软删除）→ 同样撤下，并且能撤销
+    client.delete(f"/api/events/{event_id}", headers=admin_headers)
+    calendar = _feed(client)
+    assert event_id not in _feed_ids(calendar, "CONFIRMED")
+    assert event_id in _feed_ids(calendar, "CANCELLED")
+
+    client.patch(
+        f"/api/events/{event_id}",
+        json={"hidden": False, "status": "pending"},
+        headers=admin_headers,
+    )
+    assert event_id in _feed_ids(_feed(client), "CONFIRMED")
+
+
+def test_feed_only_exports_the_owners_events(client, admin_headers):
+    """订阅令牌是站长自己的：别人的课表不该混进他的手机日历。"""
+    client.post("/api/sync", headers=admin_headers)
+    mine = _feed_ids(_feed(client))
+    assert mine, "站长自己的日程应该在 feed 里"
+
+    with session_scope() as session:
+        other = accounts.create_user(session, "lzy", "another-good-one")
+        session.add(
+            Event(
+                id="other-account-event",
+                source="tju_schedule",
+                source_id="other-1",
+                title="别人的课",
+                start_time=datetime.now(timezone.utc) + timedelta(days=1),
+                status="pending",
+                priority=5,
+                updated_at=datetime.now(timezone.utc),
+                user_id=other.id,
+            )
+        )
+        session.commit()
+
+    ids = _feed_ids(_feed(client))
+    assert "other-account-event" not in ids
+    assert mine <= ids  # 自己的还在（没被别人的顶掉）
+
+
 def test_sync_logs_endpoint(client, admin_headers):
     client.post("/api/sync", headers=admin_headers)
     logs = client.get("/api/sync/logs", headers=admin_headers).json()
     assert logs["runs"][0]["trigger"] == "api"
-    assert logs["runs"][0]["connectors"][0]["name"] == "demo"
+    # 连接器名按账号加后缀（demo#1），多租户之后不再是无主的 "demo"
+    assert logs["runs"][0]["connectors"][0]["name"].startswith("demo")
 
 
 def test_schedule_upload_and_semester(client, admin_headers, sample_ics):
