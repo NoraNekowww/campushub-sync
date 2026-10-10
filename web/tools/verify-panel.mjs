@@ -1,6 +1,7 @@
-// verify-panel.mjs — 用真浏览器证明「设置页」确实渲染出来了（不是空白）。
+// verify-panel.mjs — 用真浏览器证明「设置页」确实渲染出来了（不是空白），并检查底部反馈链接。
 // 用法（令牌走命令替换，永不落到命令行/日志里）：
-//   TOKEN=$(ssh ... 'grep -m1 "^ADMIN_TOKEN=" /var/www/schedule/.env | cut -d= -f2-' | tr -d '"') node tools/verify-panel.mjs
+//   USERNAME_E2E=... PASSWORD_E2E=... node tools/verify-panel.mjs
+//   （账号用 tools/t_e2e_user.py 临时建、跑完删）
 import puppeteer from 'puppeteer-core'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -9,6 +10,7 @@ import { join } from 'node:path'
 const URL = process.env.URL || 'https://nzlab.online/schedule/'
 const TOKEN = process.env.TOKEN || ''
 const OUT = process.env.OUT || 'C:/Users/NorazA/AppData/Local/Temp/settings-page.png'
+const OUT_FOOT = process.env.OUT_FOOT || OUT.replace(/\.png$/, '-footer.png')
 const EXE = process.env.EDGE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
 
 const errors = []
@@ -67,24 +69,40 @@ try {
   /* 下面把现场一起报出来 */
 }
 
-await page.evaluate(() =>
-  document.querySelector('[data-testid="onboarding-section"]')?.scrollIntoView({ block: 'start' }),
-)
-await new Promise((r) => setTimeout(r, 800))
-await page.screenshot({ path: OUT })
-
 const report = await page.evaluate(() => {
   const txt = (s) => document.querySelector(s)?.innerText?.replace(/\s+/g, ' ').trim() || null
+  const link = (s) => {
+    const a = document.querySelector(s)
+    return a ? { text: a.innerText.replace(/\s+/g, ' ').trim(), href: a.href } : null
+  }
   return {
     gateVisible: !!document.querySelector('[data-testid="auth-gate"]'),
     onboardingCard: txt('[data-testid="onboarding-section"]'),
     registrationCard: txt('[data-testid="registration-section"]'),
     cardCount: document.querySelectorAll('section.card').length,
     bodyChars: document.body.innerText.length,
-    bodyHead: document.body.innerText.replace(/\s+/g, ' ').slice(0, 200),
+    issueLink: link('[data-testid="issue-link"]'),
+    repoLink: link('[data-testid="repo-link"]'),
+    issuesListLink: link('[data-testid="issues-list-link"]'),
   }
 })
+
+// 截图 1：设置页顶部
+await page.evaluate(() =>
+  document.querySelector('[data-testid="onboarding-section"]')?.scrollIntoView({ block: 'start' }),
+)
+await new Promise((r) => setTimeout(r, 800))
+await page.screenshot({ path: OUT })
+
+// 截图 2：页面最底部（反馈入口）
+await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+await new Promise((r) => setTimeout(r, 800))
+await page.screenshot({ path: OUT_FOOT })
+
 await browser.close()
 
-console.log(JSON.stringify({ gateFirst, navItems, clickedSettingsTab: clicked, settingsRendered, errors, report, screenshot: OUT }, null, 2))
-process.exit(errors.length || !settingsRendered ? 1 : 0)
+const ok = settingsRendered && !!report.issueLink && errors.length === 0
+console.log(
+  JSON.stringify({ gateFirst, navItems, clickedSettingsTab: clicked, settingsRendered, errors, report, screenshots: [OUT, OUT_FOOT], pass: ok }, null, 2),
+)
+process.exit(ok ? 0 : 1)

@@ -463,6 +463,38 @@
         </span>
       </div>
     </section>
+
+    <!-- 底部：反馈入口（仓库已公开，Issues 可匿名浏览） -->
+    <footer class="pb-1 pt-1 text-center text-[11px] leading-relaxed text-slate-400">
+      <a
+        href="https://github.com/NoraNekowww/campushub-sync/issues/new"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center gap-1 underline decoration-dotted underline-offset-2 transition hover:text-slate-200"
+        data-testid="issue-link"
+      >
+        <CircleAlert :size="12" />
+        遇到问题 / 想提建议？去 GitHub 提 Issue
+      </a>
+      <div class="mt-1 text-[10px] opacity-70">
+        本页源码：
+        <a
+          href="https://github.com/NoraNekowww/campushub-sync"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="underline decoration-dotted underline-offset-2 hover:text-slate-200"
+          data-testid="repo-link"
+        >NoraNekowww/campushub-sync</a>
+        <span class="mx-1 opacity-60">·</span>
+        <a
+          href="https://github.com/NoraNekowww/campushub-sync/issues"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="underline decoration-dotted underline-offset-2 hover:text-slate-200"
+          data-testid="issues-list-link"
+        >全部反馈</a>
+      </div>
+    </footer>
   </div>
 </template>
 
@@ -472,6 +504,7 @@ import {
   CalendarDays,
   CalendarPlus,
   CheckCheck,
+  CircleAlert,
   Copy,
   Eye,
   GraduationCap,
