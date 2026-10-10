@@ -127,19 +127,24 @@ def require_write(
     authorization: Optional[str] = Header(default=None),
     x_admin_token: Optional[str] = Header(default=None),
 ) -> None:
-    """Mutating guard: admin token **or** an admin-role account session."""
+    """Mutating guard: admin token **or any signed-in account**.
+
+    多租户之后，「谁的数据」由 ``main.bind_kv_scope``（凭据空间）和
+    ``timeline_owner``（时间线归属）决定，所以任何登录账号都可以写 ——
+    写进的都是它自己的空间。普通用户连自己的教务 / 微软待办、跑自己的同步
+    都走这条路；共享管理员令牌（PWA 的老用法）继续有效。
+    """
     settings = get_settings()
     provided = x_admin_token or _bearer(authorization)
     if settings.admin_token and provided and secrets.compare_digest(settings.admin_token, provided):
         return
-    user = session_user(request)
-    if user is not None and user.is_admin:
+    if session_user(request) is not None:
         return
     if not settings.admin_token:
         return  # dev mode: no shared secret configured (startup logs a warning)
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="admin privileges required",
+        detail="需要登录：这些操作会写进你自己的账号空间",
         headers={"WWW-Authenticate": "Bearer"},
     )
 

@@ -17,7 +17,7 @@ from ..connectors import build_connectors
 from ..db import get_session
 from ..models import Event, EventStatus, Source, User, make_event_id
 from ..schemas import EventListOut, EventOut, EventPatchIn, MsTaskIn
-from ..security import require_read, require_write, timeline_owner
+from ..security import require_read, timeline_owner
 from ..services import events as event_service
 from ..services.sync_engine import upsert_events
 from ..timeutil import as_stored, get_tz, iso_local, parse_iso, utcnow
@@ -297,10 +297,15 @@ def delete_event(
     session.commit()
 
 
-@router.get("/{event_id}/debug", include_in_schema=False, dependencies=[Depends(require_write)])
-def event_debug(event_id: str, session: Session = Depends(get_session)) -> dict:
+@router.get("/{event_id}/debug", include_in_schema=False, dependencies=[Depends(timeline_owner)])
+def event_debug(
+    event_id: str,
+    owner: User = Depends(timeline_owner),
+    session: Session = Depends(get_session),
+) -> dict:
     event = session.get(Event, event_id)
-    if event is None:
+    # 这条调试路由原先是管理员专用；写入门放宽后改成「只能看自己时间线里的事件」
+    if event is None or (event.user_id is not None and event.user_id != owner.id):
         raise HTTPException(status_code=404, detail="event not found")
     return {
         "id": event.id,
