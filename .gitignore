@@ -39,3 +39,9 @@ tools/visual/out/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ===== 备份/临时文件 =====
+*.bak
+*.bak_*
+*.orig
+*.swp
