@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     # an admin-role account.
     enable_accounts: bool = True
     session_secret: Optional[str] = None  # unset = generate + persist in data_dir
+    # Key for encrypting stored *credentials* (教务密码 / 微软令牌 / 邀请码) at
+    # rest. Kept separate from SESSION_SECRET on purpose: rotating sessions must
+    # not orphan the credentials users pasted in. Unset = generate + persist
+    # data/credential.key (0600). Losing it only means users re-enter a password.
+    credential_key: Optional[str] = None
     session_ttl_hours: int = 24 * 14
     session_cookie_name: str = "campushub_session"
     session_cookie_path: str = "/"

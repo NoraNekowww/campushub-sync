@@ -20,6 +20,7 @@ from .api import api_router
 from .config import get_settings
 from .db import bind_scope, init_db, session_scope
 from .security import scope_for_request, warn_about_open_endpoints
+from .secretbox import self_check
 from .services.scheduler import get_scheduler
 
 log = logging.getLogger("campushub")
@@ -60,6 +61,11 @@ async def lifespan(app: FastAPI):
     settings.ensure_dirs()
     init_db(settings)
     warn_about_open_endpoints()
+    vault = self_check(settings)
+    if vault["ok"]:
+        log.info("credential vault ready (key id %s)", vault["key_id"])
+    else:  # pragma: no cover - only with a broken crypto backend
+        log.error("credential vault self-check FAILED: %s", vault.get("error"))
     if settings.enable_scheduler:
         get_scheduler(settings).start()
     else:

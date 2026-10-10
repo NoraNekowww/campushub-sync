@@ -14,6 +14,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from .config import Settings, get_settings
 from .models import KV
+from .secretbox import decrypt_value, encrypt_value, is_encrypted, is_secret_key
 from .timeutil import as_stored, utcnow
 
 log = logging.getLogger("campushub.db")
@@ -136,11 +137,25 @@ class KVStore:
             if row is None:
                 return default
             try:
-                return json.loads(row.value)
+                value = json.loads(row.value)
             except json.JSONDecodeError:
                 return default
+        # Values sealed by ``secretbox`` say so themselves, so decryption needs no
+        # allowlist here — pre-vault plaintext rows keep working unchanged.
+        if is_encrypted(value):
+            return decrypt_value(value, default, key=self._key(key))
+        return value
 
-    def set(self, key: str, value: Any) -> None:
+    def set(self, key: str, value: Any, *, secret: Optional[bool] = None) -> None:
+        """Write a value, encrypting credentials on the way in.
+
+        ``secret=None`` (the default) consults ``secretbox.is_secret_key`` so the
+        vault list lives in exactly one place; pass ``False``/``True`` to override.
+        """
+        if secret is None:
+            secret = is_secret_key(key)
+        if secret:
+            value = encrypt_value(value)
         payload = json.dumps(value, ensure_ascii=False, default=str)
         full = self._key(key)
         with session_scope() as session:

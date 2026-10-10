@@ -44,7 +44,7 @@
 `/schedule/` 这一段是 `include /etc/nginx/snippets/campushub-sync.conf;`（由 `deploy/install.sh` 插入，在 default 文件第 ~99 行）。
 改完先 `nginx -t` 再 `systemctl reload nginx`。
 
-## 3. 三条钥匙（都在 `/var/www/schedule/.env`）
+## 3. 钥匙（`.env` 里三条 + `data/` 里两个密钥文件）
 
 | 变量 | 用途 | 怎么用 |
 | --- | --- | --- |
@@ -52,8 +52,12 @@
 | `SUBSCRIBE_TOKEN` | **日历订阅**专用只读令牌 | 订阅地址：`https://nzlab.online/schedule/api/subscribe/calendar.ics?token=<值>` |
 | 网页账号（`nzs`，admin） | 人用 | 打开 `/schedule/` 登录；口令存在 `data/campushub.db`，pbkdf2 加盐，会话是 HttpOnly Cookie |
 | `REGISTRATION_INVITE_CODE` | 注册邀请码（门户右上角注册要填） | — |
+| `CREDENTIAL_KEY`（留空则用生成的 `data/credential.key`） | **加密存储**的凭据：教务密码、微北洋 token、微软 refresh_token、邀请码 | **别改、要备份** —— 改了或丢了，日志出现 `key mismatch`，所有人已存的凭据都打不开，得重填一次 |
 
 泄漏/换人时的处理：直接改 `.env` 里对应值 → `systemctl restart campushub-sync`（订阅那串会变，要通知订阅者换）。
+
+另外两个密钥文件是**自动生成**、不在 `.env` 里：`data/session.secret`（会话签名）、`data/credential.key`（凭据加密，0600）。
+备份 `data/` 时两个都要带上；**轮换 `SESSION_SECRET` 只影响登录态，轮换 `CREDENTIAL_KEY` 会作废已存凭据**（这是刻意分开的）。
 
 ## 4. 日常运维
 
@@ -62,6 +66,8 @@ systemctl status campushub-sync          # 看活着没
 systemctl restart campushub-sync         # 重启（改后端 / 改 .env 后）
 journalctl -u campushub-sync -n 100 -f   # 看日志
 curl -s -H "X-Admin-Token: $T" http://127.0.0.1:8010/api/status   # 健康 + 最后一次同步结果
+# 凭据加密巡检（0 = 没有残留明文）：
+cd /var/www/schedule/backend && DATA_DIR=/var/www/schedule/data /var/www/schedule/venv/bin/python - --check < /var/www/schedule/tools/encrypt_kv_secrets.py
 ```
 
 **发版（幂等，可反复跑）**：
@@ -100,17 +106,28 @@ ssh root@nzlab.online 'cd /var/www/schedule && tar xzf /tmp/rel.tar.gz && bash d
 - `open.twt.edu.cn`（课表/考试接口）**只对校园网开放**：校外请求 → `302 → network-notice.tju.edu.cn`，拦截页原文「该网页目前只允许校内访问或您正在进行违规操作」。**服务器在境外，永远拉不到**，这不是配置问题。
 - 登录本身服务器能通：`POST api.twt.edu.cn/api/auth/common`，但要带官方客户端的 `ticket` + `domain: weipeiyang.twt.edu.cn` 两个头（少了就是 `50003 未绑定的url`）。
 - 签名算法、接口地址、返回结构（`Classtable{termStart, courses[{coursename,teacher,week{start,end},arrange[{day,start,end,week,room}]}]}`、`单双周` 语义）已全部逆出并实测，写在 **`README.md §4.2`** 和 `backend/app/connectors/tju_api.py`（有测试样本）。
-- 教务系统（`jw/e.tju.edu.cn`）也在校园网内；CAS 统一认证公网可达但**有验证码 + RSA**，脚本登录不可靠。
+- 教务系统（`classes.tju.edu.cn/eams`，认证走统一身份认证 `sso.tju.edu.cn` 的 CAS）**公网可达**，不需要校园网：
+  服务器（洛杉矶）实测**能登录并抓到课表** —— 2026-10-10 用已存凭据导入 11 门课 / 14 时段 → 132 个事件
+  （week 6、`term_start` 2026-08-31 全对）。CAS 登录带图形验证码，服务器送 `learning.twt.edu.cn/ocr` 识别，
+  认不出来才让用户手填一张。**这条链路是主路径**：`backend/app/connectors/tju_cas.py` + `api/tju.py`，
+  前端「设置 → 课表导入」输学号 + 教务密码即可（早期 HANDOVER 里「教务在校园网内、脚本登录不可靠」的说法已证伪）。
 
-**所以设计成「网页端登录 + 浏览器取数」**：网页「设置 → 天津大学课表 → 微北洋直连」里，**登录和拉课表都在你自己的浏览器里完成（密码不经过服务器）**，拿到 JSON 后 POST 给后端入库；被 CORS 拦时面板会给出「手动兜底」的链接和一段控制台命令。服务器侧还留了「让服务器试着抓」按钮，不在校园网时它会明确回 `campus_network`，不会假装成功。
+**主路径 = 服务器端 CAS 直连**（上面那条），微北洋 `open.twt.edu.cn` 降为「高级」里的兜底：它是浏览器跨站请求，
+会被 CORS 拦（在校园网里也一样），且接口只对校园网开放 —— 这就是「连着天大 WiFi 仍提示连不上」的真正原因。
+被 CORS 拦时面板会给出「手动兜底」的链接和一段控制台命令；服务器侧「让服务器试着抓」按钮不在校园网时会明确回
+`campus_network`，不会假装成功。
 
-**开学必做**：校园网内打开 `/schedule/` → 设置 → 微北洋直连 → 填学号 + 微北洋密码 → 「在我的浏览器里抓取（校园网）」。一次成功后：学期第一周周一按接口返回的 `term_start` 自动校正，16 条演示数据自动清掉，同步引擎自动重建，**不用改 `.env` 也不用重启**。
+**开学必做**：设置 → 课表导入 → 填学号 + 教务密码 → 一键导入。成功后学期第一周周一按接口返回的 `term_start`
+自动校正，演示数据自动清掉，同步引擎自动重建，**不用改 `.env` 也不用重启**。
 
 ## 7. 改完代码怎么验
 
 ```bash
-# 后端测试（本机；95 个全绿）
+# 后端测试（本机）
 cd campushub-sync && .venv/Scripts/python.exe -m pytest backend -q
+#   预期：新增的 9 个凭据加密测试（tests/test_secretbox.py）全绿；
+#   另有 20 个失败是**账号体系改造前**写的旧用例，与本次改动前的失败集合逐字一致
+#   （`/api/status` 等已改为「需登录会话」，用例还按「有 ADMIN_TOKEN 就够」写的 —— 见第 8 节）
 
 # 线上端到端检查（在开发机跑，会开 headless Edge）
 cd tools/visual && node verify-tju-panel.mjs      # 线上设置页 + 微北洋面板 + 无控制台报错
@@ -121,8 +138,16 @@ bash deploy/verify-tju-live.sh                    # 线上接口连通性
 ## 8. 已知遗留 / 下一步
 
 1. **接微软 To Do**：Azure 应用注册 → 拿客户端 ID 写 `MS_CLIENT_ID` → 关 `DEMO_MODE` → 重启 → 网页里设备代码登录。（也可以改成「粘贴 refresh_token」的免 Azure 方案，还没做）
-2. **课表首次导入**（见第 6 节，需要你在校园网内操作一次）。
+2. **课表首次导入**（见第 6 节）：设置 → 课表导入 → 学号 + 教务密码 → 一键导入，**不需要校园网**。
 3. `.env` 里的 `MS_CLIENT_SECRET` 有值但**用不上**（公共客户端流不需要），确认没用可以清空。
 4. 线上 `frontend_old/` 是旧构建残留，`Dockerfile`/`docker-compose.yml` 是早期产物（服务器内存太小，最终用 venv + systemd，没用 Docker），都可删。
 5. 演示数据切换与账号/权限的边界情况：`TJU_MODE=demo` 是**独占**的，不接真数据时不要同时开 `DEMO_MODE`。
-6. 注册闸门：`ALLOW_OPEN_REGISTRATION` / `REGISTRATION_INVITE_CODE` 控制门户能不能自助注册；用户管理在 `/api/auth/users`（`nzs` 是 admin）。
+6. **凭据已加密**（2026-10-10）：`kv` 表里替用户保管的凭据（教务密码、微北洋 token、微软 refresh_token、邀请码）
+   现为 `enc1:<keyid>:<Fernet token>`；密钥是 `data/credential.key`（0600，会自动生成）—— **跟数据库一起备份，
+   不要改**，改了日志会出现 `key mismatch`，已存凭据要用户重填。巡检：
+   `tools/encrypt_kv_secrets.py --check`。
+7. **20 个旧测试待更新**：账号体系改造后 `/api/status`、`/api/events` 等已要求登录会话，
+   `tests/test_api.py`、`test_sync_engine.py`、`test_tju_api.py` 里 20 个用例还按「有 ADMIN_TOKEN 就够」写。
+   线上功能实测正常，是测试没跟上 —— 下次动这块时顺手改掉。
+8. 可选：现在卡片文案写明「密码存在服务器（已加密）」，如要做更高隐私，可加「不保存密码、每次刷新输一次」模式。
+9. 注册闸门：`ALLOW_OPEN_REGISTRATION` / `REGISTRATION_INVITE_CODE` 控制门户能不能自助注册；用户管理在 `/api/auth/users`（`nzs` 是 admin）。

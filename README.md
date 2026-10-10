@@ -137,6 +137,8 @@ cd tools/visual && npm install && node verify-ui.mjs --base http://127.0.0.1:800
 | `MS_SCOPES` | `Tasks.ReadWrite offline_access` | Graph 权限 |
 | `SEMESTER_START_DATE` `TJU_PERIOD_TIMES_JSON` | — | 学期第 1 周周一 / 节次时间表 |
 | `TJU_ICS_PATH` `TJU_WEPEIYANG_TOKEN` | — | 静态课表文件 / 微北洋令牌 |
+| `SESSION_SECRET` | 空（自动生成 `data/session.secret`） | 会话签名密钥；换掉 = 所有人重新登录 |
+| `CREDENTIAL_KEY` | 空（自动生成 `data/credential.key`） | **加密存储凭据**（教务密码/微软令牌/邀请码）的密钥；换掉或丢失 = 已存凭据全部作废，用户需重填 |
 
 未设置 `ADMIN_TOKEN` 时服务会**放行全部请求**（仅适合本地预览）；启动日志会明确警告。
 
@@ -397,7 +399,19 @@ tar czf ~/schedule-$(date +%F).tgz -C /var/www/schedule data   # 备份（.db + 
   `data/session.secret`（0600）—— **备份 data 目录就等于备份了所有人的登录态**，别外传。
 - 登录失败有内存限流（默认 10 分钟内 8 次，按 用户名+IP），注册/登录接口都做了 400/401/403 的语义区分，
   不会泄露「账号是否存在」以外的信息（口令校验对不存在的账号也走一次哈希，避免时间侧信道）。
-- `data/` 目录含微软 `refresh_token`，务必不要提交到 Git（`.dockerignore`/`.gitignore` 已排除）。
+- **凭据加密（Fernet）**：替用户保管的密钥 —— 教务系统密码、微北洋 token、微软 `refresh_token`、
+  注册邀请码 —— 在 `kv` 表里以 `enc1:<keyid>:<token>` 形态存放（AES-128-CBC + HMAC-SHA256，
+  密钥 = HKDF-SHA256(`CREDENTIAL_KEY`)；未设则生成 `data/credential.key`，0600，与会话密钥分开，
+  轮换会话不会连坐凭据）。`tools/encrypt_kv_secrets.py` 负责迁移与巡检：`--dry-run` 只看不改，
+  `--check` 发现残留明文时退出码 1（可挂监控）。只加密还不够 —— SQLite 的 UPDATE 会把旧明文留在空闲页
+  和 WAL 里（实测迁移后 db 里有 2 处、WAL 里 16 处 `"password":` 字面量），服务器上跑一次
+  `deploy/purge-plaintext-residue.sh`（VACUUM + 截断 WAL + 完整性/行数/日志自检），实测整理后 0/0。
+  **密钥要备份且不要改**：改了或丢了，日志出现 `key mismatch`，所有已存凭据打不开（表现为「未绑定」，
+  不会 500），用户重新填一次即可恢复。
+- **登录口令是单向哈希**（PBKDF2-SHA256 / 260k 轮 + 每用户随机盐，见 `accounts.py`），**刻意不可解密** ——
+  能解密的口令迟早会泄露；只有「要拿去登别人系统」的凭据才需要加密。
+- `data/` 目录含微软 `refresh_token`（已加密）与 `credential.key`/`session.secret` 两个密钥文件：
+  **备份 data 目录 = 备份了密钥本身**，别外传；`.gitignore`/`.dockerignore` 已排除整个 `data/`。
 - 服务只监听 `127.0.0.1`，外网仅经 Nginx + TLS 暴露；`/schedule/api/` 是唯一入口。
 - 前端仍支持「我有访问令牌」的只读模式（`localStorage` 存令牌，共用设备上可在设置里清除）——
   这是给不方便注册的设备的兜底，不是主路径。
