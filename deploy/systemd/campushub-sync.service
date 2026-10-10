@@ -1,0 +1,23 @@
+[Unit]
+Description=CampusHub Sync — TJU timetable + Microsoft To Do aggregator
+Documentation=file:///var/www/schedule/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/schedule/backend
+EnvironmentFile=/var/www/schedule/.env
+ExecStart=/var/www/schedule/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8010 --workers 1 --log-level info
+Restart=on-failure
+RestartSec=5
+# the SQLite file lives in /var/www/schedule/data; keep the service tidy
+NoNewPrivileges=yes
+PrivateTmp=yes
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=campushub-sync
+
+[Install]
+WantedBy=multi-user.target

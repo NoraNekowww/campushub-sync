@@ -1,0 +1,27 @@
+# build context hygiene — keep images small and reproducible
+.git
+.gitignore
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# never ship secrets or runtime state
+.env
+data/
+*.db
+*.sqlite3
+ms_token.json
+
+# frontend dev junk (the production bundle is rebuilt in the node stage)
+web/node_modules/
+web/dist/
+web/.vite/
+npm-debug.log*
+
+# local verification tooling (47 MB of puppeteer-core, never needed in an image)
+tools/visual/node_modules/
+tools/visual/shots/

@@ -1,0 +1,42 @@
+name: campushub-sync
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # args:
+      #   NPM_REGISTRY: https://registry.npmjs.org
+    image: campushub-sync:1.0.0
+    container_name: campushub-backend
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      # container-side paths (the host bind mount below lands on DATA_DIR)
+      DATA_DIR: /app/data
+      WEB_DIST: /app/web/dist
+      TZ: Asia/Shanghai
+    volumes:
+      # SQLite database + Microsoft tokens + uploaded timetable live here
+      - ./data:/app/data
+    # exposed on loopback only — Nginx terminates TLS and proxies to it
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5).status==200 else 1)
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true

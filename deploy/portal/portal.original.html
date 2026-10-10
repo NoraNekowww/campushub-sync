@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NZ Lab | 项目导航</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        header h1 {
+            font-size: 2.2rem;
+            margin-bottom: 8px;
+            color: #38bdf8;
+        }
+        header p {
+            color: #94a3b8;
+            font-size: 1rem;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            width: 100%;
+            max-width: 960px;
+        }
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+            text-decoration: none;
+            color: inherit;
+            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: #38bdf8;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
+        }
+        .card-icon {
+            font-size: 2rem;
+            margin-bottom: 12px;
+        }
+        .card h2 {
+            font-size: 1.3rem;
+            margin-bottom: 8px;
+            color: #f1f5f9;
+        }
+        .card p {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+        .card .btn {
+            font-size: 0.85rem;
+            color: #38bdf8;
+            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+        }
+        footer {
+            margin-top: auto;
+            padding-top: 40px;
+            color: #64748b;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>nzLab Project Portal</h1>
+        <p>nz的一些小项目</p>
+    </header>
+
+    <div class="container">
+     <!-- 项目 0: 蹭饭图 -->
+        <a href="/rice/" class="card">
+            <div>
+                <div class="card-icon">🍚</div>
+                <h2>蹭饭图</h2>
+                <p>9班的蹭饭图(仅限同学访问)</p>
+            </div>
+            <span class="btn">进入项目 &rarr;</span>
+        </a>
+     <!-- 项目 1: SnakeGame -->
+         <a href="/SnakeV4/" class="card">
+            <div>
+                <div class="card-icon">⚔️</div>
+                <h2>领地战</h2>
+                <p>2~4人或PVE的高度自定义的拓扑领地战</p>
+            </div>
+            <span class="btn">进入项目 &rarr;</span>
+        </a>
+	<!-- 项目 2:.FIT分析程序 -->
+        <a href="/cycle/frontend/index.html" class="card">
+            <div>
+                <div class="card-icon">🗺️</div>
+                <h2>.FIT分析程序</h2>
+                <p>可用于处理骑行等运动数据</p>
+            </div>
+            <span class="btn">进入项目 &rarr;</span>
+        </a>
+        <!-- 项目 3: 天津地铁步行可达性等高线 -->
+        <a href="/TJMetroDistanceMap/index.html" class="card">
+            <div>
+                <div class="card-icon">🗺️</div>
+                <h2>天津地铁步行可达性</h2>
+                <p>基于真实街道网络拓扑的天津全网地铁出站步行可达性与等高走廊分析。</p>
+            </div>
+            <span class="btn">进入项目 &rarr;</span>
+        </a>
+        <!-- 项目 4: 世界高铁/地铁线路图 -->
+        <a href="/MetroMap/" class="card">
+            <div>
+                <div class="card-icon">🚇</div>
+                <h2>世界轨道交通网络</h2>
+                <p>交互式世界高铁与各城市地铁规划线路图。</p>
+            </div>
+            <span class="btn">进入项目 &rarr;</span>
+        </a>
+
+        <!-- 项目 5: 城市天际线雷州地图 -->
+        <a href="/CSLMap/" class="card">
+            <div>
+                <div class="card-icon">🏙️</div>
+                <h2>雷州地铁规划图</h2>
+                <p>《Cities: Skylines》雷州城市轨道交通交互查看器。</p>
+            </div>
+            <span class="btn">进入项目 &rarr;</span>
+        </a>
+
+        <!-- 项目 6: ESP32 控制台 -->
+        <a href="/esp32/" class="card">
+            <div>
+                <div class="card-icon">🧊</div>
+                <h2>ESP32 控制台</h2>
+                <p>小冰箱控制器调试面板：实时温度、开关机、目标温度下发与串口日志。</p>
+            </div>
+            <span class="btn">进入项目 &rarr;</span>
+        </a>
+	
+
+    </div>
+
+    <footer>
+        &copy; 2026 NZ Lab. All rights reserved.
+    </footer>
+
+</body>
+</html>

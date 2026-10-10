@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NZ Lab | 项目导航</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        /* The `hidden` attribute must win over the layout `display` values below
+           (author styles beat the UA rule), otherwise the account widget shows
+           before the session has even been resolved. */
+        [hidden] {
+            display: none !important;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        header h1 {
+            font-size: 2.2rem;
+            margin-bottom: 8px;
+            color: #38bdf8;
+        }
+        header p {
+            color: #94a3b8;
+            font-size: 1rem;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            width: 100%;
+            max-width: 960px;
+        }
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+            text-decoration: none;
+            color: inherit;
+            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: #38bdf8;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
+        }
+        .card-icon {
+            font-size: 2rem;
+            margin-bottom: 12px;
+        }
+        .card h2 {
+            font-size: 1.3rem;
+            margin-bottom: 8px;
+            color: #f1f5f9;
+        }
+        .card p {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+        .card .btn {
+            font-size: 0.85rem;
+            color: #38bdf8;
+            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+        }
+        .badge {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            font-size: 0.7rem;
+            letter-spacing: 0.04em;
+            padding: 3px 8px;
+            border-radius: 999px;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            background: #0f172a;
+        }
+        .badge.locked {
+            color: #fbbf24;
+            border-color: #78350f;
+            background: #1c1917;
+        }
+        footer {
+            margin-top: auto;
+            padding-top: 40px;
+            color: #64748b;
+            font-size: 0.85rem;
+        }
+
+        /* ------------------------------------------------- account (top-right) */
+        .account {
+            position: fixed;
+            top: 16px;
+            right: 20px;
+            z-index: 60;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+        .account button {
+            font: inherit;
+            cursor: pointer;
+            border-radius: 999px;
+            border: 1px solid #334155;
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 7px 14px;
+            transition: border-color 0.2s ease, color 0.2s ease;
+        }
+        .account button:hover {
+            border-color: #38bdf8;
+            color: #38bdf8;
+        }
+        .account .who {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px 6px 14px;
+            border-radius: 999px;
+            background: #1e293b;
+            border: 1px solid #334155;
+        }
+        .account .who b {
+            color: #38bdf8;
+            font-weight: 600;
+        }
+        .account .who span.role {
+            font-size: 0.7rem;
+            color: #fbbf24;
+            border: 1px solid #78350f;
+            border-radius: 999px;
+            padding: 1px 6px;
+        }
+        .account .who button {
+            padding: 4px 10px;
+            font-size: 0.78rem;
+        }
+        .account .hidden {
+            display: none !important;
+        }
+
+        /* ------------------------------------------------------------------ modal */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 80;
+            background: rgba(2, 6, 23, 0.72);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .overlay.hidden {
+            display: none;
+        }
+        .modal {
+            width: 100%;
+            max-width: 380px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 22px;
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+        }
+        .modal h3 {
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+        }
+        .modal p.sub {
+            color: #94a3b8;
+            font-size: 0.82rem;
+            margin-bottom: 16px;
+        }
+        .tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 16px;
+        }
+        .tabs button {
+            font: inherit;
+            cursor: pointer;
+            border: 0;
+            border-radius: 7px;
+            padding: 7px 0;
+            background: transparent;
+            color: #94a3b8;
+        }
+        .tabs button.active {
+            background: #334155;
+            color: #f8fafc;
+        }
+        .modal label {
+            display: block;
+            font-size: 0.82rem;
+            color: #cbd5e1;
+            margin-bottom: 12px;
+        }
+        .modal input {
+            font: inherit;
+            width: 100%;
+            margin-top: 6px;
+            padding: 9px 12px;
+            border-radius: 10px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #f8fafc;
+            outline: none;
+        }
+        .modal input:focus {
+            border-color: #38bdf8;
+        }
+        .modal .error {
+            color: #fda4af;
+            background: rgba(159, 18, 57, 0.25);
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: 0.82rem;
+            margin-bottom: 12px;
+        }
+        .modal .error.hidden {
+            display: none;
+        }
+        .modal .submit {
+            width: 100%;
+            font: inherit;
+            cursor: pointer;
+            border: 0;
+            border-radius: 10px;
+            padding: 11px;
+            background: #0284c7;
+            color: #fff;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+        .modal .submit:disabled {
+            opacity: 0.6;
+            cursor: default;
+        }
+        .modal .hint {
+            margin-top: 12px;
+            font-size: 0.76rem;
+            color: #94a3b8;
+            text-align: center;
+            line-height: 1.5;
+        }
+        .modal .close {
+            float: right;
+            background: none;
+            border: 0;
+            color: #64748b;
+            font-size: 1.2rem;
+            cursor: pointer;
+            line-height: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 右上角账号区：登录 / 注册 / 退出，日程表访问权限由它管理 -->
+    <div class="account" id="account" hidden>
+        <button id="account-open" type="button">登录 / 注册</button>
+        <div class="who hidden" id="account-who">
+            <span>👤 <b id="account-name">—</b></span>
+            <span class="role hidden" id="account-role">管理员</span>
+            <button id="account-logout" type="button">退出</button>
+        </div>
+    </div>
+
+    <div class="overlay hidden" id="auth-overlay">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+            <button class="close" id="auth-close" type="button" aria-label="关闭">×</button>
+            <h3 id="auth-title">账号</h3>
+            <p class="sub">登录后可访问「日程表」，其他项目无需登录。</p>
+            <div class="tabs">
+                <button class="active" id="tab-login" type="button">登录</button>
+                <button id="tab-register" type="button">注册</button>
+            </div>
+            <form id="auth-form">
+                <label>用户名
+                    <input id="auth-username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="3-32 位字母/数字/._-">
+                </label>
+                <label>密码
+                    <input id="auth-password" name="password" type="password" autocomplete="current-password" placeholder="至少 8 位，需含字母和数字">
+                </label>
+                <label id="confirm-row" style="display:none">确认密码
+                    <input id="auth-confirm" type="password" autocomplete="new-password">
+                </label>
+                <label id="invite-row" style="display:none">邀请码
+                    <input id="auth-invite" placeholder="向站主索取">
+                </label>
+                <div class="error hidden" id="auth-error"></div>
+                <button class="submit" id="auth-submit" type="submit">登录</button>
+            </form>
+            <p class="hint" id="auth-hint">还没有账号？点上面的「注册」。第一个注册的账号将成为管理员。</p>
+        </div>
+    </div>
+
+    <header>
+        <h1>nzLab Project Portal</h1>
+        <p>nz的一些小项目</p>
+    </header>
+
+    <div class="container">
+        <!-- 日程表：唯一需要账号的项目 -->
+        <a href="/schedule/" class="card" id="card-schedule">
+            <span class="badge locked" id="card-schedule-badge">需登录</span>
+            <div>
+                <div class="card-icon">🗓️</div>
+                <h2>日程表 · 课表与 DDL</h2>
+                <p>天大课表 + Microsoft To Do 截止日期，聚合成一条时间线；支持 iPhone/安卓日历订阅。</p>
+            </div>
+            <span class="btn" id="card-schedule-btn">进入项目 &rarr;</span>
+        </a>
+
+     <!-- 项目 0: 蹭饭图 -->
+        <a href="/rice/" class="card">
+            <div>
+                <div class="card-icon">🍚</div>
+                <h2>蹭饭图</h2>
+                <p>9班的蹭饭图(仅限同学访问)</p>
+            </div>
+            <span class="btn">进入项目 &rarr;</span>
+        </a>
+     <!-- 项目 1: SnakeGame -->
+         <a href="/SnakeV4/" class="card">
+            <div>
+                <div class="card-icon">⚔️</div>
+                <h2>领地战</h2>
+                <p>2~4人或PVE的高度自定义的拓扑领地战</p>
+            </div>
+            <span class="btn">进入项目 &rarr;</span>
+        </a>
+	<!-- 项目 2:.FIT分析程序 -->
+        <a href="/cycle/frontend/index.html" class="card">
+            <div>
+                <div class="card-icon">🗺️</div>
+                <h2>.FIT分析程序</h2>
+                <p>可用于处理骑行等运动数据</p>
+            </div>
+            <span class="btn">进入项目 &rarr;</span>
+        </a>
+        <!-- 项目 3: 天津地铁步行可达性等高线 -->
+        <a href="/TJMetroDistanceMap/index.html" class="card">
+            <div>
+                <div class="card-icon">🗺️</div>
+                <h2>天津地铁步行可达性</h2>
+                <p>基于真实街道网络拓扑的天津全网地铁出站步行可达性与等高走廊分析。</p>
+            </div>
+            <span class="btn">进入项目 &rarr;</span>
+        </a>
+        <!-- 项目 4: 世界高铁/地铁线路图 -->
+        <a href="/MetroMap/" class="card">
+            <div>
+                <div class="card-icon">🚇</div>
+                <h2>世界轨道交通网络</h2>
+                <p>交互式世界高铁与各城市地铁规划线路图。</p>
+            </div>
+            <span class="btn">进入项目 &rarr;</span>
+        </a>
+
+        <!-- 项目 5: 城市天际线雷州地图 -->
+        <a href="/CSLMap/" class="card">
+            <div>
+                <div class="card-icon">🏙️</div>
+                <h2>雷州地铁规划图</h2>
+                <p>《Cities: Skylines》雷州城市轨道交通交互查看器。</p>
+            </div>
+            <span class="btn">进入项目 &rarr;</span>
+        </a>
+
+        <!-- 项目 6: ESP32 控制台 -->
+        <a href="/esp32/" class="card">
+            <div>
+                <div class="card-icon">🧊</div>
+                <h2>ESP32 控制台</h2>
+                <p>小冰箱控制器调试面板：实时温度、开关机、目标温度下发与串口日志。</p>
+            </div>
+            <span class="btn">进入项目 &rarr;</span>
+        </a>
+	
+
+    </div>
+
+    <footer>
+        &copy; 2026 NZ Lab. All rights reserved.
+    </footer>
+
+<script>
+/* --------------------------------------------------------------------------
+   账号区：与日程表后端（/schedule/api/auth/*）共享会话 Cookie。
+   这里只管登录/注册/退出和日程表卡片的锁标记；数据权限由后端强制，
+   前端隐藏卡片只是提示，不是安全边界。
+   -------------------------------------------------------------------------- */
+(function () {
+    const API = '/schedule/api';
+    const els = {
+        account: document.getElementById('account'),
+        open: document.getElementById('account-open'),
+        who: document.getElementById('account-who'),
+        name: document.getElementById('account-name'),
+        role: document.getElementById('account-role'),
+        logout: document.getElementById('account-logout'),
+        overlay: document.getElementById('auth-overlay'),
+        modal: document.querySelector('.modal'),
+        close: document.getElementById('auth-close'),
+        tabLogin: document.getElementById('tab-login'),
+        tabRegister: document.getElementById('tab-register'),
+        form: document.getElementById('auth-form'),
+        username: document.getElementById('auth-username'),
+        password: document.getElementById('auth-password'),
+        confirm: document.getElementById('auth-confirm'),
+        confirmRow: document.getElementById('confirm-row'),
+        invite: document.getElementById('auth-invite'),
+        inviteRow: document.getElementById('invite-row'),
+        error: document.getElementById('auth-error'),
+        submit: document.getElementById('auth-submit'),
+        hint: document.getElementById('auth-hint'),
+        badge: document.getElementById('card-schedule-badge'),
+        cardBtn: document.getElementById('card-schedule-btn'),
+    };
+
+    let mode = 'login';
+    let meta = { enabled: false, registration_open: false, invite_required: true, password_min_length: 8 };
+
+    function setError(message) {
+        els.error.textContent = message || '';
+        els.error.classList.toggle('hidden', !message);
+    }
+
+    function setMode(next) {
+        mode = next;
+        const register = next === 'register';
+        els.tabLogin.classList.toggle('active', !register);
+        els.tabRegister.classList.toggle('active', register);
+        els.confirmRow.style.display = register ? 'block' : 'none';
+        els.inviteRow.style.display = register && meta.invite_required ? 'block' : 'none';
+        els.submit.textContent = register ? '注册并登录' : '登录';
+        els.hint.textContent = register
+            ? '第一个注册的账号将成为管理员。邀请码由站主提供。'
+            : (meta.registration_open ? '还没有账号？点上面的「注册」。' : '注册已关闭，请联系站主开通。');
+        els.tabRegister.disabled = !meta.registration_open;
+        els.tabRegister.style.opacity = meta.registration_open ? '1' : '0.5';
+        setError('');
+    }
+
+    function openModal(next) {
+        els.overlay.classList.remove('hidden');
+        setMode(next || (meta.registration_open ? 'register' : 'login'));
+        els.username.focus();
+    }
+
+    function closeModal() {
+        els.overlay.classList.add('hidden');
+        els.password.value = '';
+        els.confirm.value = '';
+        setError('');
+    }
+
+    function render(session) {
+        const user = session && session.user;
+        meta = Object.assign(meta, session && session.accounts ? session.accounts : {});
+        hideAccount(!meta.enabled);
+
+        const signedIn = Boolean(user);
+        els.open.classList.toggle('hidden', signedIn);
+        els.who.classList.toggle('hidden', !signedIn);
+        if (signedIn) {
+            els.name.textContent = user.display_name || user.username;
+            els.role.classList.toggle('hidden', !user.is_admin);
+            els.badge.textContent = '已登录 · 可访问';
+            els.badge.classList.remove('locked');
+            els.cardBtn.textContent = '进入日程表 →';
+        } else {
+            els.badge.textContent = '需登录';
+            els.badge.classList.add('locked');
+            els.cardBtn.textContent = '进入项目 →';
+        }
+    }
+
+    function hideAccount(hidden) {
+        els.account.hidden = hidden;
+        if (hidden) els.overlay.classList.add('hidden');
+    }
+
+    async function api(path, options) {
+        const response = await fetch(`${API}${path}`, Object.assign({ credentials: 'include' }, options || {}));
+        let payload = {};
+        try {
+            payload = await response.json();
+        } catch (error) {
+            payload = {};
+        }
+        if (!response.ok) {
+            const detail = payload.detail;
+            const message = typeof detail === 'string' ? detail : `请求失败（${response.status}）`;
+            throw new Error(message);
+        }
+        return payload;
+    }
+
+    async function refresh() {
+        try {
+            render(await api('/auth/session'));
+        } catch (error) {
+            hideAccount(true);   // 后端不可达时不要显示一个点了没反应的按钮
+        }
+    }
+
+    els.open.addEventListener('click', () => openModal(meta.registration_open ? 'register' : 'login'));
+    els.close.addEventListener('click', closeModal);
+    els.overlay.addEventListener('click', (event) => {
+        if (event.target === els.overlay) closeModal();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !els.overlay.classList.contains('hidden')) closeModal();
+    });
+    els.tabLogin.addEventListener('click', () => setMode('login'));
+    els.tabRegister.addEventListener('click', () => {
+        if (meta.registration_open) setMode('register');
+    });
+
+    els.form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setError('');
+        const username = els.username.value.trim();
+        const password = els.password.value;
+        if (!username) return setError('请填写用户名');
+        if (password.length < (meta.password_min_length || 8)) {
+            return setError(`密码至少 ${meta.password_min_length || 8} 位`);
+        }
+        if (mode === 'register' && password !== els.confirm.value) return setError('两次输入的密码不一致');
+        if (mode === 'register' && meta.invite_required && !els.invite.value.trim()) return setError('请填写邀请码');
+
+        els.submit.disabled = true;
+        els.submit.textContent = '处理中…';
+        try {
+            const body = { username: username, password: password };
+            if (mode === 'register') {
+                body.invite_code = els.invite.value.trim() || null;
+            }
+            const path = mode === 'register' ? '/auth/register' : '/auth/login';
+            const payload = await api(path, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            render({ user: payload.user, accounts: payload.accounts || meta });
+            closeModal();
+            window.location.href = '/schedule/';
+        } catch (error) {
+            setError(error.message || '操作失败');
+        } finally {
+            els.submit.disabled = false;
+            els.submit.textContent = mode === 'register' ? '注册并登录' : '登录';
+        }
+    });
+
+    els.logout.addEventListener('click', async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        try {
+            await api('/auth/logout', { method: 'POST' });
+        } catch (error) {
+            /* 已经失效的会话，忽略 */
+        }
+        await refresh();
+    });
+
+    refresh();
+})();
+</script>
+</body>
+</html>

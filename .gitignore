@@ -1,0 +1,41 @@
+# ===== 密钥与本地环境：绝不入库 =====
+.env
+.env.*
+!.env.example
+
+# ===== Python =====
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# ===== 数据与运行产物 =====
+*.db
+*.sqlite3
+data/
+backend/data/
+*.log
+campushub-release.tar.gz
+
+# ===== 抓包/调试临时目录 =====
+_jw_dump/
+_jw_scratch/
+
+# ===== 前端 =====
+node_modules/
+web/node_modules/
+tools/visual/node_modules/
+dist/
+web/dist/
+tools/visual/*.png
+tools/visual/*.jpg
+tools/visual/out/
+
+# ===== 编辑器/系统 =====
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini

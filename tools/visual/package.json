@@ -1,0 +1,13 @@
+{
+  "name": "campushub-visual-check",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Headless UI verification for the CampusHub Sync PWA (reuses the system Edge/Chrome via puppeteer-core).",
+  "scripts": {
+    "verify": "node verify-ui.mjs"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^23.11.1"
+  }
+}
