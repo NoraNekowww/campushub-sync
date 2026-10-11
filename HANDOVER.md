@@ -117,15 +117,30 @@ ssh root@nzlab.online 'cd /var/www/schedule && tar xzf /tmp/rel.tar.gz && bash d
 被 CORS 拦时面板会给出「手动兜底」的链接和一段控制台命令；服务器侧「让服务器试着抓」按钮不在校园网时会明确回
 `campus_network`，不会假装成功。
 
-**开学必做**：设置 → 课表导入 → 填学号 + 教务密码 → 一键导入。成功后学期第一周周一按接口返回的 `term_start`
+**开学必做**：设置 → 课表导入 → 填学号 + 教务密码 → 一键导入，**不需要校园网**。成功后学期第一周周一按接口返回的 `term_start`
 自动校正，演示数据自动清掉，同步引擎自动重建，**不用改 `.env` 也不用重启**。
+
+**周次换算（2026-10-11 修正，别再退回旧算法）**：教务课表页 JS 里那段 53 位周次位图（`00001111…`），
+**第 1 位是开学前的报到/入学教育周**，不是教学周。学校口径（2026 级迎新）：8/27 报到、8/28-9/20 军训、
+**9/21 开始上课**；位图里第一个 `1` 落在第 5 位 ⇒ 第 5 位 = 教学周第 4 周 = 9/21，
+即**位图位次 − 1 才是教学周**（常量 `tju_cas.EAMS_WEEK_OFFSET`）。旧算法直接把位图位次当教学周：
+整学期的课都往后挪一周，**单双周正好反过来**（线上实例：英语听说本来是双周 4,6,8…18，被算成单周）。
+三处必须一起对，缺一个就会重新错位：
+
+- 位图 → 教学周：`tju_cas._parse_js_activities`（`EAMS_WEEK_OFFSET`）。
+- 学期「第一周周一」：以导入数据的 `term_start` 为准，并在 `store_classtable` 里**写回学期设置**。
+  线上曾留着设置里手填的 2026-07-31（周五），界面上的周次比真实周次差 4-5 周、单双周跟着反。
+- 事件 id 用**周次**而不是日期（`source_id = …:{课名}:w{week}:…`）：改锚点只改日期、不留孤儿行，
+  用户「划掉/删掉」（`hidden`）的标记也不会因为改锚点而复活。
+
+自检：`python - < tools/check-week-alignment.py`（在服务器 backend 目录跑，4 项全绿才算对）。
 
 ## 7. 改完代码怎么验
 
 ```bash
 # 后端测试（本机）
 cd campushub-sync && .venv/Scripts/python.exe -m pytest backend -q
-#   预期：全绿（106 项）。tests/conftest.py 里两件事让旧用例重新跑得动：
+#   预期：全绿（110 项，含 4 项周次换算用例）。tests/conftest.py 里两件事让旧用例重新跑得动：
 #     ① CAPTCHA_ENABLED=false —— 注册用例不该去认 SVG 里的字；
 #     ② admin_headers 懒建一个 owner 账号 —— 时间线按账号隔离后，共享管理员令牌
 #        只有 owner 存在时才解析得出身份（别改成全局 autouse：注册那几个用例要靠
@@ -138,6 +153,8 @@ cd web && USERNAME_E2E=e2echeck PASSWORD_E2E=... node tools/verify-swipe-delete.
 #   ↑ 逐条断言「拖开 → 删除按钮真的露出来（命中测试）→ 点删除 → 卡片消失 + 服务端 hidden=true
 #     → 提示条带撤销 → 点撤销 → 卡片回来」，顺带回归「点划掉还能用」
 bash deploy/verify-tju-live.sh                    # 线上接口连通性
+ssh root@nzlab.online 'cd /var/www/schedule/backend && /var/www/schedule/venv/bin/python -' \
+    < tools/check-week-alignment.py               # 周次对齐自检（学期锚点/报到周换算/重复行）
 ```
 
 ## 8. 已知遗留 / 下一步
@@ -158,3 +175,8 @@ bash deploy/verify-tju-live.sh                    # 线上接口连通性
    **注意**：`X-CANCELLED-COUNT` 不该长期上涨 —— 涨了说明有东西被反复划掉/删掉。
 8. 可选：现在卡片文案写明「密码存在服务器（已加密）」，如要做更高隐私，可加「不保存密码、每次刷新输一次」模式。
 9. 注册闸门：`ALLOW_OPEN_REGISTRATION` / `REGISTRATION_INVITE_CODE` 控制门户能不能自助注册；用户管理在 `/api/auth/users`（`nzs` 是 admin）。
+10. **周次换算已修正**（2026-10-11，见第 6 节）：位图位次 − 1 = 教学周；学期锚点写回设置；
+    事件 id 改按周次。线上已重导入对齐（第 1 教学周 8/31、当前第 6 周、第一个有课周 9/21）。
+11. 遗留小事：① 别的账号（如 lzy）当年导入课表时没给「现在是第几周」，锚点会落错周一 ——
+    想修就在设置里把它的课表重导一次（面板会把当前周一并带上）；② 微软待办里还留着测试任务
+    （「测试日程/测试日程C/测试日程D」），会出现在订阅日历里，可自行删或让我清。

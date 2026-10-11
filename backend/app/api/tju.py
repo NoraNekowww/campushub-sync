@@ -446,10 +446,11 @@ async def _jw_import(
         raise _jw_http_error(exc) from exc
 
     if total_weeks is None:
-        # 学期总周数对齐真实课表：设置里的默认值是 16，而这里排到第 20 周 ——
-        # 用 16 会把第 17-20 周的课静默截掉。只升不降（不低于设置里的值）。
+        # 学期总周数对齐真实课表：设置里的默认值是 16，而课表排到第 19 教学周 ——
+        # 用 16 会把后面几周静默截掉。课表最后一周之后还有考试周，所以 +1。
+        # 只升不降（不低于设置里的值）。
         found = _max_week(raw)
-        total_weeks = max(found, get_settings().semester_total_weeks) if found else None
+        total_weeks = max(found + 1, get_settings().semester_total_weeks) if found else None
     try:
         meta, demo_removed = _apply_import(payload, "jw", total_weeks)
     except (TjuApiError, ConnectorError, ValueError, TypeError) as exc:

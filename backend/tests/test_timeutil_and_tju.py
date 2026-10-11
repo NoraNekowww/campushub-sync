@@ -102,3 +102,83 @@ def test_utcnow_is_aware():
     now = utcnow()
     assert now.tzinfo is not None
     assert now.tzinfo.utcoffset(now) == timedelta(0)
+
+
+# ---------------------------------------------------------------- 教务周次换算
+CAS_TABLE_HTML = """\
+activity = new TaskActivity("1", "杨志群(副教授)", "45203(01039)", "微积分I", "3964",
+  "45楼B203", "00001111111111111111000000000000000000000000000000000", null, "", "", "");
+index =1*unitCount+0; table0.activities[index][0]=activity;
+index =1*unitCount+1; table0.activities[index][0]=activity;
+"""
+
+
+def test_eams_bitmap_position_5_is_teaching_week_4():
+    """教务位图第 1 位是开学前的报到周位 ⇒ 第 5 位 = 教学周第 4 周。"""
+    from app.connectors.tju_cas import EAMS_WEEK_OFFSET, _parse_js_activities
+
+    assert EAMS_WEEK_OFFSET == 1
+    arranges = _parse_js_activities(CAS_TABLE_HTML)
+    assert len(arranges) == 1
+    assert arranges[0]["weeks"] == list(range(4, 20))
+    assert arranges[0]["day"] == 2 and arranges[0]["unit"] == [1, 2]  # JS 里 day=1 是周二
+
+
+def test_first_class_lands_on_the_school_start_date():
+    """2026 秋：第 1 教学周 = 8/31，第一个有课的周 = 9/21（学校迎新的上课日）。"""
+    from app.connectors.tju_cas import _parse_js_activities
+
+    weeks = set(_parse_js_activities(CAS_TABLE_HTML)[0]["weeks"])
+    entry = ClassEntry(name="微积分I", weekday=1, start_period=1, end_period=2, weeks=weeks)
+    semester = Semester(name="2026-2027 1", start_date=date(2026, 8, 31), period_times=PERIOD_TIMES)
+    events = entry.to_events(
+        semester, now=datetime(2026, 8, 31, tzinfo=timezone.utc), horizon_days=365
+    )
+    days = sorted(event.start_time.date() for event in events)
+    assert days[0] == date(2026, 9, 21)
+    assert days[-1] == date(2027, 1, 4)
+
+
+def test_event_id_ignores_the_anchor_so_reanchor_redates_in_place():
+    """改学期锚点只改日期、不改 id —— 否则库里会多出一份旧日期的孤儿行。"""
+    entry = ClassEntry(name="微积分I", weekday=1, start_period=1, end_period=2, weeks={4})
+    now = datetime(2026, 8, 31, tzinfo=timezone.utc)
+    shifted = Semester(name="2026-2027 1", start_date=date(2026, 8, 24), period_times=PERIOD_TIMES)
+    right = Semester(name="2026-2027 1", start_date=date(2026, 8, 31), period_times=PERIOD_TIMES)
+    first = entry.to_events(shifted, now=now, horizon_days=365)[0]
+    second = entry.to_events(right, now=now, horizon_days=365)[0]
+    assert first.id == second.id
+    assert first.start_time.date() == date(2026, 9, 14)
+    assert second.start_time.date() == date(2026, 9, 21)
+
+
+def test_import_writes_term_start_back_into_semester_settings(settings):
+    """导入的 term_start 要写回学期设置，否则设置里那个手填的 start_date 继续生效。"""
+    from app.connectors.tju_schedule import SEMESTER_KEY, TjuScheduleConnector
+    from app.db import KVStore
+
+    store = KVStore()
+    store.set(SEMESTER_KEY, {"name": "2026", "start_date": "2026-07-31", "total_weeks": 16})
+    payload = {
+        "error_code": -1,
+        "data": {
+            "term": "2026-2027 1",
+            "week": 6,
+            "term_start": 1788105600,  # 2026-08-31 00:00 +08:00
+            "data": [
+                {
+                    "coursename": "微积分I",
+                    "teacher": "杨志群(副教授)",
+                    "arrange": [
+                        {"day": 1, "start": 1, "end": 2, "room": "45楼B203", "week": [4, 5, 6]}
+                    ],
+                    "week": {"start": 4, "end": 6},
+                }
+            ],
+        },
+    }
+    TjuScheduleConnector(settings).store_classtable(payload, source="jw", total_weeks=20)
+    stored = KVStore().get(SEMESTER_KEY)
+    assert stored["start_date"] == "2026-08-31"
+    assert stored["total_weeks"] == 20
+    assert stored["name"] == "2026"  # 用户起的名字不动

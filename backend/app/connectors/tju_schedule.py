@@ -282,8 +282,11 @@ class ClassEntry:
             start_aware = as_aware(start)
             if start_aware is None or start_aware > horizon or (end and as_aware(end) < floor):
                 continue
+            # id 里放**周次**而不是日期：学期锚点一旦修正（比如教务周次换算改了），
+            # 日期会变而周次不变 ⇒ 同一行被就地改期，不会留下一份旧日期的孤儿行；
+            # 用户划掉/删掉（hidden）和被本地改过的标记也因此能跟着走，不会"复活"。
             source_id = (
-                f"{semester.name}:{self.name}:{start.date().isoformat()}"
+                f"{semester.name}:{self.name}:w{week}"
                 f":p{self.start_period}-{self.end_period}:{self.location or ''}"
             )
             events.append(
@@ -783,19 +786,27 @@ class TjuScheduleConnector(HttpConnector):
         from .tju_api import parse_classtable
 
         used_weeks = int(total_weeks) if total_weeks else int(self.semester.total_weeks)
-        if total_weeks:
-            # 真实课表可能比设置里的周数长（这里排到第 20 周，设置默认是 16）：
-            # 先把学期总周数按课表落库并重建，否则 parse_classtable 会把 17-20 周截掉。
-            held = self.store.get(SEMESTER_KEY)
-            held = dict(held) if isinstance(held, dict) else {}
-            if int(held.get("total_weeks") or 0) != used_weeks:
-                held["total_weeks"] = used_weeks
-                self.store.set(SEMESTER_KEY, held)
-                self.semester = build_semester(self.settings, self.store)
+        held = self.store.get(SEMESTER_KEY)
+        held = dict(held) if isinstance(held, dict) else {}
+        if total_weeks and int(held.get("total_weeks") or 0) != used_weeks:
+            # 真实课表可能比设置里的周数长（课表排到第 20 周，设置默认是 16）：
+            # 先把总周数落库并重建，否则 parse_classtable 会把多出来的那几周静默截掉。
+            held["total_weeks"] = used_weeks
+            self.store.set(SEMESTER_KEY, held)
+            self.semester = build_semester(self.settings, self.store)
         parsed = parse_classtable(payload, used_weeks)
         self.store.set(CLASSTABLE_KEY, payload)
         if parsed.term_start:
             self.store.set(TERM_START_KEY, parsed.term_start.isoformat())
+        # 学期锚点也写回「设置」：以前只写总周数，设置里那个手填/遗留的 start_date
+        # （线上实测是个周五 2026-07-31）会继续被界面当成「第 1 周周一」，
+        # 于是界面上显示的周次和课程真实日期差好几周（显示第 11 周、其实是第 6 周 ⇒ 单双周反了）。
+        anchor = parsed.term_start.isoformat() if parsed.term_start else None
+        if anchor and held.get("start_date") != anchor:
+            held["start_date"] = anchor
+        if not held.get("name") and parsed.term:
+            held["name"] = parsed.term
+        self.store.set(SEMESTER_KEY, held)
         meta = {**parsed.summary(), "source": source, "imported_at": utcnow().isoformat()}
         self.store.set(IMPORT_META_KEY, meta)
         self.store.set(MODE_KEY, "imported")

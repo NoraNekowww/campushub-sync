@@ -67,6 +67,7 @@ campushub-sync/
 │   ├── make_icons.py               # 零依赖生成 PWA 图标
 │   ├── smoke_test.py               # 对运行中的实例做 34 项端到端检查
 │   ├── check-feed-hide.py          # 线上自检：删一条日程 → 订阅日历里消失 + 墓碑（跑完自动撤销）
+│   ├── check-week-alignment.py     # 线上自检：学期锚点 / 教务周次换算 / 有没有重复行
 │   ├── encrypt_kv_secrets.py       # 凭据迁移/巡检（--check / --dry-run）
 │   ├── t_e2e_user.py               # 建/删临时账号（--cleanup 连它的日程一起清）
 │   └── visual/                     # puppeteer-core + 系统 Edge 的无头校验
@@ -213,6 +214,13 @@ GET  /v1/classtable?t=<ms>&sign=<…>&app_key=<…>     头: Authorization: Bear
 
 > 学期第一周周一优先取接口返回的 `term_start`（真实值），其次才是 `SEMESTER_START_DATE`。
 > 首次导入时，带「（演示）」标记的演示事件会被自动清掉，并重建同步引擎。
+
+**周次怎么对齐（教务直连这条主路径）**：教务课表页 JS 里的 53 位周次位图，
+**第 1 位是开学前的报到/入学教育周**，所以 `教学周 = 位图位次 − 1`（`tju_cas.EAMS_WEEK_OFFSET`）。
+2026 秋的基准：第 1 教学周 = **8/31**，位图第一个 `1` 在第 5 位 ⇒ 第一个有课的周 = 教学周 4 = **9/21**
+（学校迎新口径：8/27 报到、8/28-9/20 军训、9/21 上课）。不换算的话整学期挪后一周、**单双周会反**。
+导入时还会把 `term_start` 写回学期设置，事件 id 也按周次生成（改锚点只改日期、不留重复行）。
+自检：`tools/check-week-alignment.py`。
 
 ---
 

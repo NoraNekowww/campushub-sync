@@ -515,6 +515,15 @@ def _js_value(token: str) -> str:
     return "" if token in ("null", "undefined", "false") else token
 
 
+#: 教务位图的周次比「教学周」多 1 —— 教务把开学前的**报到/入学教育周**也算成第 1 周。
+#:
+#: 2026-2027 秋季学期实测：新生 8/27 报到（那一周就是教务的第 1 周 = 8/24 起），
+#: 8/28-9/20 军训、**9/21 开始上课**（学校迎新日程），而课表位图里第一个 ``1`` 落在
+#: 第 5 位 ⇒ 9/21 = 教学周第 4 周；微北洋/校历说的「第 1 教学周」是 8/31。
+#: 不减掉这个 1 的话：整个学期的课都往后挪一周，单双周正好反过来。
+EAMS_WEEK_OFFSET = 1
+
+
 def _parse_js_activities(html: str) -> list[dict[str, Any]]:
     """从课表页的 JS 里抠出排课块（``TaskActivity`` + ``index = 星期*unitCount+节次``）。
 
@@ -523,10 +532,10 @@ def _parse_js_activities(html: str) -> list[dict[str, Any]]:
         activity = new TaskActivity(teacherIds, teacherNames, "45203(01039)",
                     "微积分I", "3964", "45楼B203", "00001111…", null, "", …);
         index =1*unitCount+0; table0.activities[index][…]=activity;
-        index =1*unitCount+1; …
+        index =1*unitCount+1; ……
 
     第 2 个串是教师名（逗号分隔）、第 4 个是课程名、第 6 个是教室、第 7 个是
-    53 位周次位图（第 w 位 = 1 表示第 w 周有课）。
+    53 位周次位图（第 w 位 = 1 表示教务的第 w 周有课，减 ``EAMS_WEEK_OFFSET`` 才是教学周）。
     """
     arranges: list[dict[str, Any]] = []
     for chunk in html.split(_ACTIVITY_SPLIT)[1:]:
@@ -540,7 +549,12 @@ def _parse_js_activities(html: str) -> list[dict[str, Any]]:
         room = args[5].strip()
         bitmap = args[6].strip()
         teachers = [item.strip() for item in args[1].split(",") if item.strip()]
-        weeks = [index + 1 for index, char in enumerate(bitmap) if char == "1"]
+        # 位图第 w 位 = 教务第 w 周；教务把报到/入学教育周算作第 1 周，减 1 才是教学周。
+        weeks = [
+            index + 1 - EAMS_WEEK_OFFSET
+            for index, char in enumerate(bitmap)
+            if char == "1" and index + 1 - EAMS_WEEK_OFFSET >= 1
+        ]
         # 同一个 activity 可能连着占好几节：紧跟其后的 index 行都算它的，
         # 遇到下一个块开头的 ``var teachers`` 就停。
         body = tail.split("var teachers")[0]
