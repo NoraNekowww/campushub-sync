@@ -68,7 +68,12 @@ class Settings(BaseSettings):
     password_min_length: int = 8
 
     # ------------------------------------------------------------ sync engine
-    sync_interval_minutes: int = 20
+    sync_interval_minutes: int = 10
+    # 待办快通道：待办里的勾选/取消勾选变化小、抓得快，用更短的间隔单独刷，
+    # 于是「手机上勾掉」不用等整轮（含教务登录）跑完。0 = 关掉快通道。
+    # 别调太密：一轮 = 每个清单一次 Graph 请求，几十次/分钟会吃到 429 限流
+    # （被限流后要等 Retry-After，反而更慢），5 分钟稳。
+    ms_sync_interval_minutes: int = 5
     sync_on_startup: bool = True
     enable_scheduler: bool = True
     public_base_url: str = "https://schedule.nzlab.online"
@@ -87,6 +92,11 @@ class Settings(BaseSettings):
     ms_scopes: str = "Tasks.ReadWrite offline_access"
     ms_list_ids: str = ""  # empty = every list in the account
     ms_include_completed: bool = False
+    # 待办里勾掉的日程要能在客户端显示成「已划掉」，所以完成态也得回拉；
+    # 但不回拉全部历史（那要翻很多页），只看最近这么多天动过的。
+    ms_completed_lookback_days: int = 14
+    # 清单数量可能十几个，每个清单一次 Graph 请求 —— 并发抓，别排队。
+    ms_max_concurrency: int = 6
     ms_include_undue: bool = False
     graph_base_url: str = "https://graph.microsoft.com/v1.0"
 

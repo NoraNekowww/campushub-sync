@@ -78,7 +78,8 @@
                        text-left text-[10px] leading-tight text-brand-900 transition-shadow hover:shadow-md
                        dark:border-brand-500/30 dark:bg-brand-500/20 dark:text-brand-100"
                 :style="blockStyle(block)"
-                @click="selected = block"
+                :aria-pressed="selected?.id === block.id"
+                @click="selected = selected?.id === block.id ? null : block"
               >
                 <span class="block truncate font-semibold">{{ block.title }}</span>
                 <span class="block truncate opacity-80">
@@ -91,6 +92,55 @@
         </div>
       </div>
     </div>
+
+    <!-- 格子里一节课的位置只够写「时间 + 地点」，其余的点开看 -->
+    <section
+      v-if="selected"
+      data-testid="class-detail"
+      class="card animate-fade-up space-y-2 p-3.5"
+    >
+      <div class="flex items-start gap-2">
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-semibold">{{ selected.title }}</p>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {{ timeLabel(selected.start_time) }}–{{ timeLabel(selected.end_time) }}
+            <template v-if="selected.location"> · {{ selected.location }}</template>
+          </p>
+        </div>
+        <button
+          class="btn-ghost !px-2"
+          title="收起"
+          data-testid="class-detail-close"
+          @click="selected = null"
+        >
+          <X :size="15" />
+        </button>
+      </div>
+      <dl
+        class="grid grid-cols-2 gap-x-4 gap-y-1.5 border-t border-slate-100 pt-2.5 text-xs dark:border-slate-800/70"
+      >
+        <div v-if="periodLabel(selected.periods)" class="flex gap-1.5">
+          <dt class="shrink-0 text-slate-400">节次</dt>
+          <dd>{{ periodLabel(selected.periods) }}</dd>
+        </div>
+        <div v-if="selected.location" class="flex gap-1.5">
+          <dt class="shrink-0 text-slate-400">地点</dt>
+          <dd class="min-w-0 truncate">{{ selected.location }}</dd>
+        </div>
+        <div v-if="selected.teacher" class="flex gap-1.5">
+          <dt class="shrink-0 text-slate-400">教师</dt>
+          <dd class="min-w-0 truncate">{{ selected.teacher }}</dd>
+        </div>
+        <div v-if="selected.week" class="flex gap-1.5">
+          <dt class="shrink-0 text-slate-400">周次</dt>
+          <dd>第 {{ selected.week }} 周</dd>
+        </div>
+        <div class="flex gap-1.5">
+          <dt class="shrink-0 text-slate-400">来源</dt>
+          <dd>{{ selected.source === 'tju_schedule' ? '天津大学课表' : selected.source }}</dd>
+        </div>
+      </dl>
+    </section>
 
     <section v-if="deadlines.length" class="space-y-2">
       <h2 class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -114,12 +164,12 @@
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { ChevronLeft, ChevronRight, ListTodo } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight, ListTodo, X } from 'lucide-vue-next'
 import EmptyState from '../components/EmptyState.vue'
 import EventCard from '../components/EventCard.vue'
 import { api } from '../api'
 import { removeEvent, state, toggleCompleted } from '../store'
-import { dayKey, minutesOfDay, timeLabel, todayKey, weekWindow } from '../utils/datetime'
+import { dayKey, minutesOfDay, periodLabel, timeLabel, todayKey, weekWindow } from '../utils/datetime'
 
 const DAY_START = 8 * 60 // 08:00
 const DAY_END = 21 * 60 + 30 // 21:30
@@ -232,7 +282,10 @@ function shift(delta) {
   offset.value = Math.max(-1, Math.min(8, offset.value + delta))
 }
 
-watch(offset, loadWeek)
+watch(offset, () => {
+  selected.value = null // 换周了，展开的那节课不是这一周的了
+  loadWeek()
+})
 watch(() => state.lastUpdated, loadWeek)
 onMounted(loadWeek)
 </script>

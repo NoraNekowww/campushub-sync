@@ -140,7 +140,7 @@ ssh root@nzlab.online 'cd /var/www/schedule && tar xzf /tmp/rel.tar.gz && bash d
 ```bash
 # 后端测试（本机）
 cd campushub-sync && .venv/Scripts/python.exe -m pytest backend -q
-#   预期：全绿（110 项，含 4 项周次换算用例）。tests/conftest.py 里两件事让旧用例重新跑得动：
+#   预期：全绿（120 项，含 4 项周次换算用例 + 10 项待办反向同步/抓取并发用例）。tests/conftest.py 里两件事让旧用例重新跑得动：
 #     ① CAPTCHA_ENABLED=false —— 注册用例不该去认 SVG 里的字；
 #     ② admin_headers 懒建一个 owner 账号 —— 时间线按账号隔离后，共享管理员令牌
 #        只有 owner 存在时才解析得出身份（别改成全局 autouse：注册那几个用例要靠
@@ -155,6 +155,9 @@ cd web && USERNAME_E2E=e2echeck PASSWORD_E2E=... node tools/verify-swipe-delete.
 bash deploy/verify-tju-live.sh                    # 线上接口连通性
 ssh root@nzlab.online 'cd /var/www/schedule/backend && /var/www/schedule/venv/bin/python -' \
     < tools/check-week-alignment.py               # 周次对齐自检（学期锚点/报到周换算/重复行）
+ssh root@nzlab.online 'cd /var/www/schedule/backend && /var/www/schedule/venv/bin/python -' \
+    < tools/check-todo-sync.py                    # 课表事件带 periods/teacher/week + 整轮/待办两个间隔
+cd web && node tools/verify-class-cards.mjs       # 课表卡片折叠/点开（本地 dist + API fixture，不碰线上数据）
 ```
 
 ## 8. 已知遗留 / 下一步
@@ -180,6 +183,24 @@ ssh root@nzlab.online 'cd /var/www/schedule/backend && /var/www/schedule/venv/bi
     注意：id 从「按日期」换成「按周次」是一次性迁移 —— 老库里 `hidden` 的行在新 id 下会变成**另一行**，
     用户此前删掉的那节课会重新出现；线上已按「同一天同时间同教室」把它的新行重新隐藏（1 条）。
     之后 id 稳定，不会再发生。
-11. 遗留小事：① 别的账号（如 lzy）当年导入课表时没给「现在是第几周」，锚点会落错周一 ——
+11. **待办反向同步 + 提速 + 课表卡片精简**（2026-10-11 已上线）：
+    ① **微软待办里勾掉 → 客户端也划掉**：抓待办时用
+    `(status ne 'completed') or (lastModifiedDateTime ge <now-14d>)` 回拉最近的完成态
+    （`MS_COMPLETED_LOOKBACK_DAYS`；注意 `completedDateTime` 是 `dateTimeTimeZone`，
+    拿它跟字面量比会被 Graph 400 拒掉，别改回去）。完成态按「谁最后动过」判归属，
+    但**只认「对面把它划掉」一个方向**（对面报未完成不动本地 —— 本地划掉会立刻推回待办，
+    推回去本身就让对面的时间戳变新，互认「更新者胜」会把刚划掉的自己抹掉）。
+    ② **提速**：待办那一轮改成一个共享 `httpx.AsyncClient` + 并发抓各清单
+    （`MS_MAX_CONCURRENCY=6`），整轮 3.2s → 1.1s；并新增**待办快通道**
+    `MS_SYNC_INTERVAL_MINUTES=5`（只刷待办、不碰教务），整轮降到 10 分钟
+    （`SYNC_INTERVAL_MINUTES=10`）。⚠️ 快通道别调到 2 分钟以内：一轮 = 每个清单一次
+    Graph 请求，密了吃 429，被限流后等 `Retry-After` 反而更慢。
+    ③ **课表卡片**：折叠态只有「时间区间 + 地点」，点开才有节次/时长/教师/周次/来源；
+    课表格子里点一节课，下方出详情卡。后端 `EventOut` 为此多给了 `teacher`/`week`。
+    自检：`tools/check-todo-sync.py`、`tools/check-todo-roundtrip.py`（真在待办里建一条、
+    直接经 Graph 勾掉、验证本地跟着划掉，跑完清理）、`web/tools/verify-class-cards.mjs`。
+12. 遗留小事：① 别的账号（如 lzy）当年导入课表时没给「现在是第几周」，锚点会落错周一 ——
     想修就在设置里把它的课表重导一次（面板会把当前周一并带上）；② 微软待办里还留着测试任务
     （「测试日程/测试日程C/测试日程D」），会出现在订阅日历里，可自行删或让我清。
+    ③ 账号 #2 / #5 的微软待办连接器每轮都会报「no refresh token」——他们没重新授权过，
+    待办那部分一直不可用（教务部分是好的）；要恢复就让本人登录后在设置里重新走一次设备代码流。

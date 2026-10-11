@@ -68,6 +68,8 @@ campushub-sync/
 │   ├── smoke_test.py               # 对运行中的实例做 34 项端到端检查
 │   ├── check-feed-hide.py          # 线上自检：删一条日程 → 订阅日历里消失 + 墓碑（跑完自动撤销）
 │   ├── check-week-alignment.py     # 线上自检：学期锚点 / 教务周次换算 / 有没有重复行
+│   ├── check-todo-sync.py          # 线上自检：课表事件带 periods/teacher/week + 两个同步间隔都在跑
+│   ├── check-todo-roundtrip.py     # 线上自检：待办里勾掉 → 客户端跟着划掉（真建真勾真删）
 │   ├── encrypt_kv_secrets.py       # 凭据迁移/巡检（--check / --dry-run）
 │   ├── t_e2e_user.py               # 建/删临时账号（--cleanup 连它的日程一起清）
 │   └── visual/                     # puppeteer-core + 系统 Edge 的无头校验
@@ -77,7 +79,8 @@ campushub-sync/
 ├── web/tools/                      # 前端侧的线上校验（同一套 headless Edge 套路）
 │   ├── verify-swipe-delete.mjs     # 卡片左右滑动删除 + 撤销 + 划掉未被手势吃掉
 │   ├── verify-tju-ui.mjs           # 真账号回归：教务绑定面板
-│   └── verify-panel.mjs            # 设置页渲染 + 底部反馈链接
+│   ├── verify-panel.mjs            # 设置页渲染 + 底部反馈链接
+│   └── verify-class-cards.mjs      # 课表卡片：折叠只看时间+地点、点开才有教师/周次（本地 dist + API fixture，不碰线上数据）
 ├── Dockerfile  docker-compose.yml  .dockerignore  .env.example
 └── README.md
 ```
@@ -137,7 +140,10 @@ cd tools/visual && npm install && node verify-ui.mjs --base http://127.0.0.1:800
 | `PUBLIC_BASE_URL` | `https://schedule.nzlab.online` | 生成订阅地址用，必须能从手机访问 |
 | `DATA_DIR` | `./data` | SQLite + 令牌文件所在目录（compose 里是 `/app/data`） |
 | `WEB_DIST` | `../web/dist` | 前端构建产物目录 |
-| `SYNC_INTERVAL_MINUTES` | `20` | 后台同步周期（建议 15–30） |
+| `SYNC_INTERVAL_MINUTES` | `10` | 整轮同步周期（含教务 CAS 登录，别太勤） |
+| `MS_SYNC_INTERVAL_MINUTES` | `5` | **待办快通道**：只刷微软待办、不碰教务，让手机上的勾选很快回来（`0` = 关）。别调到 2 分钟以内 —— 一轮 = 每个清单一次 Graph 请求，密了会吃 429，被限流后要等 `Retry-After`，反而更慢 |
+| `MS_COMPLETED_LOOKBACK_DAYS` | `14` | 待办里勾掉的日程要能在客户端显示成「已划掉」⇒ 完成态也回拉，但只看最近这么多天动过的 |
+| `MS_MAX_CONCURRENCY` | `6` | 清单抓取并发（十几个清单一轮并发抓，不再排队） |
 | `SYNC_ON_STARTUP` / `ENABLE_SCHEDULER` | `true` | 启动即同步 / 是否启用调度器 |
 | `EVENT_RETENTION_DAYS` | `30` | 清理过了多久的旧事件（`source=custom` 不动） |
 | `DEMO_MODE` / `TJU_MODE` | `false` / `ics` | 演示数据 / 课表来源：`ics`・`wepeiyang`・`demo` |
@@ -266,6 +272,12 @@ GET  /v1/classtable?t=<ms>&sign=<…>&app_key=<…>     头: Authorization: Bear
   一直留着；对 45 天内删掉/刚划掉的日程再发一条同 `UID` 的 `STATUS:CANCELLED` 墓碑，
   客户端才会真的把它从手机日历里删掉。响应头 `X-Event-Count` / `X-Cancelled-Count`
   分别给出「可见」与「墓碑」条数。
+- **微软待办里勾掉 → 客户端也划掉**：抓待办时不只拉未完成的，还回拉「最近 14 天动过的
+  完成态」（`MS_COMPLETED_LOOKBACK_DAYS`），所以你在手机上勾掉一条，客户端这边也会变成
+  带删除线的「已划掉」。判定用「谁最后动过」：只有对面确实更晚（`lastModifiedDateTime`
+  比本地这行的更新时间新）才让完成态盖过来，本地改过的标题/地点/备注仍受保护；反过来
+  （对面报未完成）不会抹掉本地的划掉 —— 因为本地划掉会立刻推回待办，推回去本身就会让
+  对面的时间戳变新，两边互认「更新者胜」就会把刚划掉的自己抹掉。要取消划掉在客户端点一下。
 - **只发站长自己的**：订阅令牌是站长（owner）的，feed 只导出他名下的日程；多租户之后
   别人的课表不会混进他的手机日历。想要「已完成也留着」用 `?include_completed=true`。
 - `STATUS:CONFIRMED` 是 VEVENT 唯一说得通的「在办」状态（RFC 5545 的 `COMPLETED` 只属于
@@ -393,9 +405,22 @@ tar czf ~/schedule-$(date +%F).tgz -C /var/www/schedule data   # 备份（.db + 
    单个连接器失败只影响它自己，`/api/status` 会标 `degraded` 并给出原因。
 2. 写入时以 `id = hash(source + source_id)` **upsert**：外部字段（标题/时间/地点/描述）会被更新，
    **本地状态（`status`）永不覆盖** —— 你在 App 里打的勾不会被下一次同步抹掉。
-3. 清理：超过 `EVENT_RETENTION_DAYS`（默认 30 天）的旧事件删除，`source=custom` 的手动事件保留。
-4. 时间一律以 **UTC** 入库，出入接口按 `Asia/Shanghai` 呈现；前端用上海时区的日期工具，
+   唯一的例外是「对面更晚动过」的完成态（见 §5「微软待办里勾掉 → 客户端也划掉」）。
+3. 两条节奏：整轮 `SYNC_INTERVAL_MINUTES`（默认 10 分钟，含教务 CAS 登录）+ 待办快通道
+   `MS_SYNC_INTERVAL_MINUTES`（默认 5 分钟，`run(trigger, sources=["microsoft_todo"])` 只跑待办，
+   不碰教务）。快通道存在的原因：手机上勾掉一条待办，不该等整轮跑完才回来。
+4. 微软待办那一轮是一个共享的 `httpx.AsyncClient` + 并发抓各清单（`MS_MAX_CONCURRENCY`，
+   默认 6），一轮从「14 次串行 ≈ 2.5s」压到「≈ 0.7s」；换令牌是串行的（并发刷新会用同一个
+   refresh token 打两次令牌端点，微软认一次拒一次，被拒那条路径会清掉刚拿到的令牌）。
+5. 清理：超过 `EVENT_RETENTION_DAYS`（默认 30 天）的旧事件删除，`source=custom` 的手动事件保留。
+6. 时间一律以 **UTC** 入库，出入接口按 `Asia/Shanghai` 呈现；前端用上海时区的日期工具，
    所以手机时区错乱也不会串行。
+
+### 课表卡片：折叠只看「时间区间 + 地点」，点开才有详情
+
+课上完了要一眼扫过去，所以日程里的课表卡片折叠态只有**时间区间 + 地点**（来源、教师、周次、
+节次、时长、备注都收进点开的详情里）；课表这一周的格子里点一节课，下方出现同样的详情卡。
+`verify-class-cards.mjs` 用系统 Edge 跑本地构建产物 + API fixture 验证这条，不碰线上数据。
 
 ---
 

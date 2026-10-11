@@ -29,6 +29,8 @@ web/node_modules/
 tools/visual/node_modules/
 dist/
 web/dist/
+# 真浏览器回归的截图产物（web/tools/verify-*.mjs 跑出来），不进仓库
+web/tools/shots/
 tools/visual/*.png
 tools/visual/*.jpg
 tools/visual/out/

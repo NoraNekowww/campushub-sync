@@ -77,7 +77,17 @@ function releaseSwipe(closer) {
           <span v-if="durationShort" class="mt-0.5 text-[10px] leading-none">{{ durationShort }}</span>
         </div>
 
-        <div class="min-w-0 flex-1">
+        <div
+          class="min-w-0 flex-1"
+          :class="collapsible ? 'cursor-pointer' : ''"
+          :role="collapsible ? 'button' : undefined"
+          :tabindex="collapsible ? 0 : undefined"
+          :aria-expanded="collapsible ? expanded : undefined"
+          data-testid="event-body"
+          @click="toggleExpanded"
+          @keydown.enter.prevent="toggleExpanded"
+          @keydown.space.prevent="toggleExpanded"
+        >
           <div class="flex items-start gap-2">
             <h3
               class="min-w-0 flex-1 truncate text-sm font-semibold"
@@ -92,9 +102,33 @@ function releaseSwipe(closer) {
             >
               {{ priority.label }}
             </span>
+            <ChevronDown
+              v-if="collapsible"
+              :size="15"
+              class="mt-0.5 shrink-0 text-slate-400 transition-transform"
+              :class="expanded ? 'rotate-180' : ''"
+              aria-hidden="true"
+            />
           </div>
 
-          <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+          <!-- 折叠态就「时间区间 + 地点」：课表卡片一排排扫过去要能一眼看完 -->
+          <div
+            v-if="collapsible"
+            class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400"
+            data-testid="event-basics"
+          >
+            <span class="inline-flex items-center gap-1">
+              <Clock :size="12" />{{ timeLabel(event.start_time) }}–{{ endLabel }}
+            </span>
+            <span v-if="event.location" class="inline-flex items-center gap-1">
+              <MapPin :size="12" />{{ event.location }}
+            </span>
+          </div>
+
+          <div
+            v-else
+            class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400"
+          >
             <span class="inline-flex items-center gap-1">
               <component :is="sourceIcon" :size="12" />
               {{ sourceLabel }}
@@ -140,9 +174,37 @@ function releaseSwipe(closer) {
             </button>
           </div>
 
-          <p v-if="event.description" class="mt-1.5 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
-            {{ event.description }}
-          </p>
+          <!-- 点开才给的详情 -->
+          <dl
+            v-if="collapsible && expanded"
+            class="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-1.5 border-t border-slate-100 pt-2.5 text-xs text-slate-500 dark:border-slate-700/60 dark:text-slate-400"
+            data-testid="event-detail"
+          >
+            <div v-if="periodLabel(event.periods)" class="flex gap-1.5">
+              <dt class="shrink-0 text-slate-400">节次</dt>
+              <dd>{{ periodLabel(event.periods) }}</dd>
+            </div>
+            <div v-if="durationPlain" class="flex gap-1.5">
+              <dt class="shrink-0 text-slate-400">时长</dt>
+              <dd>{{ durationPlain }}</dd>
+            </div>
+            <div v-if="event.teacher" class="flex gap-1.5">
+              <dt class="shrink-0 text-slate-400">教师</dt>
+              <dd class="min-w-0 truncate">{{ event.teacher }}</dd>
+            </div>
+            <div v-if="event.week" class="flex gap-1.5">
+              <dt class="shrink-0 text-slate-400">周次</dt>
+              <dd>第 {{ event.week }} 周</dd>
+            </div>
+            <div class="flex gap-1.5">
+              <dt class="shrink-0 text-slate-400">来源</dt>
+              <dd>{{ sourceLabel }}</dd>
+            </div>
+            <div v-if="event.description && !event.teacher" class="col-span-2 flex gap-1.5">
+              <dt class="shrink-0 text-slate-400">备注</dt>
+              <dd class="min-w-0">{{ event.description }}</dd>
+            </div>
+          </dl>
         </div>
       </div>
       </article>
@@ -156,6 +218,7 @@ import {
   AlertTriangle,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   Circle,
   Clock,
   GraduationCap,
@@ -163,11 +226,23 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-vue-next'
-import { countdown, durationLabel, periodsShort, timeLabel } from '../utils/datetime'
+import { countdown, durationLabel, periodLabel, periodsShort, timeLabel } from '../utils/datetime'
 import { openCustomEditor } from '../store'
 
 const props = defineProps({ event: { type: Object, required: true } })
 const emit = defineEmits(['toggle', 'remove'])
+
+/* ----------------------------------------------- 折叠 / 展开（课表卡片） */
+
+// 课表课程默认只露「时间区间 + 地点」，点一下才给教师、周次、节次这些。
+// 待办那类卡片本来就是要做的事，信息一行就够，不折腾。
+const collapsible = computed(() => props.event.source === 'tju_schedule' && !props.event.is_deadline)
+const expanded = ref(false)
+
+function toggleExpanded() {
+  if (!collapsible.value) return
+  expanded.value = !expanded.value
+}
 
 /* ------------------------------------------------------- 左右滑动删除 */
 
@@ -315,6 +390,8 @@ const accentBar = computed(() =>
 const timeLabelSafe = timeLabel
 const endLabel = computed(() => timeLabel(props.event.end_time) || '—')
 const durationText = computed(() => durationLabel(props.event.start_time, props.event.end_time, props.event.periods))
+// 展开区把「节次」单独列一行，时长就别再重复一遍节数
+const durationPlain = computed(() => durationLabel(props.event.start_time, props.event.end_time, null))
 const durationShort = computed(() => periodsShort(props.event.start_time, props.event.end_time, props.event.periods))
 
 /* 能划掉的：待办 + 自定义 + 微软待办任务。课表课程不给划 —— 它不是"完成/未完成"语义。 */

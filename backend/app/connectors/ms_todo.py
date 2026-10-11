@@ -77,6 +77,9 @@ class MSTodoConnector(HttpConnector):
         super().__init__(settings)
         self.store = store or KVStore()
         self._msal_app = None
+        # 清单是并发抓的，换令牌必须串行（见 _refresh）。
+        self._refresh_lock = asyncio.Lock()
+        self._refreshed_at = 0.0
 
     # ------------------------------------------------------------- MSAL setup
     @property
@@ -121,6 +124,7 @@ class MSTodoConnector(HttpConnector):
             }
         )
         self.store.set(TOKEN_KEY, tokens)
+        self._refreshed_at = time.time()
         if tokens.get("account"):
             self.store.set(ACCOUNT_KEY, {"username": tokens["account"]})
         return tokens
@@ -227,9 +231,17 @@ class MSTodoConnector(HttpConnector):
 
     # ---------------------------------------------------------------- refresh
     async def _refresh(self, force: bool = False) -> str:
+        # 清单并发抓 ⇒ 换令牌必须串行：两次并发的 refresh 用同一个 refresh token
+        # 打令牌端点，微软只认一次、另一次报 invalid_grant，而那条路径会
+        # forget_tokens()（把刚拿到的 token 也抹了）。串行 + 刚换过就复用。
+        async with self._refresh_lock:
+            return await self._refresh_locked(force)
+
+    async def _refresh_locked(self, force: bool) -> str:
         tokens = self._tokens()
         access = tokens.get("access_token")
-        if access and not force and float(tokens.get("expires_at") or 0) > time.time():
+        fresh = float(tokens.get("expires_at") or 0) > time.time()
+        if access and fresh and (not force or time.time() - self._refreshed_at < 10):
             return access
         refresh_token = tokens.get("refresh_token")
         if not refresh_token:
@@ -261,8 +273,15 @@ class MSTodoConnector(HttpConnector):
         return {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 
     # ------------------------------------------------------------- Graph API
-    async def _get(self, url: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        headers = await self._auth_headers()
+    async def _get(
+        self,
+        url: str,
+        params: dict[str, Any] | None = None,
+        *,
+        client: "httpx.AsyncClient | None" = None,
+        headers: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        headers = dict(headers) if headers is not None else await self._auth_headers()
 
         async def on_unauthorized() -> None:
             """Force one token refresh, then let the request layer retry."""
@@ -270,7 +289,12 @@ class MSTodoConnector(HttpConnector):
             headers["Authorization"] = f"Bearer {token}"
 
         return await self.request_json(
-            "GET", url, headers=headers, params=params, on_unauthorized=on_unauthorized
+            "GET",
+            url,
+            headers=headers,
+            params=params,
+            client=client,
+            on_unauthorized=on_unauthorized,
         ) or {}
 
     async def _send(
@@ -373,14 +397,21 @@ class MSTodoConnector(HttpConnector):
         events = self.normalize_task(task, todo_list, horizon)
         return events[0] if events else None
 
-    async def _paged(self, url: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    async def _paged(
+        self,
+        url: str,
+        params: dict[str, Any] | None = None,
+        *,
+        client: "httpx.AsyncClient | None" = None,
+        headers: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         next_url: Optional[str] = url
         next_params = params
         guard = 0
         while next_url and guard < 50:
             guard += 1
-            page = await self._get(next_url, next_params)
+            page = await self._get(next_url, next_params, client=client, headers=headers)
             items.extend(page.get("value") or [])
             next_url = page.get("@odata.nextLink")
             next_params = None  # nextLink already carries the query string
@@ -389,7 +420,12 @@ class MSTodoConnector(HttpConnector):
                 break
         return items
 
-    async def _lists(self) -> list[dict[str, Any]]:
+    async def _lists(
+        self,
+        *,
+        client: "httpx.AsyncClient | None" = None,
+        headers: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
         base = self.settings.graph_base_url.rstrip("/")
         chosen = set(self.settings.list_id_list)
         # NOTE: Graph's To Do RequestBroker rejects *any* ``$select`` on this
@@ -397,7 +433,9 @@ class MSTodoConnector(HttpConnector):
         # verified against the live service (``$top`` alone returns 200 and the
         # full list objects; raw ``$``, ``%24`` and urlencoded variants all 400).
         # So ask for the whole object and pick fields locally.
-        lists = await self._paged(f"{base}/me/todo/lists", {"$top": 100})
+        lists = await self._paged(
+            f"{base}/me/todo/lists", {"$top": 100}, client=client, headers=headers
+        )
         if chosen:
             filtered = [item for item in lists if item.get("id") in chosen]
             missing = chosen - {item.get("id") for item in lists}
@@ -411,27 +449,68 @@ class MSTodoConnector(HttpConnector):
     def enabled(self) -> bool:
         return self.settings.ms_enabled
 
+    def task_query(self) -> dict[str, Any]:
+        """``/tasks`` 的查询串。
+
+        待办里勾掉一条日程，客户端要能跟着显示成「已划掉」——所以完成态也得回拉。
+        但「完成」这个筛选用不了：``completedDateTime`` 是 ``dateTimeTimeZone``，
+        跟字面量比会 ``400 Invalid filter clause``（拿线上账号实测过，见
+        ``tools/ms-filter-probe`` 一类的探针结论）。能用的等价写法是
+        ``lastModifiedDateTime``：
+
+            (status ne 'completed') or (lastModifiedDateTime ge <cutoff>)
+
+        即「未完成的全部 + 最近动过的（含刚勾掉的）」。窗口之外、又早就勾掉的
+        历史任务不再回拉 —— 它们本来也不该出现在时间线上。
+
+        ``$select`` 一律不能用（To Do 的 RequestBroker 会 400，见 ``_lists``）。
+        """
+        params: dict[str, Any] = {"$top": 100}
+        if self.settings.ms_include_completed:
+            return params  # 显式要求「连历史完成态一起要」：不过滤
+        lookback = max(0, int(self.settings.ms_completed_lookback_days))
+        if lookback:
+            cutoff = (utcnow() - timedelta(days=lookback)).strftime("%Y-%m-%dT%H:%M:%S.0000000Z")
+            params["$filter"] = f"(status ne 'completed') or (lastModifiedDateTime ge {cutoff})"
+        else:
+            params["$filter"] = "status ne 'completed'"
+        return params
+
     async def fetch(self) -> FetchResult:
         base = self.settings.graph_base_url.rstrip("/")
         horizon = utcnow() + timedelta(days=self.settings.horizon_days)
         events: list[Event] = []
-        lists = await self._lists()
-        per_list: dict[str, int] = {}
+        params = self.task_query()
 
-        for todo_list in lists:
-            list_id = todo_list.get("id")
-            if not list_id:
-                continue
-            # ``$select`` is rejected by the To Do RequestBroker (see ``_lists``),
-            # so ask for every field and let the normaliser ignore what it needs.
-            params: dict[str, Any] = {"$top": 100}
-            if not self.settings.ms_include_completed:
-                params["$filter"] = "status ne 'completed'"
-            try:
-                tasks = await self._paged(f"{base}/me/todo/lists/{list_id}/tasks", params)
-            except ConnectorError as exc:
-                log.warning("microsoft_todo: list %s failed: %s", list_id, exc)
-                continue
+        # 一个清单一次 Graph 请求，账号里有十几个清单 ⇒ 串行排队就是几秒。
+        # 共用一个 client（省掉每次 TLS 握手）+ 并发抓（Semaphore 限流）。
+        async with self._client() as client:
+            headers = await self._auth_headers()  # 先换好令牌，别让 14 个请求一起撞 401
+            lists = await self._lists(client=client, headers=headers)
+            semaphore = asyncio.Semaphore(max(1, int(self.settings.ms_max_concurrency)))
+
+            async def load(todo_list: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+                list_id = todo_list.get("id")
+                if not list_id:
+                    return todo_list, []
+                async with semaphore:
+                    try:
+                        tasks = await self._paged(
+                            f"{base}/me/todo/lists/{list_id}/tasks",
+                            params,
+                            client=client,
+                            headers=headers,
+                        )
+                    except ConnectorError as exc:
+                        log.warning("microsoft_todo: list %s failed: %s", list_id, exc)
+                        return todo_list, []
+                return todo_list, tasks
+
+            results = await asyncio.gather(*(load(item) for item in lists))
+
+        per_list: dict[str, int] = {}
+        for todo_list, tasks in results:
+            list_id = todo_list.get("id") or "?"
             count = 0
             for task in tasks:
                 for event in self.normalize_task(task, todo_list, horizon):
@@ -444,6 +523,7 @@ class MSTodoConnector(HttpConnector):
             "events": len(events),
             "horizon_days": self.settings.horizon_days,
             "account": self.auth_state().get("account"),
+            "filter": params.get("$filter"),
         }
         return FetchResult(events=events, detail=detail)
 

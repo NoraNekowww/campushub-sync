@@ -87,6 +87,23 @@ def upsert_events(
                 if name in protected:
                     continue
                 setattr(existing, name, getattr(incoming, name))
+            # 例外：完成状态按「谁最后动」定。用户在微软待办那边勾掉一条日程，
+            # 客户端要跟着划掉；而本地划掉会立刻推回待办，所以正常情况两边一致。
+            # 只有对面确实更晚动过（lastModifiedDateTime / updated_at 更新）才让
+            # 它改这一项，本地改的标题、地点、备注仍然受保护。
+            #
+            # 只认「对面把它划掉」这一个方向：反过来（对面报未完成）不动本地的
+            # 划掉标记 —— 我们推回去的写入本身就会让对面的 lastModifiedDateTime
+            # 变新，若两边互认「更新者胜」，本地刚划掉的会被自己推的那次同步抹掉。
+            # 要取消划掉，在客户端点一下即可（那会立刻推回待办）。
+            if (
+                incoming.status == "completed"
+                and existing.status != "completed"
+                and as_aware(incoming.updated_at) > as_aware(existing.updated_at)
+            ):
+                log.info("sync: %s marked completed by the source", event_id)
+                existing.status = "completed"
+                existing.completed_at = incoming.completed_at or utcnow()
             existing.updated_at = utcnow()
         else:
             for name in SYNCED_FIELDS:
@@ -133,7 +150,16 @@ class SyncEngine:
             scopes.append((user.id, build_connectors(self.settings, store=store)))
         return scopes
 
-    async def run(self, trigger: str = "manual") -> SyncOutcome:
+    async def run(
+        self, trigger: str = "manual", sources: Optional[Sequence[str]] = None
+    ) -> SyncOutcome:
+        """跑一轮同步。
+
+        ``sources`` 只跑指定名字的连接器（``["microsoft_todo"]``）—— 待办的变化
+        小而快，用短间隔单独刷；教务要现场登录 CAS，跟着一起刷就是浪费。
+        """
+        wanted = {name.strip().lower() for name in sources} if sources else None
+
         if self._lock.locked():
             log.info("sync already running — skipping %s trigger", trigger)
             return SyncOutcome(ok=False, trigger=trigger, message="sync already in progress")
@@ -148,11 +174,18 @@ class SyncEngine:
             outcome.run_id = run_id
 
             scopes = self._scopes()
+            if wanted is not None:
+                scopes = [
+                    (user_id, [conn for conn in connectors if conn.name.lower() in wanted])
+                    for user_id, connectors in scopes
+                ]
             if not any(connectors for _user_id, connectors in scopes):
                 # 一个连接器都没有 = 没东西可同步，不算失败；只给一条提示，
                 # 免得用户刚注册、还没绑任何账号就看到「同步失败」。
                 outcome.message = (
-                    "no connector enabled — set MS_CLIENT_ID / TJU_MODE or DEMO_MODE=1"
+                    f"no {'/'.join(sorted(wanted))} connector enabled"
+                    if wanted is not None
+                    else "no connector enabled — set MS_CLIENT_ID / TJU_MODE or DEMO_MODE=1"
                 )
                 self._close_run(run_id, outcome, started)
                 return outcome

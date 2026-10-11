@@ -35,6 +35,9 @@ class EventOut(BaseModel):
     updated_at: datetime
     completed_at: Optional[datetime] = None
     periods: Optional[list[int]] = None  # 真实节次 [起, 止]（1 起），教务事件才有
+    #: 教务事件的授课教师与周次（卡片折叠时只显示时间+地点，展开才用得上）
+    teacher: Optional[str] = None
+    week: Optional[int] = None
     #: 「划掉」有没有成功推回微软待办：``{"ok": bool, "error": str | None}``
     ms_sync: Optional[dict[str, Any]] = None
 
@@ -65,7 +68,29 @@ class EventOut(BaseModel):
             updated_at=local(event.updated_at),  # type: ignore[arg-type]
             completed_at=local(event.completed_at),
             periods=_periods_from_raw(event.raw_dict()),
+            teacher=_str_from_raw(event.raw_dict(), "teacher"),
+            week=_int_from_raw(event.raw_dict(), "week"),
         )
+
+
+def _str_from_raw(raw: Any, key: str) -> Optional[str]:
+    if not isinstance(raw, dict):
+        return None
+    value = raw.get(key)
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _int_from_raw(raw: Any, key: str) -> Optional[int]:
+    if not isinstance(raw, dict):
+        return None
+    try:
+        value = int(raw.get(key))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
 
 
 def _periods_from_raw(raw: Any) -> Optional[list[int]]:
