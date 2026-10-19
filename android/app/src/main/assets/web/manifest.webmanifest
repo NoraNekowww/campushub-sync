@@ -1,0 +1,47 @@
+{
+  "name": "CampusHub Sync · 课表与 DDL",
+  "short_name": "CampusHub",
+  "description": "天津大学课表 + Microsoft To Do 截止日期，聚合为一条时间线。",
+  "lang": "zh-CN",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "日程", "url": "." },
+    { "name": "课表", "url": "." },
+    { "name": "桌面组件", "url": "widget.html" }
+  ],
+  "widgets": [
+    {
+      "name": "今日日程",
+      "short_name": "今日日程",
+      "description": "显示今日即将开始的课程与 DDL 截止日程",
+      "tag": "today-agenda",
+      "template": "widget-today",
+      "ms_ac_template": "widgets/today-template.json",
+      "data": "api/widgets/today",
+      "type": "application/json",
+      "screenshots": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "label": "今日日程"
+        }
+      ],
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}
