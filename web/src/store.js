@@ -8,6 +8,8 @@ import { dayKey, isEventEnded, todayKey } from './utils/datetime'
 import { browserClasstable, browserLogin, TwtError } from './twt-sign'
 
 const THEME_KEY = 'campushub.theme'
+const EVENTS_CACHE_KEY = 'campushub.events_cache.v1'
+const USER_CACHE_KEY = 'campushub.user_cache.v1'
 const LOOKAHEAD_DAYS = 60
 
 export const state = reactive({
@@ -126,8 +128,68 @@ function fetchParams() {
   }
 }
 
+function loadCachedData() {
+  try {
+    const rawEvents = localStorage.getItem(EVENTS_CACHE_KEY)
+    if (rawEvents) {
+      const parsed = JSON.parse(rawEvents)
+      if (Array.isArray(parsed?.items) && parsed.items.length > 0) {
+        state.events = parsed.items
+        state.total = parsed.total ?? parsed.items.length
+        if (parsed.timestamp) {
+          state.lastUpdated = new Date(parsed.timestamp)
+        }
+      }
+    }
+  } catch (e) {
+    /* ignore */
+  }
+
+  try {
+    const rawUser = localStorage.getItem(USER_CACHE_KEY)
+    if (rawUser) {
+      const parsedUser = JSON.parse(rawUser)
+      if (parsedUser && typeof parsedUser === 'object') {
+        state.user = parsedUser
+      }
+    }
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+function saveEventsCache(items, total) {
+  try {
+    localStorage.setItem(
+      EVENTS_CACHE_KEY,
+      JSON.stringify({
+        items,
+        total,
+        timestamp: Date.now(),
+      })
+    )
+  } catch (e) {
+    /* ignore storage quota errors */
+  }
+}
+
+function saveUserCache(user) {
+  try {
+    if (user) {
+      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user))
+    } else {
+      localStorage.removeItem(USER_CACHE_KEY)
+    }
+  } catch (e) {
+    /* ignore */
+  }
+}
+
 export async function refresh({ silent = false } = {}) {
-  if (!silent) state.loading = true
+  // 如果本地有缓存的课表数据，则无需展示全屏 loading 转圈，实现视觉无感秒出
+  if (!silent && (!state.events || state.events.length === 0)) {
+    state.loading = true
+  }
   try {
     const payload = await api.events(fetchParams())
     state.events = payload.items || []
@@ -135,12 +197,17 @@ export async function refresh({ silent = false } = {}) {
     state.error = ''
     state.authRequired = false
     state.lastUpdated = new Date()
+    // 异步更新本地离线缓存
+    saveEventsCache(state.events, state.total)
   } catch (error) {
     if (isAuthError(error)) {
       state.authRequired = true
       state.error = ''
     } else {
-      state.error = error.message || '加载失败'
+      // 若已有缓存课表展示，网络报错仅在控制台或弱提示，不冲垮已渲染的课表
+      if (!state.events || state.events.length === 0) {
+        state.error = error.message || '加载失败'
+      }
     }
   } finally {
     state.loading = false
@@ -175,6 +242,7 @@ export async function loadConfig() {
 }
 
 export async function bootstrap() {
+  loadCachedData()
   await Promise.all([refresh(), loadStatus(), loadConfig()])
 }
 
@@ -187,6 +255,7 @@ export async function fetchSession() {
     state.user = payload.user || null
     state.accounts = payload.accounts || null
     state.accountsReady = true
+    saveUserCache(state.user)
     return state.user
   } catch (error) {
     // Endpoint missing (old backend) or unreachable → treat accounts as absent

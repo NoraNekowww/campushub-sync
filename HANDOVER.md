@@ -414,3 +414,14 @@ cd web && node tools/check-live-render.mjs        # 线上体检：无凭据=登
         3. 动态数据接口（`/schedule/api/*`）无缝穿透走网络并在后台异步静默刷新，做到真正意义上的**毫秒级极速秒开、超低延迟、断网也能瞬间展示完整界面**。
       - APK 重新编译打包并已覆盖上传至 GitHub Release `v1.0.0`（直链自动获取最新版本）。
     - 测试：后端 **152 全过**；前端 `verify-week-grid.mjs` **27 项全过**。`sw.js` VERSION → `campushub-v21`。
+
+31. **第 18 批（2026-10-14 课表与日程「本地即时缓存优先 + 后台静默续期」机制）** —— 用户原话：「可以引入缓存机制,课表这种东西就可以先加载出来」：
+    - ① **SWR（Stale-While-Revalidate）双轨缓存加载机制**：
+      - 在 `web/src/store.js` 引入持久化数据缓存 `campushub.events_cache.v1` 与用户状态缓存 `campushub.user_cache.v1`。
+      - `bootstrap()` 初始化启动第一步即执行 `loadCachedData()`，从本地磁盘同步恢复上次拉取到的全部课表、日程、DDL 和用户身份，**应用点开即刻渲染出完整课表网格，耗时 0 毫秒**。
+      - `refresh()` 探测到已有本地课表时，自动取消全屏 loading 菊花转圈，界面不被任何 loading 骨架遮蔽；静默在后台发起网络请求拉取增量与变更，拉取成功后无感更新网格并写回本地持久缓存。
+      - 离线或弱网抗抖动：网络异常时保留当前完整课表并提示缓存状态，绝不冲垮清空已渲染的课表网格。
+    - ② **ServiceWorker 离线预缓存与 APK 同步更新**：
+      - `sw.js` 版本升级至 `campushub-v22`。
+      - 将更新后的前端构建产物（含离线秒出缓存逻辑）重新同步至 Android 工程 `assets/web/`，重新编译生成 `CampusHub.apk`（4.0MB）并覆盖上传至 GitHub Releases `v1.0.0`。
+    - 测试：后端 **152 全过**；前端 `verify-week-grid.mjs` **27 项全过**。`sw.js` VERSION → `campushub-v22`。
