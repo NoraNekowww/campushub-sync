@@ -89,8 +89,9 @@ function releaseSwipe(closer) {
           @keydown.space.prevent="toggleExpanded"
         >
           <div class="flex items-start gap-2">
+            <!-- 标题要能看全：长课名/长待办名换行显示，而不是被截成一行省略号 -->
             <h3
-              class="min-w-0 flex-1 truncate text-sm font-semibold"
+              class="min-w-0 flex-1 break-words text-sm font-semibold leading-snug"
               :class="event.status === 'completed' ? 'line-through decoration-slate-400' : ''"
             >
               {{ event.title }}
@@ -120,9 +121,19 @@ function releaseSwipe(closer) {
             <span class="inline-flex items-center gap-1">
               <Clock :size="12" />{{ timeLabel(event.start_time) }}–{{ endLabel }}
             </span>
-            <span v-if="event.location" class="inline-flex items-center gap-1">
-              <MapPin :size="12" />{{ event.location }}
+            <span v-if="noteLocation" class="inline-flex items-center gap-1">
+              <MapPin :size="12" />{{ noteLocation }}
             </span>
+            <!-- 折叠态也要能改：调课、换教室、加备注都从这里进 -->
+            <button
+              v-if="event.source !== 'tju_schedule'"
+              class="inline-flex items-center gap-1 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400"
+              :aria-label="`编辑：${event.title}`"
+              data-testid="edit-custom-event"
+              @click.stop="openCustomEditor(event)"
+            >
+              <Pencil :size="12" />编辑
+            </button>
           </div>
 
           <div
@@ -140,8 +151,8 @@ function releaseSwipe(closer) {
               <Clock :size="12" />{{ timeLabel(event.start_time) }}–{{ endLabel }}
               <span v-if="durationText" class="text-slate-400">· {{ durationText }}</span>
             </span>
-            <span v-if="event.location" class="inline-flex items-center gap-1">
-              <MapPin :size="12" />{{ event.location }}
+            <span v-if="noteLocation" class="inline-flex items-center gap-1">
+              <MapPin :size="12" />{{ noteLocation }}
             </span>
             <span v-if="countdownInfo" class="chip border-transparent" :class="countdownClasses">
               <AlertTriangle v-if="countdownInfo.tone === 'danger'" :size="11" />
@@ -164,9 +175,9 @@ function releaseSwipe(closer) {
               {{ event.status === 'completed' ? '已划掉' : '划掉' }}
             </button>
             <button
-              v-if="event.source === 'custom'"
+              v-if="event.source !== 'tju_schedule'"
               class="inline-flex items-center gap-1 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400"
-              :aria-label="`编辑自定义日程：${event.title}`"
+              :aria-label="`编辑：${event.title}`"
               data-testid="edit-custom-event"
               @click.stop="openCustomEditor(event)"
             >
@@ -200,9 +211,9 @@ function releaseSwipe(closer) {
               <dt class="shrink-0 text-slate-400">来源</dt>
               <dd>{{ sourceLabel }}</dd>
             </div>
-            <div v-if="event.description && !event.teacher" class="col-span-2 flex gap-1.5">
+            <div v-if="noteText && !event.teacher" class="col-span-2 flex gap-1.5">
               <dt class="shrink-0 text-slate-400">备注</dt>
-              <dd class="min-w-0">{{ event.description }}</dd>
+              <dd class="min-w-0">{{ noteText }}</dd>
             </div>
           </dl>
         </div>
@@ -227,6 +238,7 @@ import {
   Trash2,
 } from 'lucide-vue-next'
 import { countdown, durationLabel, periodLabel, periodsShort, timeLabel } from '../utils/datetime'
+import { splitNoteLocation } from '../utils/note'
 import { openCustomEditor } from '../store'
 
 const props = defineProps({ event: { type: Object, required: true } })
@@ -380,6 +392,12 @@ const SOURCE_LABELS = {
 }
 
 const sourceLabel = computed(() => SOURCE_LABELS[props.event.source] || props.event.source)
+
+/* 待办任务没有地点字段，地点是并进备注的（`📍 45楼B203`）：摘出来当地点用，
+   备注里只留用户自己写的那部分 —— 界面上不会重复出现那行文本。 */
+const noteParts = computed(() => splitNoteLocation(props.event.description))
+const noteLocation = computed(() => props.event.location || noteParts.value.location)
+const noteText = computed(() => noteParts.value.note)
 const sourceIcon = computed(() => (props.event.source === 'tju_schedule' ? GraduationCap : props.event.source === 'custom' ? Pencil : CalendarDays))
 const accentBar = computed(() =>
   props.event.is_deadline

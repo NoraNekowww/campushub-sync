@@ -42,6 +42,12 @@ tools/visual/out/
 Thumbs.db
 desktop.ini
 
+# ===== Android 构建 =====
+.gradle/
+android/.gradle/
+android/**/build/
+android/local.properties
+
 # ===== 备份/临时文件 =====
 *.bak
 *.bak_*

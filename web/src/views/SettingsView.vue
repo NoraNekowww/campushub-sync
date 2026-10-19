@@ -262,6 +262,38 @@
       </div>
     </section>
 
+    <section class="card space-y-3 p-4">
+      <header class="flex items-center gap-2">
+        <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
+        <h2 class="text-sm font-semibold">安卓桌面小组件</h2>
+        <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
+          PWA & 桌面组件
+        </span>
+      </header>
+      <p class="text-xs text-slate-500 dark:text-slate-400">
+        网站安装为 PWA 后，支持在手机桌面添加常驻小组件，实时显示今日课程、地点与 DDL：
+      </p>
+      <div class="space-y-1.5 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-800/60">
+        <p class="font-medium text-slate-700 dark:text-slate-200">方式 1：标准 PWA 桌面组件（Chrome / Edge）</p>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400">
+          在浏览器菜单中点击「安装应用」后，长按手机桌面空白处 ->「微件/小组件」-> 找到 CampusHub 即可添加「今日日程」小部件。
+        </p>
+        <p class="pt-1 font-medium text-slate-700 dark:text-slate-200">方式 2：独立微型组件卡片（全机型兼容）</p>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400">
+          针对部分定制桌面，可使用 Hermit、Web Widget 等工具直接挂载专属微型组件页：
+        </p>
+        <div class="pt-1 flex items-center gap-2">
+          <a
+            href="./widget.html"
+            target="_blank"
+            class="btn-primary !py-1 text-xs inline-flex items-center gap-1"
+          >
+            打开微型组件预览
+          </a>
+        </div>
+      </div>
+    </section>
+
     <!-- ---------------------------------------------------------- calendar -->
     <section class="card space-y-3 p-4">
       <header class="flex items-center gap-2">
@@ -514,6 +546,7 @@ import {
   Monitor,
   Moon,
   RefreshCw,
+  Smartphone,
   ShieldCheck,
   Sun,
   Trash2,

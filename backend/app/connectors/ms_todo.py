@@ -49,6 +49,85 @@ WEEKDAY_INDEX = {name: idx for idx, name in enumerate(WEEKDAYS)}
 RELATIVE_INDEX = {"first": 0, "second": 1, "third": 2, "fourth": 3, "last": -1}
 MAX_OCCURRENCES = 366
 _HTML_TAG = re.compile(r"<[^>]+>")
+#: HTML 备注里的换行标签 —— 先换成真换行再剥标签，否则整段会被挤成一行，
+#: 地点行（见 ``note_with_location``）就再也切不出来了。
+_HTML_BREAK = re.compile(r"<\s*(?:br|/div|/p|/li|/tr)\s*/?\s*>", re.IGNORECASE)
+
+#: 微软待办的任务**没有**地点字段、也没有「时长」这个概念，只能并进备注。约定：
+#: 备注里用前缀行写这两样 ——
+#:
+#:     📍 45楼B203
+#:     ⏱ 1h
+#:     带教材
+#:
+#: 网页端（`web/src/utils/note.js`）认这两行：地点单独显示、时长换算成结束时间，
+#: 备注里就不会再重复出现一遍（用户要求「网页端隐藏这个格式」）。
+LOCATION_PREFIX = "📍"
+DURATION_PREFIX = "⏱"
+_LOCATION_LINE = re.compile(rf"^\s*{re.escape(LOCATION_PREFIX)}\s*(?P<location>.+?)\s*$")
+_DURATION_LINE = re.compile(
+    rf"^\s*{re.escape(DURATION_PREFIX)}\s*(?P<hours>\d+(?:\.\d+)?)\s*h(?:\s*ours?)?\s*$",
+    re.IGNORECASE,
+)
+
+
+def format_duration(hours: float | None) -> Optional[str]:
+    """小时数 -> ``1h`` / ``1.5h``；没给或 <= 0 返回 ``None``。"""
+    try:
+        value = float(hours)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if value <= 0:
+        return None
+    return f"{int(value)}h" if float(value).is_integer() else f"{value:g}h"
+
+
+def note_with_meta(
+    note: Optional[str], location: Optional[str], duration_hours: float | None = None
+) -> Optional[str]:
+    """把地点 / 时长并进待办备注的文本（``None`` = 什么都不写）。"""
+    head: list[str] = []
+    place = (location or "").strip()
+    if place:
+        head.append(f"{LOCATION_PREFIX} {place}")
+    span = format_duration(duration_hours)
+    if span:
+        head.append(f"{DURATION_PREFIX} {span}")
+    text = (note or "").strip()
+    if text:
+        head.append(text)
+    return "\n".join(head) or None
+
+
+def split_note_meta(note: Optional[str]) -> tuple[Optional[str], Optional[float], Optional[str]]:
+    """把备注里的地点行 / 时长行摘出来，返回 ``(location, duration_hours, 剩余备注)``。"""
+    if not note:
+        return None, None, None
+    location: Optional[str] = None
+    duration: Optional[float] = None
+    rest: list[str] = []
+    for line in note.splitlines():
+        match = _LOCATION_LINE.match(line)
+        if match and location is None:
+            location = match.group("location").strip() or None
+            continue
+        span = _DURATION_LINE.match(line)
+        if span and duration is None:
+            duration = float(span.group("hours"))
+            continue
+        rest.append(line)
+    return location, duration, "\n".join(rest).strip() or None
+
+
+def note_with_location(note: Optional[str], location: Optional[str]) -> Optional[str]:
+    """兼容旧调用：不带时长。"""
+    return note_with_meta(note, location)
+
+
+def split_note_location(note: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    """兼容旧调用：只关心地点。"""
+    location, _duration, text = split_note_meta(note)
+    return location, text
 
 
 def _plain_text(body: dict | None) -> Optional[str]:
@@ -58,6 +137,7 @@ def _plain_text(body: dict | None) -> Optional[str]:
     if not content:
         return None
     if (body.get("contentType") or "").lower() == "html":
+        content = _HTML_BREAK.sub("\n", content)
         content = _HTML_TAG.sub("", content)
         content = (
             content.replace("&nbsp;", " ")
@@ -66,7 +146,9 @@ def _plain_text(body: dict | None) -> Optional[str]:
             .replace("&gt;", ">")
             .replace("&quot;", '"')
         )
-    return " ".join(content.split()) or None
+    # 保留换行（行内空白照旧压缩）：地点行是按行认的，全压平就没了。
+    lines = [" ".join(line.split()) for line in content.splitlines()]
+    return "\n".join(line for line in lines if line) or None
 
 
 class MSTodoConnector(HttpConnector):
@@ -387,6 +469,55 @@ class MSTodoConnector(HttpConnector):
         log.info("microsoft_todo: task %s -> %s", task_id, payload["status"])
         return task
 
+    async def update_task(
+        self,
+        source_id: str,
+        list_id: str,
+        *,
+        title: Optional[str] = None,
+        due: Optional[datetime] = None,
+        note: Optional[str] = None,
+        importance: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """改一条已有任务（标题 / 截止时间 / 备注）。
+
+        ``None`` 表示这一项不动；``note=""`` 是真的清空备注。改 due 时同步把
+        reminderDateTime 一起挪过去，否则手机上还会按老时间响。
+        """
+        task_id = source_id.split("#", 1)[0]
+        body: dict[str, Any] = {}
+        if title is not None:
+            body["title"] = title
+        if due is not None:
+            local = due.astimezone(ZoneInfo(self.settings.timezone))
+            stamp = local.replace(tzinfo=None).isoformat(timespec="seconds")
+            body["dueDateTime"] = {"dateTime": stamp, "timeZone": self.settings.timezone}
+            body["reminderDateTime"] = {"dateTime": stamp, "timeZone": self.settings.timezone}
+            body["isReminderOn"] = True
+        if note is not None:
+            body["body"] = {"content": note, "contentType": "text"}
+        if importance in {"low", "normal", "high"}:
+            body["importance"] = importance
+        if not body:
+            return {}
+        base = self.settings.graph_base_url.rstrip("/")
+        task = await self._send("PATCH", f"{base}/me/todo/lists/{list_id}/tasks/{task_id}", body)
+        log.info("microsoft_todo: updated task %s (%s)", task_id, ",".join(sorted(body)))
+        return task
+
+    async def delete_task(self, source_id: str, list_id: str) -> dict[str, Any]:
+        """把一条任务从微软待办里**真删掉**（用户点的「删除日程同步删微软」）。
+
+        这是唯一一个不可逆的写操作 —— 网页端删完，待办 App 里那条也不在了，
+        撤销只能把本地那条恢复回来，微软那边得用户自己重建。``DELETE`` 回 204
+        没有响应体，这里返回 ``{}``。
+        """
+        task_id = source_id.split("#", 1)[0]
+        base = self.settings.graph_base_url.rstrip("/")
+        await self._send("DELETE", f"{base}/me/todo/lists/{list_id}/tasks/{task_id}")
+        log.info("microsoft_todo: deleted task %s", task_id)
+        return {}
+
     def task_event(
         self, todo_list: dict[str, Any], task: dict[str, Any]
     ) -> Optional[Event]:
@@ -538,6 +669,20 @@ class MSTodoConnector(HttpConnector):
         self, task: dict[str, Any], todo_list: dict[str, Any], horizon: datetime
     ) -> list[Event]:
         due = parse_graph_datetime(task.get("dueDateTime"))
+        reminder = parse_graph_datetime(task.get("reminderDateTime"))
+        # To Do 里只填了日期、没填具体时间时，``dueDateTime`` 就是当地 00:00 ——
+        # 直接拿来当开始时间的话，网页上会出现一条「00:00」的日程（用户报过）。
+        # 这种情况下改用提醒时刻；提醒也没有 / 也是 00:00，才算真正的「只有日期」。
+        if due is not None:
+            zone = ZoneInfo(self.settings.timezone)
+            local_due = as_aware(due).astimezone(zone)
+            if (local_due.hour, local_due.minute) == (0, 0):
+                local_reminder = as_aware(reminder).astimezone(zone) if reminder else None
+                if local_reminder is not None and (local_reminder.hour, local_reminder.minute) != (
+                    0,
+                    0,
+                ):
+                    due = reminder
         if due is None and not self.settings.ms_include_undue:
             return []
         task_id = task.get("id") or ""
@@ -545,7 +690,6 @@ class MSTodoConnector(HttpConnector):
             return []
 
         anchor = due or parse_graph_datetime(task.get("createdDateTime")) or utcnow()
-        reminder = parse_graph_datetime(task.get("reminderDateTime"))
         reminder_minutes = (
             max(0, int((as_aware(anchor) - as_aware(reminder)).total_seconds() // 60))
             if reminder
@@ -558,11 +702,21 @@ class MSTodoConnector(HttpConnector):
         )
         completed_at = parse_graph_datetime(task.get("completedDateTime"))
         priority = IMPORTANCE_PRIORITY.get((task.get("importance") or "normal").lower(), 5)
-        description = _plain_text(task.get("body"))
+        # 备注里的 ``📍 地点`` 行摘出来当地点用（To Do 任务本身没有地点字段），
+        # 剩下的才算用户备注 —— 网页端因此不会重复显示这段。
+        noted_location, noted_duration, description = split_note_meta(
+            _plain_text(task.get("body"))
+        )
         list_name = todo_list.get("displayName")
         updated_at = parse_graph_datetime(task.get("lastModifiedDateTime")) or utcnow()
 
         def build(source_id: str, when: datetime, note: Optional[str] = None) -> Event:
+            # 备注里带 ``⏱ 1h`` 的话顺带补出结束时间：网页上是一个时段，不是一个点。
+            ends_at = (
+                when + timedelta(hours=noted_duration)
+                if noted_duration and noted_duration > 0
+                else None
+            )
             return Event(
                 id=make_event_id(Source.microsoft_todo, source_id),
                 source=Source.microsoft_todo.value,
@@ -570,9 +724,9 @@ class MSTodoConnector(HttpConnector):
                 title=task.get("title") or "(untitled task)",
                 description=note or description,
                 start_time=when,
-                end_time=None,
+                end_time=ends_at,
                 is_deadline=True,
-                location=list_name,
+                location=noted_location or list_name,
                 status=status,
                 priority=priority,
                 reminder_minutes=reminder_minutes,

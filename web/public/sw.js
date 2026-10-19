@@ -9,7 +9,7 @@
  * Every path is derived from the registration scope, so one bundle works both
  * at `/` (local, Docker) and at `/schedule/` (nzlab.online).
  */
-const VERSION = 'campushub-v6'
+const VERSION = 'campushub-v19'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 
@@ -17,11 +17,13 @@ const BASE = new URL(self.registration.scope).pathname // '/', '/schedule/'
 const SHELL = [
   BASE,
   `${BASE}index.html`,
+  `${BASE}widget.html`,
   `${BASE}manifest.webmanifest`,
+  `${BASE}widgets/today-template.json`,
   `${BASE}icons/icon-192.png`,
 ]
 const API_PREFIX = `${BASE}api/`
-const CACHEABLE_API = ['events', 'status', 'config']
+const CACHEABLE_API = ['events', 'status', 'config', 'widgets']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -108,4 +110,48 @@ self.addEventListener('message', (event) => {
   if (event.data === 'skip-waiting') self.skipWaiting()
   // Signing out must not leave another account's timeline in the cache.
   if (event.data === 'clear-data-cache') event.waitUntil(caches.delete(DATA_CACHE))
+})
+
+/* ------------------------------------------------------------------ PWA Widgets */
+
+async function updatePwaWidget(widget) {
+  if (!widget) return
+  try {
+    const resp = await fetch(`${API_PREFIX}widgets/today`)
+    if (!resp.ok) return
+    const data = await resp.json()
+    const templateResp = await fetch(`${BASE}widgets/today-template.json`)
+    if (!templateResp.ok) return
+    const template = await templateResp.text()
+
+    if (self.widgets && self.widgets.updateByTag) {
+      await self.widgets.updateByTag('today-agenda', {
+        template,
+        data: JSON.stringify(data),
+      })
+    }
+  } catch (e) {
+    // 离线时不打断
+  }
+}
+
+self.addEventListener('widgetinstall', (event) => {
+  event.waitUntil(updatePwaWidget(event.widget))
+})
+
+self.addEventListener('widgetresume', (event) => {
+  event.waitUntil(updatePwaWidget(event.widget))
+})
+
+self.addEventListener('widgetclick', (event) => {
+  event.waitUntil(
+    (async () => {
+      const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      if (allClients.length > 0) {
+        allClients[0].focus()
+      } else {
+        await self.clients.openWindow(BASE)
+      }
+    })(),
+  )
 })

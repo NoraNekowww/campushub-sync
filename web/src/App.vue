@@ -15,6 +15,9 @@
 
       <BottomNav />
 
+      <!-- 新建日程挪到右下角悬浮按钮（顶栏那个小 + 手机上够不着） -->
+      <FloatingAdd />
+
       <EventEditor />
     </template>
 
@@ -48,6 +51,7 @@ import { computed, onMounted } from 'vue'
 import AppHeader from './components/AppHeader.vue'
 import AuthGate from './components/AuthGate.vue'
 import BottomNav from './components/BottomNav.vue'
+import FloatingAdd from './components/FloatingAdd.vue'
 import TokenBanner from './components/TokenBanner.vue'
 import AgendaView from './views/AgendaView.vue'
 import EventEditor from './components/EventEditor.vue'

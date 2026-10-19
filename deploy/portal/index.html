@@ -103,6 +103,10 @@
             border-color: #78350f;
             background: #1c1917;
         }
+        /* .card 是 display:flex, 会盖掉 [hidden]; 这张管理员卡片靠这条规则真正隐藏 */
+        .card[hidden] {
+            display: none !important;
+        }
         footer {
             margin-top: auto;
             padding-top: 40px;
@@ -299,7 +303,7 @@
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
             <button class="close" id="auth-close" type="button" aria-label="关闭">×</button>
             <h3 id="auth-title">账号</h3>
-            <p class="sub">登录后可访问「日程表」，其他项目无需登录。</p>
+            <p class="sub">登录后可访问「日程表」和「ESP32 控制台」；ESP32 控制台只有管理员能下发指令，其他账号只读预览。其余项目无需登录。</p>
             <div class="tabs">
                 <button class="active" id="tab-login" type="button">登录</button>
                 <button id="tab-register" type="button">注册</button>
@@ -330,6 +334,17 @@
     </header>
 
     <div class="container">
+        <!-- 管理员专属: Hermes 远程控制台 (未登录/非管理员时隐藏, 由下方脚本按 is_admin 显示) -->
+        <a href="https://108.186.202.38.sslip.io/" class="card" id="card-console" target="_blank" rel="noopener" hidden>
+            <span class="badge">仅管理员</span>
+            <div>
+                <div class="card-icon">🖥️</div>
+                <h2>Hermes 控制台</h2>
+                <p>远程接管本机 Hermes：对话、终端与系统页。进入后需两层密码。</p>
+            </div>
+            <span class="btn">打开控制台 &rarr;</span>
+        </a>
+
         <!-- 日程表：唯一需要账号的项目 -->
         <a href="/schedule/" class="card" id="card-schedule">
             <span class="badge locked" id="card-schedule-badge">需登录</span>
@@ -397,14 +412,15 @@
             <span class="btn">进入项目 &rarr;</span>
         </a>
 
-        <!-- 项目 6: ESP32 控制台 -->
-        <a href="/esp32/" class="card">
+        <!-- 项目 6: ESP32 控制台 (需登录; 与日程表同一账号, 普通用户只读预览, 仅管理员可下发指令) -->
+        <a href="/esp32/" class="card" id="card-esp32">
+            <span class="badge locked" id="card-esp32-badge">需登录</span>
             <div>
                 <div class="card-icon">🧊</div>
                 <h2>ESP32 控制台</h2>
-                <p>小冰箱控制器调试面板：实时温度、开关机、目标温度下发与串口日志。</p>
+                <p>小冰箱控制器调试面板：实时温度、TEC 制冷/制热换向与内外风扇调速。需登录；普通用户只读预览，只有管理员能下发指令。</p>
             </div>
-            <span class="btn">进入项目 &rarr;</span>
+            <span class="btn" id="card-esp32-btn">进入项目 &rarr;</span>
         </a>
 	
 
@@ -446,9 +462,15 @@
         hint: document.getElementById('auth-hint'),
         badge: document.getElementById('card-schedule-badge'),
         cardBtn: document.getElementById('card-schedule-btn'),
+        consoleCard: document.getElementById('card-console'),
+        esp32Card: document.getElementById('card-esp32'),
+        esp32Badge: document.getElementById('card-esp32-badge'),
+        esp32Btn: document.getElementById('card-esp32-btn'),
     };
 
     let mode = 'login';
+    let signedInNow = false;   // 未登录时点 ESP32 卡片 → 弹登录框, 而不是跳到一个进不去的页面
+    let pendingHref = '';      // 登录成功后要去的页面(默认还是 /schedule/)
     let meta = { enabled: false, registration_open: false, invite_required: true, password_min_length: 8 };
 
     function setError(message) {
@@ -504,6 +526,25 @@
             els.badge.classList.add('locked');
             els.cardBtn.textContent = '进入项目 →';
         }
+
+        // ESP32 控制台卡片: 三态标记。前端只是提示, 真正的门禁在 nginx + 中继(非管理员指令一律拒)
+        signedInNow = signedIn;
+        if (signedIn && user.is_admin) {
+            els.esp32Badge.textContent = '可控制';
+            els.esp32Badge.classList.remove('locked');
+            els.esp32Btn.textContent = '进入控制台 →';
+        } else if (signedIn) {
+            els.esp32Badge.textContent = '预览 · 只读';
+            els.esp32Badge.classList.remove('locked');
+            els.esp32Btn.textContent = '进入项目 →';
+        } else {
+            els.esp32Badge.textContent = '需登录';
+            els.esp32Badge.classList.add('locked');
+            els.esp32Btn.textContent = '登录后进入 →';
+        }
+
+        // 管理员专属快捷方式: 必须已登录且 role=admin 才显示
+        els.consoleCard.hidden = !(signedIn && Boolean(user && user.is_admin));
     }
 
     function hideAccount(hidden) {
@@ -530,10 +571,26 @@
     async function refresh() {
         try {
             render(await api('/auth/session'));
+            // 未登录直连 /esp32/… 会被 nginx 弹回首页并带上 ?login=esp32 → 直接开登录框, 并清掉参数
+            if (new URLSearchParams(location.search).get('login') === 'esp32') {
+                history.replaceState(null, '', location.pathname);
+                if (meta.enabled) {
+                    pendingHref = '/esp32/';
+                    openModal('login');
+                }
+            }
         } catch (error) {
             hideAccount(true);   // 后端不可达时不要显示一个点了没反应的按钮
         }
     }
+
+    // 未登录点 ESP32 卡片 → 打开登录框(打不开的页面就别让人进去看黑屏)
+    els.esp32Card.addEventListener('click', (event) => {
+        if (signedInNow || !meta.enabled) return;   // 已登录 / 账号系统没开 → 正常跳转
+        event.preventDefault();
+        pendingHref = '/esp32/';                    // 登录完直接进控制台, 而不是被扔去日程表
+        openModal('login');
+    });
 
     els.open.addEventListener('click', () => openModal(meta.registration_open ? 'register' : 'login'));
     els.close.addEventListener('click', closeModal);
@@ -575,7 +632,7 @@
             });
             render({ user: payload.user, accounts: payload.accounts || meta });
             closeModal();
-            window.location.href = '/schedule/';
+            window.location.href = pendingHref || '/schedule/';
         } catch (error) {
             setError(error.message || '操作失败');
         } finally {

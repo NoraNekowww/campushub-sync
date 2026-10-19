@@ -121,7 +121,7 @@ export const api = {
   events: (params) => request(`/events${qs(params)}`),
   patchEvent: (id, patch) => request(`/events/${id}`, { method: 'PATCH', body: patch }),
   createEvent: (payload) => request('/events', { method: 'POST', body: payload }),
-  deleteEvent: (id) => request(`/events/${id}`, { method: 'DELETE' }),
+  deleteEvent: (id, params = {}) => request(`/events/${id}${qs(params)}`, { method: 'DELETE' }),
   sync: () => request('/sync', { method: 'POST' }),
   syncLogs: (limit = 10) => request(`/sync/logs${qs({ limit })}`),
   /* ------------------------------------------------------------- accounts */

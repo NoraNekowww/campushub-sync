@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 from icalendar import Calendar
 
-from app.connectors.tju_schedule import expand_raw, parse_ics
+from app.connectors.tju_schedule import PERIOD_TIMES, expand_raw, parse_ics
 from app.models import Event, Source, make_event_id
 from app.services.ics_export import build_calendar, calendar_bytes, feed_etag
 
@@ -60,6 +60,28 @@ def test_expand_biweekly_until(sample_ics):
     )
 
 
+def test_deadline_reminder_set_to_zero_minutes_still_rings():
+    """待办把提醒设在截止那一刻（提前 0 分钟）也是要提醒的。
+
+    线上 6 个未完成待办里 5 个的 `reminder_minutes` 就是 0，原来这批在 feed 里
+    一个闹钟都不挂 —— 而用户要的恰恰是「只留 DDL 的提醒」。
+    """
+    event = _event(is_deadline=True, reminder_minutes=0, title="交物理实验报告")
+    text = calendar_bytes([event]).decode("utf-8")
+    assert "BEGIN:VALARM" in text
+    assert "TRIGGER:" in text
+
+
+def test_evening_periods_run_1830_to_2000():
+    """9-10 节连着上、中间不休息，合起来正好 18:30–20:00。
+
+    2026-10-13 用户对着教务课表纠正过：以前写成 18:00–19:35，整段早了半小时
+    （「51单片机 18:30-20:00，你写的是 18:00-19:30」）。
+    """
+    assert PERIOD_TIMES[9] == ("18:30", "19:15")
+    assert PERIOD_TIMES[10] == ("19:15", "20:00")
+
+
 def test_calendar_export_structure():
     payload = calendar_bytes([_event()], calendar_name="CampusHub 日程")
     text = payload.decode("utf-8")
@@ -69,9 +91,25 @@ def test_calendar_export_structure():
     assert "BEGIN:VTIMEZONE" in text and "TZID:Asia/Shanghai" in text
     assert "DTSTART;TZID=Asia/Shanghai:20261012T083000" in text
     assert "DTEND;TZID=Asia/Shanghai:20261012T095500" in text
-    assert "BEGIN:VALARM" in text and "TRIGGER:-PT10M" in text
+    # 课表事件不挂提醒（2026-10-13：「课表不带提醒，只留 DDL 的」）——
+    # 一周十几节课天天响，是用户明确要去掉的那部分噪音
+    assert "BEGIN:VALARM" not in text
     assert "CATEGORIES:课程" in text
     assert "TRANSP:OPAQUE" in text
+
+
+def test_calendar_export_keeps_an_explicit_reminder():
+    """提醒没被一刀切掉：自己填了提前量的日程照样挂闹钟。"""
+    custom = _event(
+        id=make_event_id(Source.custom, "custom-1"),
+        source=Source.custom.value,
+        source_id="custom-1",
+        title="交材料",
+        reminder_minutes=120,
+    )
+    text = calendar_bytes([custom]).decode("utf-8")
+    # icalendar 会把 120 分钟归一成 -PT2H，按它实际的写法断言
+    assert "BEGIN:VALARM" in text and "TRIGGER:-PT2H" in text
 
 
 def test_calendar_export_roundtrip():

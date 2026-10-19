@@ -11,6 +11,14 @@ from .models import Event, EventStatus, Source
 from .timeutil import iso_local
 
 
+class RecurrenceMeta(BaseModel):
+    group_id: str
+    freq: str  # day | week | month
+    interval: int
+    index: int
+    total: int
+
+
 class EventOut(BaseModel):
     """Event rendered for clients: local (Asia/Shanghai) ISO 8601 timestamps."""
 
@@ -38,6 +46,8 @@ class EventOut(BaseModel):
     #: 教务事件的授课教师与周次（卡片折叠时只显示时间+地点，展开才用得上）
     teacher: Optional[str] = None
     week: Optional[int] = None
+    #: 重复任务元数据（批量生成/批量修改用）
+    recurrence: Optional[RecurrenceMeta] = None
     #: 「划掉」有没有成功推回微软待办：``{"ok": bool, "error": str | None}``
     ms_sync: Optional[dict[str, Any]] = None
 
@@ -70,6 +80,7 @@ class EventOut(BaseModel):
             periods=_periods_from_raw(event.raw_dict()),
             teacher=_str_from_raw(event.raw_dict(), "teacher"),
             week=_int_from_raw(event.raw_dict(), "week"),
+            recurrence=_recurrence_from_raw(event.raw_dict(), event.source_id),
         )
 
 
@@ -113,6 +124,33 @@ def _periods_from_raw(raw: Any) -> Optional[list[int]]:
     return [start, end]
 
 
+def _recurrence_from_raw(raw: Any, source_id: str) -> Optional[RecurrenceMeta]:
+    if not isinstance(raw, dict):
+        return None
+    rec = raw.get("recurrence")
+    if not isinstance(rec, dict):
+        return None
+    try:
+        group_id = str(rec.get("group_id") or "")
+        if not group_id and source_id.startswith("custom-"):
+            parts = source_id.split("-")
+            if len(parts) >= 2:
+                group_id = f"rec-{parts[1]}"
+        freq = str(rec.get("freq") or "week")
+        interval = int(rec.get("interval", 1))
+        index = int(rec.get("index", 1))
+        total = int(rec.get("total", 1))
+        return RecurrenceMeta(
+            group_id=group_id or "rec-unknown",
+            freq=freq,
+            interval=interval,
+            index=index,
+            total=total,
+        )
+    except (TypeError, ValueError):
+        return None
+
+
 class EventListOut(BaseModel):
     items: list[EventOut]
     total: int
@@ -129,6 +167,13 @@ class EventPatchIn(BaseModel):
     reminder_minutes: Optional[int] = None
     #: 软删除开关：``true`` = 从日历里拿掉（等同 DELETE），``false`` = 恢复（撤销）
     hidden: Optional[bool] = None
+    #: 改时间（本地墙钟或带时区的 ISO 都行）。``None`` = 这一项不动。
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    #: ``end_time`` 传 null 表示「不改」，所以要清空结束时间得显式打开这个开关
+    clear_end_time: bool = False
+    #: 批量修改范围：single = 仅当前事件；all = 整个重复系列全部修改；future = 当前及后续所有重复事件
+    apply_scope: Optional[str] = "single"
 
 
 class MsTaskIn(BaseModel):
@@ -138,6 +183,10 @@ class MsTaskIn(BaseModel):
     #: 本地墙钟时间；没带时区就按 settings.timezone 解释
     start: datetime
     note: Optional[str] = None
+    #: 地点：待办任务没有这个字段，后端会并进备注（网页端读回来当 location 用）
+    location: Optional[str] = None
+    #: 时长（小时）：待办也没有这个字段，同样并进备注的 ``⏱ 1h`` 行；0 / 不填 = 不写
+    duration_hours: Optional[float] = None
     list_id: Optional[str] = None  # 不填 = 这个微软账号里的第一个清单
     importance: Optional[str] = None  # low / normal / high
 

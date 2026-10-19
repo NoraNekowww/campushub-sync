@@ -10,14 +10,22 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlmodel import select
 
 from app.connectors.base import FetchResult
-from app.connectors.ms_todo import MSTodoConnector
+from app.connectors.ms_todo import (
+    MSTodoConnector,
+    note_with_location,
+    note_with_meta,
+    split_note_location,
+    split_note_meta,
+)
 from app.db import session_scope
 from app.models import Event, Source, make_event_id
 from app.services.sync_engine import SyncEngine, upsert_events
+from app.timeutil import utcnow
 
 
 def _event(*, status: str = "pending", updated: datetime, title: str = "交作业", source_id: str = "t1") -> Event:
@@ -207,3 +215,163 @@ def test_scheduler_registers_todo_fast_lane(settings):
         service.shutdown()
 
     asyncio.run(boot())
+
+
+# ------------------------------------------------- 地点：塞进备注再读回来
+def test_note_with_location_prepends_marker():
+    assert note_with_location(None, "45楼B203") == "📍 45楼B203"
+    assert note_with_location("带教材", "45楼B203") == "📍 45楼B203\n带教材"
+    assert note_with_location("带教材", None) == "带教材"
+    assert note_with_location("   ", "  ") is None
+
+
+# ------------------------------------------- 开始时间：只有日期时别落到 00:00
+def test_due_midnight_falls_back_to_reminder(settings):
+    """To Do 里只填了日期（due 就是当天 00:00）时改用提醒时刻 —— 网页上别显示 00:00。"""
+    conn = MSTodoConnector(settings=settings.model_copy(update={"timezone": "Asia/Shanghai"}))
+    task = {
+        "id": "t1",
+        "title": "接种疫苗",
+        "dueDateTime": {
+            "dateTime": "2026-10-14T00:00:00.0000000",
+            "timeZone": "China Standard Time",
+        },
+        "reminderDateTime": {
+            "dateTime": "2026-10-14T11:20:00.0000000",
+            "timeZone": "China Standard Time",
+        },
+    }
+    horizon = utcnow() + timedelta(days=60)
+    (event,) = conn.normalize_task(task, {"id": "L1", "displayName": "任务"}, horizon)
+    local = event.start_time.astimezone(ZoneInfo("Asia/Shanghai"))
+    assert (local.hour, local.minute) == (11, 20)
+
+
+def test_due_midnight_without_reminder_stays_midnight(settings):
+    """提醒也没有 / 也是 00:00 时，就当它真的只是一天，不硬塞一个时间。"""
+    conn = MSTodoConnector(settings=settings.model_copy(update={"timezone": "Asia/Shanghai"}))
+    task = {
+        "id": "t2",
+        "title": "交作业",
+        "dueDateTime": {
+            "dateTime": "2026-10-14T00:00:00.0000000",
+            "timeZone": "China Standard Time",
+        },
+    }
+    horizon = utcnow() + timedelta(days=60)
+    (event,) = conn.normalize_task(task, {"id": "L1", "displayName": "任务"}, horizon)
+    local = event.start_time.astimezone(ZoneInfo("Asia/Shanghai"))
+    assert (local.hour, local.minute) == (0, 0)
+
+
+def test_due_with_real_time_is_kept(settings):
+    """due 自带具体时间时原样保留（别被提醒时刻顶掉）。"""
+    conn = MSTodoConnector(settings=settings.model_copy(update={"timezone": "Asia/Shanghai"}))
+    task = {
+        "id": "t3",
+        "title": "开会",
+        "dueDateTime": {
+            "dateTime": "2026-10-14T15:30:00.0000000",
+            "timeZone": "China Standard Time",
+        },
+        "reminderDateTime": {
+            "dateTime": "2026-10-14T15:00:00.0000000",
+            "timeZone": "China Standard Time",
+        },
+    }
+    horizon = utcnow() + timedelta(days=60)
+    (event,) = conn.normalize_task(task, {"id": "L1", "displayName": "任务"}, horizon)
+    local = event.start_time.astimezone(ZoneInfo("Asia/Shanghai"))
+    assert (local.hour, local.minute) == (15, 30)
+
+
+# ------------------------------------------------- 时长：塞进备注再读回来
+def test_note_meta_roundtrip():
+    note = note_with_meta("带教材", "45楼B203", 1.5)
+    assert note == "📍 45楼B203\n⏱ 1.5h\n带教材"
+    assert split_note_meta(note) == ("45楼B203", 1.5, "带教材")
+
+
+def test_note_meta_partial():
+    assert note_with_meta("带教材", None, None) == "带教材"
+    assert note_with_meta("带教材", None, 0) == "带教材"
+    assert note_with_meta(None, None, 2) == "⏱ 2h"
+    assert note_with_meta(None, "45楼", None) == "📍 45楼"
+    assert note_with_meta(None, None, None) is None
+    assert split_note_meta(None) == (None, None, None)
+
+
+def test_note_meta_keeps_user_text():
+    """用户自己写的「⏱ 大概1h」对不上严格写法，原样留着别吞掉。"""
+    _location, duration, rest = split_note_meta("正文\n⏱ 大概1h")
+    assert duration is None
+    assert rest == "正文\n⏱ 大概1h"
+
+
+def test_duration_in_note_becomes_end_time(settings):
+    """备注里带 ⏱ 1.5h 时同步出来的日程要有结束时间（网页上是一个时段）。"""
+    conn = MSTodoConnector(settings=settings.model_copy(update={"timezone": "Asia/Shanghai"}))
+    task = {
+        "id": "t4",
+        "title": "答疑",
+        "dueDateTime": {
+            "dateTime": "2026-10-14T14:00:00.0000000",
+            "timeZone": "China Standard Time",
+        },
+        "body": {"content": "📍 45楼B203\n⏱ 1.5h\n带教材", "contentType": "text"},
+    }
+    horizon = utcnow() + timedelta(days=60)
+    (event,) = conn.normalize_task(task, {"id": "L1", "displayName": "任务"}, horizon)
+    assert event.end_time is not None
+    assert event.end_time - event.start_time == timedelta(hours=1.5)
+    assert event.location == "45楼B203"
+    assert event.description == "带教材"
+
+
+def test_split_note_location_roundtrip():
+    assert split_note_location("📍 45楼B203\n带教材") == ("45楼B203", "带教材")
+    assert split_note_location("📍 45楼B203") == ("45楼B203", None)
+    assert split_note_location("只有备注") == (None, "只有备注")
+    assert split_note_location(None) == (None, None)
+
+
+def _task(body: str, *, content_type: str = "text", title: str = "高数作业") -> dict:
+    return {
+        "id": "t1",
+        "title": title,
+        "dueDateTime": {"dateTime": "2026-10-20T09:00:00.0000000", "timeZone": "Asia/Shanghai"},
+        "body": {"content": body, "contentType": content_type},
+        "status": "notStarted",
+        "importance": "normal",
+        "lastModifiedDateTime": "2026-10-10T00:00:00Z",
+    }
+
+
+def _normalize(conn: MSTodoConnector, task: dict, list_name: str = "任务"):
+    horizon = utcnow() + timedelta(days=30)
+    return conn.normalize_task(task, {"id": "l1", "displayName": list_name}, horizon)
+
+
+def test_task_location_note_becomes_event_location(settings):
+    """备注里的 ``📍 地点`` 变成日程的地点，备注只剩下用户写的那部分。"""
+    conn = MSTodoConnector(settings=settings)
+    events = _normalize(conn, _task("📍 45楼B203\n带教材"))
+    assert events[0].location == "45楼B203"
+    assert events[0].description == "带教材"
+
+
+def test_task_without_location_note_keeps_list_name(settings):
+    conn = MSTodoConnector(settings=settings)
+    events = _normalize(conn, _task("带教材"))
+    assert events[0].location == "任务"
+    assert events[0].description == "带教材"
+
+
+def test_html_note_keeps_location_line(settings):
+    """在待办里手改过备注 ⇒ body 变成 HTML，地点行仍要认得出来。"""
+    conn = MSTodoConnector(settings=settings)
+    events = _normalize(
+        conn, _task("<div>📍 45楼B203</div><div>带教材</div>", content_type="html")
+    )
+    assert events[0].location == "45楼B203"
+    assert events[0].description == "带教材"

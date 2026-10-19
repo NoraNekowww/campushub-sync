@@ -4,7 +4,7 @@
  */
 import { reactive } from 'vue'
 import { api, ApiError, getToken, isAuthError, setToken } from './api'
-import { dayKey, todayKey } from './utils/datetime'
+import { dayKey, isEventEnded, todayKey } from './utils/datetime'
 import { browserClasstable, browserLogin, TwtError } from './twt-sign'
 
 const THEME_KEY = 'campushub.theme'
@@ -24,7 +24,9 @@ export const state = reactive({
   total: 0,
   filter: 'all', // all | class | deadline
   source: 'all',
-  includeCompleted: true,
+  /* 搜索框：课程名 / 老师 / 地点 / 备注 / DDL 标题里命中哪个字都算 */
+  query: '',
+  includeCompleted: false,
   /* 微软待办（反向写入）：清单列表 + 是否已授权，给「新建到微软」下拉用 */
   msLists: [],
   msConnected: false,
@@ -297,7 +299,10 @@ export async function saveCustomEvent(payload) {
       ? await api.patchEvent(existing.id, payload)
       : await api.createEvent(payload)
     closeCustomEditor()
-    notify(existing ? '日程已更新' : '日程已添加', 'ok')
+    // 微软待办来源的改动会推回待办；推失败只提示，本地改动照样算数。
+    const push = saved && saved.ms_sync
+    if (push && !push.ok) notify(`已保存，但微软待办那边没同步上：${push.error}`, 'warn')
+    else notify(existing ? '日程已更新' : '日程已添加', 'ok')
     await refresh({ silent: true })
     return saved
   } catch (error) {
@@ -306,12 +311,14 @@ export async function saveCustomEvent(payload) {
   }
 }
 
-export async function removeCustomEvent(id) {
+export async function removeCustomEvent(id, options = {}) {
   const target = state.events.find((item) => item.id === id)
+  const applyScope = options.apply_scope || 'single'
   try {
-    await api.deleteEvent(id)
+    await api.deleteEvent(id, { apply_scope: applyScope })
     closeCustomEditor()
-    notify(`已移除${target ? `「${target.title}」` : '这条日程'}`, 'info', {
+    const scopeNote = applyScope === 'all' ? '（系列全部）' : applyScope === 'future' ? '（当前及后续）' : ''
+    notify(`已移除${target ? `「${target.title}」` : '这条日程'}${scopeNote}`, 'info', {
       action: { label: '撤销', run: () => restoreEvent(id) },
       duration: 6000,
     })
@@ -337,11 +344,23 @@ export async function removeEvent(event) {
   if (index >= 0) state.events.splice(index, 1) // 先动 UI，失败再放回去
 
   try {
-    await api.deleteEvent(event.id)
-    notify(removedText(event), 'info', {
-      action: { label: '撤销', run: () => restoreEvent(event.id, event.title) },
-      duration: 6000,
-    })
+    const out = await api.deleteEvent(event.id)
+    const ms = out?.ms_sync
+    if (ms && ms.ok === false) {
+      // 本地删掉了，微软那条没删掉 —— 给「撤销」，让用户能自己收场
+      notify(`${removedText(event)}；微软待办里那条没删掉（${ms.error || '未知原因'}）`, 'warn', {
+        action: { label: '撤销', run: () => restoreEvent(event.id, event.title) },
+        duration: 8000,
+      })
+    } else if (event.source === 'microsoft_todo') {
+      // 微软那条是真删了，远程撤不回来 —— 不挂「撤销」，免得让人以为还能还原
+      notify(`已删除「${event.title}」，微软待办里的任务也一起删了`, 'info', { duration: 6000 })
+    } else {
+      notify(removedText(event), 'info', {
+        action: { label: '撤销', run: () => restoreEvent(event.id, event.title) },
+        duration: 6000,
+      })
+    }
     await refresh({ silent: true })
     return true
   } catch (error) {
@@ -352,7 +371,6 @@ export async function removeEvent(event) {
 }
 
 function removedText(event) {
-  if (event.source === 'microsoft_todo') return `已从日历移除：「${event.title}」（微软待办里的任务还在）`
   return `已移除「${event.title}」`
 }
 
@@ -663,17 +681,33 @@ export async function forgetJw() {
 
 /* -------------------------------------------------------------- filtering */
 
+/** 搜索命中判定：标题、老师、地点、备注、来源，大小写不敏感。 */
+export function matchesQuery(event, query = state.query) {
+  const needle = String(query || '').trim().toLowerCase()
+  if (!needle) return true
+  return [event.title, event.teacher, event.location, event.description, event.source]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .includes(needle)
+}
+
 export function filterEvents(events = state.events) {
   const today = todayKey()
+  const nowTs = Date.now()
   return events.filter((event) => {
     if (state.filter === 'class' && event.is_deadline) return false
     if (state.filter === 'deadline' && !event.is_deadline) return false
-    if (!state.includeCompleted && event.status === 'completed' && !event.is_deadline) return false
+    // 划掉的 DDL 一律不占课表（用户原话「划掉的 ddl 就不要显示在里面了」）。
+    if (event.is_deadline && event.status === 'completed') return false
+    // 已经结束的课不再显示在列表里（用户原话「已经结束的课不再显示在课表和列表里」）
+    if (!state.includeCompleted && isEventEnded(event, nowTs)) return false
+    if (!state.includeCompleted && event.status === 'completed') return false
     if (state.source !== 'all' && event.source !== state.source) return false
     // keep overdue deadlines visible, drop long-finished classes
     const reference = dayKey(event.end_time || event.start_time)
     if (reference < today && event.is_deadline && event.status === 'completed') return false
-    return true
+    return matchesQuery(event)
   })
 }
 

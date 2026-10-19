@@ -109,8 +109,16 @@ def patch_event(
     location: Optional[str] = None,
     reminder_minutes: Optional[int] = None,
     hidden: Optional[bool] = None,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+    clear_end_time: bool = False,
 ) -> Optional[Event]:
-    """User edits are sticky: ``local_override`` stops the next sync clobbering them."""
+    """User edits are sticky: ``local_override`` stops the next sync clobbering them.
+
+    ``start_time`` / ``end_time`` 也在受保护字段里（见 ``sync_engine.upsert_events``）：
+    改过时间的课/待办，之后同步不会再把它拽回教务或待办那边的原值。
+    ``end_time`` 传 ``None`` 表示「不改」，要清空得用 ``clear_end_time``。
+    """
     event = session.get(Event, event_id)
     if event is None:
         return None
@@ -127,6 +135,20 @@ def patch_event(
     ):
         if value is not None and getattr(event, field) != value:
             setattr(event, field, value)
+            changed = True
+    if start_time is not None:
+        value = as_aware(start_time)
+        if event.start_time != value:
+            event.start_time = value
+            changed = True
+    if clear_end_time:
+        if event.end_time is not None:
+            event.end_time = None
+            changed = True
+    elif end_time is not None:
+        value = as_aware(end_time)
+        if event.end_time != value:
+            event.end_time = value
             changed = True
     if hidden is not None and bool(hidden) != bool(event.hidden):
         event.hidden = bool(hidden)

@@ -19,16 +19,20 @@ echo
 echo
 
 echo "===== 3) public paths + new frontend asset ====="
+ASSET=$(basename "$(ls -t frontend/assets/index-*.js 2>/dev/null | head -1)")
+echo "    (built bundle: $ASSET)"
 curl -s -o /dev/null -w "portal        %{http_code}\n" https://nzlab.online/
 curl -s -o /dev/null -w "app           %{http_code}\n" https://nzlab.online/schedule/
-curl -s -o /dev/null -w "new asset     %{http_code}\n" https://nzlab.online/schedule/assets/index-Dagrr90f.js
+curl -s -o /dev/null -w "new asset     %{http_code}\n" "https://nzlab.online/schedule/assets/$ASSET"
 curl -s -o /dev/null -w "tju api anon  %{http_code}\n" https://nzlab.online/schedule/api/tju/status
 curl -s -o /dev/null -w "ics feed      %{http_code}\n" "https://nzlab.online/schedule/api/subscribe/calendar.ics?token=$SUB"
 echo
 
 echo "===== 4) new panel present in the built bundle ====="
-grep -c "微北洋直连" frontend/assets/index-Dagrr90f.js || true
-grep -c "open.twt.edu.cn" frontend/assets/index-Dagrr90f.js || true
+grep -c "微北洋直连" "frontend/assets/$ASSET" || true
+grep -c "open.twt.edu.cn" "frontend/assets/$ASSET" || true
+echo "    📍 marker (地点走备注) in bundle: $(grep -c '📍' "frontend/assets/$ASSET" || true)"
+echo "    sw cache version: $(grep -o 'campushub-v[0-9]*' frontend/sw.js | head -1)"
 echo
 
 echo "===== 5) service health + recent log ====="

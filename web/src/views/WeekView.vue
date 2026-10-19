@@ -1,37 +1,56 @@
 <template>
   <div class="space-y-4 px-4">
     <div class="flex items-center gap-2">
-      <button class="btn-ghost !px-2" title="上一周" @click="shift(-1)">
+      <button class="btn-ghost !px-2" title="向左平滑滑动" @click="scrollWeeks(-1)">
         <ChevronLeft :size="16" />
       </button>
-      <div class="flex-1 text-center">
-        <p class="text-sm font-semibold">{{ rangeLabel }}</p>
+      <div class="flex-1 text-center cursor-pointer" title="点击回到今天" @click="focusToday('smooth')">
+        <div class="flex items-center justify-center gap-1.5">
+          <p class="text-sm font-semibold">{{ currentVisibleWeekLabel }}</p>
+          <span
+            v-if="!isCurrentWeekCentered"
+            class="chip border-brand-200 bg-brand-50 px-1.5 py-0 text-[10px] text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300"
+          >
+            回今天
+          </span>
+        </div>
         <p class="text-[11px] text-slate-500 dark:text-slate-400">
-          {{ classes.length }} 节课 · {{ deadlines.length }} 个 DDL
+          支持左右无极连续滑动 · 共 {{ classes.length }} 节课
           <span v-if="loading"> · 加载中…</span>
         </p>
       </div>
-      <button class="btn-ghost !px-2" title="下一周" @click="shift(1)">
+      <button class="btn-ghost !px-2" title="向右平滑滑动" @click="scrollWeeks(1)">
         <ChevronRight :size="16" />
       </button>
     </div>
 
     <div class="card overflow-hidden">
-      <div ref="scroller" data-testid="week-scroller" class="overflow-x-auto no-scrollbar">
-        <div class="min-w-[600px]">
+      <div
+        ref="scroller"
+        data-testid="week-scroller"
+        class="overflow-x-auto no-scrollbar scroll-smooth"
+        @scroll.passive="onScrollerScroll"
+      >
+        <div class="flex flex-col min-w-fit">
           <!-- day header -->
           <div class="grid border-b border-slate-100 dark:border-slate-800" :style="gridStyle">
             <div
-              class="sticky left-0 z-20 bg-white px-1 py-2 text-center text-[10px] text-slate-400 dark:bg-slate-900"
+              class="sticky left-0 z-10 bg-white px-1 py-2 text-center text-[9px] text-slate-300 dark:bg-slate-900 dark:text-slate-600 select-none"
             >
               时间
             </div>
             <div
               v-for="day in days"
               :key="`head-${day.key}`"
-              class="border-l border-slate-100 px-1 py-2 text-center dark:border-slate-800"
-              :class="day.isToday ? 'bg-brand-50/60 dark:bg-brand-500/10' : ''"
+              class="px-1 py-2 text-center"
+              :class="[
+                day.isMonday ? 'border-l-2 border-slate-300 dark:border-slate-700' : 'border-l border-slate-100 dark:border-slate-800',
+                day.isToday ? 'bg-brand-50/60 dark:bg-brand-500/10' : ''
+              ]"
             >
+              <div v-if="day.isMonday" class="mb-0.5 whitespace-nowrap text-[9px] font-bold text-brand-600 dark:text-brand-400">
+                {{ day.weekLabel }}
+              </div>
               <p class="text-[11px]" :class="day.isToday ? 'font-semibold text-brand-600 dark:text-brand-400' : 'text-slate-500'">
                 {{ day.weekday }}
               </p>
@@ -54,13 +73,26 @@
               >
                 {{ String(hour).padStart(2, '0') }}:00
               </div>
+
+              <!-- 当前时间指示（呼吸闪烁） -->
+              <div
+                v-if="isNowVisible && hasTodayInView"
+                data-testid="current-time-gutter"
+                class="pointer-events-none absolute right-1 z-10 -translate-y-1/2 rounded bg-rose-500 px-1 py-0.5 text-[9px] font-bold text-white shadow animate-pulse"
+                :style="{ top: `${nowPct}%` }"
+              >
+                {{ nowLabel }}
+              </div>
             </div>
 
             <div
               v-for="day in days"
               :key="`col-${day.key}`"
-              class="relative border-l border-slate-100 dark:border-slate-800"
-              :class="day.isToday ? 'bg-brand-50/40 dark:bg-brand-500/5' : ''"
+              class="relative"
+              :class="[
+                day.isMonday ? 'border-l-2 border-slate-300 dark:border-slate-700' : 'border-l border-slate-100 dark:border-slate-800',
+                day.isToday ? 'bg-brand-50/40 dark:bg-brand-500/5' : ''
+              ]"
               :style="{ height: `${GRID_HEIGHT}px` }"
             >
               <div
@@ -69,83 +101,105 @@
                 class="absolute inset-x-0 border-t border-dashed border-slate-100 dark:border-slate-800/80"
                 :style="{ top: pct(hour * 60) + '%' }"
               />
-              <button
-                v-for="block in day.blocks"
-                :key="block.id"
-                data-testid="class-block"
-                :data-day="day.key"
-                class="absolute inset-x-0.5 overflow-hidden rounded-lg border border-brand-200/70 bg-brand-100/80 px-1.5 py-1
-                       text-left text-[10px] leading-tight text-brand-900 transition-shadow hover:shadow-md
-                       dark:border-brand-500/30 dark:bg-brand-500/20 dark:text-brand-100"
-                :style="blockStyle(block)"
-                :aria-pressed="selected?.id === block.id"
-                @click="selected = selected?.id === block.id ? null : block"
+
+              <!-- 当前时间线（仅今天且在 08:00–22:00 内展示，呼吸闪烁） -->
+              <div
+                v-if="day.isToday && isNowVisible"
+                data-testid="current-time-line"
+                class="pointer-events-none absolute inset-x-0 z-30 flex items-center animate-pulse"
+                :style="{ top: `${nowPct}%` }"
               >
-                <span class="block truncate font-semibold">{{ block.title }}</span>
-                <span class="block truncate opacity-80">
-                  {{ timeLabel(block.start_time) }}–{{ timeLabel(block.end_time) }}
-                </span>
-                <span v-if="block.location" class="block truncate opacity-70">{{ block.location }}</span>
-              </button>
+                <div class="-ml-1 h-2 w-2 rounded-full bg-rose-500 shadow-sm shadow-rose-500/50" />
+                <div class="h-[2px] flex-1 bg-rose-500 shadow-sm shadow-rose-500/50" />
+              </div>
+
+              <template v-for="item in day.items" :key="item.event.id">
+                <!-- 有结束时间：一个块 -->
+                <button
+                  v-if="item.end !== null"
+                  data-testid="class-block"
+                  :data-day="day.key"
+                  class="absolute inset-x-0 overflow-hidden rounded-lg border border-brand-200/70 bg-brand-100/80 px-px py-1
+                         text-left text-[10px] leading-tight text-brand-900 transition-shadow hover:shadow-md
+                         dark:border-brand-500/30 dark:bg-brand-500/20 dark:text-brand-100"
+                  :class="
+                    item.event.is_deadline
+                      ? 'border-amber-300/80 bg-amber-100/80 text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/20 dark:text-amber-100'
+                      : ''
+                  "
+                  :style="blockStyle(item)"
+                  :aria-pressed="selected?.id === item.event.id"
+                  @click="selected = selected?.id === item.event.id ? null : item.event"
+                >
+                  <span class="font-semibold text-[9px] leading-[10px] line-clamp-2">{{ item.event.title }}</span>
+                  <span class="block whitespace-nowrap text-[9px] leading-[11px] tracking-tighter opacity-80">
+                    {{ timeLabel(item.event.start_time) }}-{{ timeLabel(item.event.end_time) }}
+                  </span>
+                  <!-- 卡片上加上简短地点（用户要求：不加红色针头，省空间） -->
+                  <span
+                    v-if="item.event.location"
+                    data-testid="class-block-location"
+                    class="block truncate text-[8.5px] leading-[10px] font-medium text-brand-700/90 dark:text-brand-300/90"
+                    :title="item.event.location"
+                  >
+                    {{ formatShortLocation(item.event.location) }}
+                  </span>
+                </button>
+
+                <!-- 没有结束时间（DDL）：一条线，信息写在线上方。 -->
+                <button
+                  v-else
+                  data-testid="line-event"
+                  :data-day="day.key"
+                  class="absolute inset-x-0 z-10 px-0 py-2 text-left"
+                  :style="lineStyle(item)"
+                  :aria-pressed="selected?.id === item.event.id"
+                  @click="selected = selected?.id === item.event.id ? null : item.event"
+                >
+                  <span
+                    class="absolute inset-x-0 top-2 block h-0 border-t-2 border-dashed"
+                    :class="
+                      item.event.is_deadline
+                        ? 'border-amber-400 dark:border-amber-400/80'
+                        : 'border-sky-400 dark:border-sky-400/80'
+                    "
+                  />
+                  <span
+                    class="pointer-events-none absolute top-0 left-0 max-w-full truncate rounded-sm bg-white/90 px-0.5
+                           text-[9px] leading-[11px] font-medium"
+                    :class="
+                      item.event.is_deadline
+                        ? 'text-amber-700 dark:bg-slate-900/85 dark:text-amber-300'
+                        : 'text-sky-700 dark:bg-slate-900/85 dark:text-sky-300'
+                    "
+                  >
+                    {{ item.event.title }}
+                  </span>
+                </button>
+              </template>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 格子里一节课的位置只够写「时间 + 地点」，其余的点开看 -->
-    <section
-      v-if="selected"
-      data-testid="class-detail"
-      class="card animate-fade-up space-y-2 p-3.5"
-    >
-      <div class="flex items-start gap-2">
-        <div class="min-w-0 flex-1">
-          <p class="text-sm font-semibold">{{ selected.title }}</p>
-          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {{ timeLabel(selected.start_time) }}–{{ timeLabel(selected.end_time) }}
-            <template v-if="selected.location"> · {{ selected.location }}</template>
-          </p>
-        </div>
-        <button
-          class="btn-ghost !px-2"
-          title="收起"
-          data-testid="class-detail-close"
-          @click="selected = null"
-        >
-          <X :size="15" />
-        </button>
-      </div>
-      <dl
-        class="grid grid-cols-2 gap-x-4 gap-y-1.5 border-t border-slate-100 pt-2.5 text-xs dark:border-slate-800/70"
-      >
-        <div v-if="periodLabel(selected.periods)" class="flex gap-1.5">
-          <dt class="shrink-0 text-slate-400">节次</dt>
-          <dd>{{ periodLabel(selected.periods) }}</dd>
-        </div>
-        <div v-if="selected.location" class="flex gap-1.5">
-          <dt class="shrink-0 text-slate-400">地点</dt>
-          <dd class="min-w-0 truncate">{{ selected.location }}</dd>
-        </div>
-        <div v-if="selected.teacher" class="flex gap-1.5">
-          <dt class="shrink-0 text-slate-400">教师</dt>
-          <dd class="min-w-0 truncate">{{ selected.teacher }}</dd>
-        </div>
-        <div v-if="selected.week" class="flex gap-1.5">
-          <dt class="shrink-0 text-slate-400">周次</dt>
-          <dd>第 {{ selected.week }} 周</dd>
-        </div>
-        <div class="flex gap-1.5">
-          <dt class="shrink-0 text-slate-400">来源</dt>
-          <dd>{{ selected.source === 'tju_schedule' ? '天津大学课表' : selected.source }}</dd>
-        </div>
-      </dl>
-    </section>
+    <!-- 格子里点击弹放大详情卡看全部（老师、周次、节次、备注、地点等） -->
+    <ClassDetail :event="selected" @close="selected = null" />
 
-    <section v-if="deadlines.length" class="space-y-2">
-      <h2 class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        <ListTodo :size="13" /> 本周截止
-      </h2>
+    <section v-if="deadlines.length" data-testid="week-deadlines-section" class="space-y-2">
+      <div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <ListTodo :size="13" />
+        <span>7 天内日程</span>
+        <span
+          v-if="overdueCount > 0"
+          class="rounded bg-rose-100 px-1.5 py-0.2 text-[10px] font-semibold text-rose-600 dark:bg-rose-950/40 dark:text-rose-300"
+        >
+          含 {{ overdueCount }} 项延期
+        </span>
+        <span class="ml-auto text-[11px] font-normal normal-case text-slate-400">
+          共 {{ deadlines.length }} 条
+        </span>
+      </div>
       <EventCard
         v-for="event in deadlines"
         :key="`ddl-${event.id}`"
@@ -163,112 +217,249 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { ChevronLeft, ChevronRight, ListTodo, X } from 'lucide-vue-next'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { ChevronLeft, ChevronRight, ListTodo, MapPin } from 'lucide-vue-next'
+import ClassDetail from '../components/ClassDetail.vue'
 import EmptyState from '../components/EmptyState.vue'
 import EventCard from '../components/EventCard.vue'
 import { api } from '../api'
-import { removeEvent, state, toggleCompleted } from '../store'
-import { dayKey, minutesOfDay, periodLabel, timeLabel, todayKey, weekWindow } from '../utils/datetime'
+import { matchesQuery, removeEvent, state, toggleCompleted } from '../store'
+import { dayKey, dayLabel, isEventEnded, minutesOfDay, periodLabel, timeLabel, todayKey, weekOffsetOf, weekWindow } from '../utils/datetime'
 
 const DAY_START = 8 * 60 // 08:00
-const DAY_END = 21 * 60 + 30 // 21:30
-const GRID_HEIGHT = 620
+const DAY_END = 22 * 60 // 22:00（晚上 11-12 节连着上，最晚到 21:40）
+// 上下微微压缩适应手机长屏比例（从 620 降至 540），文字依然留有充足内边距不溢出
+const GRID_HEIGHT = 540
+/* 没有结束时间的条目（DDL / 只填了开始的自定义日程）画一条横贯整列的线。
+   LINE_MINUTES 只是它在「没有 end 时」的兜底高度。 */
+const LINE_MINUTES = 30
 const hours = Array.from({ length: 14 }, (_, index) => index + 8) // 08..21
 const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
-const offset = ref(0)
 const loading = ref(false)
 const events = ref([])
 const selected = ref(null)
 const scroller = ref(null)
 
-const gridStyle = { gridTemplateColumns: '42px repeat(7, minmax(78px, 1fr))' }
+/* 当前时间线：实时走动，呼吸闪烁 */
+const now = ref(new Date())
+let nowTimer = null
 
-const window_ = computed(() => {
-  const anchor = new Date(Date.now() + offset.value * 7 * 86400000)
-  return weekWindow(anchor)
+const nowMinutes = computed(() => {
+  const d = now.value
+  return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60
+})
+const isNowVisible = computed(() => nowMinutes.value >= DAY_START && nowMinutes.value <= DAY_END)
+const nowPct = computed(() => pct(nowMinutes.value))
+const nowLabel = computed(() => {
+  const h = String(now.value.getHours()).padStart(2, '0')
+  const m = String(now.value.getMinutes()).padStart(2, '0')
+  return `${h}:${m}`
 })
 
-const days = computed(() =>
-  window_.value.days.map((key, index) => {
-    const blocks = events.value
-      .filter((event) => !event.is_deadline && dayKey(event.start_time) === key)
-      .sort((a, b) => String(a.start_time).localeCompare(String(b.start_time)))
+/* 无极滚动多周构建：从上上周(-2) 到未来第六周(+6)，共 9 周 = 63 天 */
+const WEEKS_PAST = 2
+const WEEKS_FUTURE = 6
+const totalWeeks = WEEKS_PAST + WEEKS_FUTURE + 1
+
+const multiWeekWindow = computed(() => {
+  const nowTs = Date.now()
+  const today = todayKey()
+  const allDays = []
+  for (let w = -WEEKS_PAST; w <= WEEKS_FUTURE; w++) {
+    const anchor = new Date(nowTs + w * 7 * 86400000)
+    const win = weekWindow(anchor)
+    win.days.forEach((key, idx) => {
+      allDays.push({
+        key,
+        weekday: WEEKDAYS[idx],
+        dayNum: Number(key.slice(8, 10)),
+        isToday: key === today,
+        isMonday: idx === 0,
+        weekOffset: w,
+        weekLabel: w === 0 ? '本周' : w === 1 ? '下周' : w === -1 ? '上周' : `第 ${w > 0 ? '+' : ''}${w} 周`,
+      })
+    })
+  }
+  return allDays
+})
+
+const days = computed(() => {
+  return multiWeekWindow.value.map((d) => {
+    const items = events.value
+      .filter(
+        (event) =>
+          dayKey(event.start_time) === d.key &&
+          matchesQuery(event) &&
+          // 划掉的 DDL 不占课表
+          !(event.is_deadline && event.status === 'completed'),
+      )
+      .map((event) => ({
+        event,
+        start: minutesOfDay(event.start_time),
+        end: minutesOfDay(event.end_time),
+      }))
+      .filter((item) => item.start !== null)
+    layoutItems(items)
     return {
-      key,
-      weekday: WEEKDAYS[index],
-      dayNum: Number(key.slice(8, 10)),
-      isToday: key === todayKey(),
-      blocks,
+      ...d,
+      items,
     }
-  }),
-)
+  })
+})
 
-const classes = computed(() => events.value.filter((event) => !event.is_deadline))
-const deadlines = computed(() =>
-  events.value
-    .filter((event) => event.is_deadline)
-    .sort((a, b) => String(a.start_time).localeCompare(String(b.start_time))),
-)
+const hasTodayInView = computed(() => days.value.some((d) => d.isToday))
 
-const GUTTER = 42 // width of the time-label column, see gridStyle above
+const GUTTER = 34
+const COL_WIDTH = 54
+const gridStyle = computed(() => ({
+  gridTemplateColumns: `${GUTTER}px repeat(${days.value.length}, ${COL_WIDTH}px)`,
+}))
 
-/**
- * The grid is wider than a phone, so on a Saturday you would stare at an empty
- * Monday. Centre today's column whenever the view appears or the week changes.
- * Declared after `days` on purpose — `watch` evaluates its source eagerly.
- */
-function focusToday(behavior = 'auto') {
+/* 课表无极滚动实时感知当前视窗居中的周次 */
+const centeredWeekOffset = ref(0)
+const isCurrentWeekCentered = computed(() => centeredWeekOffset.value === 0)
+
+const currentVisibleWeekLabel = computed(() => {
+  const offset = centeredWeekOffset.value
+  const targetDay = days.value.find((d) => d.weekOffset === offset && d.isMonday)
+  if (!targetDay) return '本周'
+  const monKey = targetDay.key
+  const sunDate = new Date(new Date(`${monKey}T00:00:00Z`).getTime() + 6 * 86400000)
+  const sunKey = sunDate.toISOString().slice(0, 10)
+  const fmt = (k) => `${Number(k.slice(5, 7))}月${Number(k.slice(8, 10))}日`
+  const title = offset === 0 ? '本周' : offset === 1 ? '下周' : offset === -1 ? '上周' : `第 ${offset > 0 ? '+' : ''}${offset} 周`
+  return `${title} · ${fmt(monKey)} – ${fmt(sunKey)}`
+})
+
+function onScrollerScroll() {
+  const el = scroller.value
+  if (!el) return
+  const centerLeft = el.scrollLeft + el.clientWidth / 2 - GUTTER
+  const colIndex = Math.floor(centerLeft / COL_WIDTH)
+  const clampedIndex = Math.max(0, Math.min(days.value.length - 1, colIndex))
+  const centerDay = days.value[clampedIndex]
+  if (centerDay && centerDay.weekOffset !== centeredWeekOffset.value) {
+    centeredWeekOffset.value = centerDay.weekOffset
+  }
+}
+
+function scrollWeeks(delta) {
+  const el = scroller.value
+  if (!el) return
+  el.scrollBy({ left: delta * COL_WIDTH * 7, behavior: 'smooth' })
+}
+
+function focusToday(behavior = 'smooth') {
   const el = scroller.value
   const index = days.value.findIndex((day) => day.isToday)
   if (!el || index < 0 || !el.clientWidth) return
-  const column = (el.scrollWidth - GUTTER) / 7
-  const left = GUTTER + index * column - (el.clientWidth - column) / 2
+  const left = GUTTER + index * COL_WIDTH - (el.clientWidth - COL_WIDTH) / 2
   el.scrollTo({ left: Math.max(0, left), behavior })
+  centeredWeekOffset.value = 0
 }
 
-onMounted(() => nextTick(() => focusToday()))
+const classes = computed(() => {
+  return events.value.filter(
+    (event) => !event.is_deadline && matchesQuery(event),
+  )
+})
+
+/* 课表下方日程：7 天内日程（包括所有过去延期的未完成任务） */
+const deadlines = computed(() => {
+  const horizonDate = new Date(Date.now() + 7 * 86400000)
+  const horizonKey = dayKey(horizonDate)
+
+  return events.value
+    .filter((event) => {
+      if (!event.is_deadline || event.status === 'completed') return false
+      if (!matchesQuery(event)) return false
+      const k = dayKey(event.start_time)
+      // 包含过去所有延期的 (k < todayKey) 以及未来 7 天内截止的 (k <= horizonKey)
+      return k <= horizonKey
+    })
+    .sort((a, b) => String(a.start_time).localeCompare(String(b.start_time)))
+})
+
+const overdueCount = computed(() => {
+  const today = todayKey()
+  return deadlines.value.filter((ev) => dayKey(ev.start_time) < today).length
+})
+
+onMounted(() => nextTick(() => focusToday('auto')))
 watch(
   () => state.view,
   (view) => {
-    if (view === 'week') nextTick(() => focusToday())
+    if (view === 'week') nextTick(() => focusToday('auto'))
   },
 )
-watch(
-  () => days.value.map((day) => day.key).join(),
-  () => focusToday('smooth'),
-)
 
-const rangeLabel = computed(() => {
-  const { start, end } = window_.value
-  const fmt = (key) => `${Number(key.slice(5, 7))}月${Number(key.slice(8, 10))}日`
-  const weeks = offset.value === 0 ? '本周' : offset.value === 1 ? '下周' : offset.value === -1 ? '上周' : `第 ${offset.value > 0 ? '+' : ''}${offset.value} 周`
-  return `${weeks} · ${fmt(start)} – ${fmt(end)}`
-})
+function formatShortLocation(loc) {
+  if (!loc) return ''
+  // 简短化地点，去掉括号里的多余描述
+  const clean = loc.replace(/\s*[（(][^）)]*[）)]\s*/g, '').trim()
+  return clean || loc
+}
 
 const pct = (minutes) => {
   const clamped = Math.min(Math.max(minutes, DAY_START), DAY_END)
   return ((clamped - DAY_START) / (DAY_END - DAY_START)) * 100
 }
 
-function blockStyle(block) {
-  const rawStart = minutesOfDay(block.start_time)
-  const rawEnd = minutesOfDay(block.end_time) ?? (rawStart === null ? null : rawStart + 45)
-  if (rawStart === null) return { display: 'none' }
-  const startMin = Math.min(Math.max(rawStart, DAY_START), DAY_END)
-  let endMin = rawEnd === null ? startMin + 45 : Math.min(Math.max(rawEnd, DAY_START), DAY_END)
-  if (endMin <= startMin) endMin = Math.min(startMin + 45, DAY_END)
-  const top = ((startMin - DAY_START) / (DAY_END - DAY_START)) * 100
+const STACK_STEP_PX = 15
+const LINE_PAD_PX = 8
+
+function spansOverlap(a, b) {
+  const aEnd = a.end === null ? a.start + LINE_MINUTES : a.end
+  const bEnd = b.end === null ? b.start + LINE_MINUTES : b.end
+  return a.start < bEnd && b.start < aEnd
+}
+
+function layoutItems(items) {
+  const sorted = [...items].sort((a, b) => a.start - b.start)
+  let cluster = []
+  let clusterEnd = -Infinity
+  const flush = () => {
+    if (!cluster.length) return
+    cluster.forEach((item, index) => {
+      const priors = cluster.slice(0, index).filter((other) => spansOverlap(other, item))
+      item.stack = priors.length ? Math.max(...priors.map((other) => other.stack)) + 1 : 0
+    })
+    cluster = []
+    clusterEnd = -Infinity
+  }
+  for (const item of sorted) {
+    if (cluster.length && item.start >= clusterEnd) flush()
+    cluster.push(item)
+    clusterEnd = Math.max(clusterEnd, item.end === null ? item.start + LINE_MINUTES : item.end)
+  }
+  flush()
+  return sorted
+}
+
+function blockStyle(item) {
+  const startMin = Math.min(Math.max(item.start, DAY_START), DAY_END)
+  let endMin =
+    item.end === null ? startMin + LINE_MINUTES : Math.min(Math.max(item.end, DAY_START), DAY_END)
+  if (endMin <= startMin) endMin = Math.min(startMin + LINE_MINUTES, DAY_END)
   const height = Math.max(3.4, ((endMin - startMin) / (DAY_END - DAY_START)) * 100)
-  return { top: `${top}%`, height: `${height}%` }
+  const push = (item.stack || 0) * STACK_STEP_PX
+  return { top: `calc(${pct(item.start)}% + ${push}px)`, height: `${height}%` }
+}
+
+function lineStyle(item) {
+  const push = (item.stack || 0) * STACK_STEP_PX - LINE_PAD_PX
+  return { top: `calc(${pct(item.start)}% + ${push}px)` }
 }
 
 async function loadWeek() {
   loading.value = true
   try {
-    const { start, end } = window_.value
-    const payload = await api.events({ start_date: start, end_date: end, limit: 800 })
+    const list = multiWeekWindow.value
+    if (!list.length) return
+    const start = list[0].key
+    const end = list[list.length - 1].key
+    const payload = await api.events({ start_date: start, end_date: end, limit: 1200 })
     events.value = payload.items || []
   } catch (error) {
     events.value = []
@@ -278,14 +469,14 @@ async function loadWeek() {
   }
 }
 
-function shift(delta) {
-  offset.value = Math.max(-1, Math.min(8, offset.value + delta))
-}
-
-watch(offset, () => {
-  selected.value = null // 换周了，展开的那节课不是这一周的了
-  loadWeek()
-})
 watch(() => state.lastUpdated, loadWeek)
-onMounted(loadWeek)
+onMounted(() => {
+  loadWeek()
+  nowTimer = setInterval(() => {
+    now.value = new Date()
+  }, 10000)
+})
+onUnmounted(() => {
+  if (nowTimer) clearInterval(nowTimer)
+})
 </script>

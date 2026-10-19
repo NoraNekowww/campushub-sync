@@ -16,6 +16,32 @@
   ],
   "shortcuts": [
     { "name": "日程", "url": "." },
-    { "name": "课表", "url": "." }
+    { "name": "课表", "url": "." },
+    { "name": "桌面组件", "url": "widget.html" }
+  ],
+  "widgets": [
+    {
+      "name": "今日日程",
+      "short_name": "今日日程",
+      "description": "显示今日即将开始的课程与 DDL 截止日程",
+      "tag": "today-agenda",
+      "template": "widget-today",
+      "ms_ac_template": "widgets/today-template.json",
+      "data": "api/widgets/today",
+      "type": "application/json",
+      "screenshots": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "label": "今日日程"
+        }
+      ],
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
   ]
 }

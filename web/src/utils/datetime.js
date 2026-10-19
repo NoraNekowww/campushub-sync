@@ -153,6 +153,15 @@ export function groupByDay(events) {
     }))
 }
 
+/** 判断一个课程是否已经结束。DDL 不算课程（走自己的 deadline/completed 逻辑）。 */
+export function isEventEnded(event, now = Date.now()) {
+  if (!event || event.is_deadline) return false
+  const end = event.end_time || event.start_time
+  if (!end) return false
+  const ts = new Date(end).getTime()
+  return Number.isFinite(ts) && ts <= now
+}
+
 /** Monday-based week window (Asia/Shanghai) used by the week grid + fetches. */
 export function weekWindow(reference = new Date()) {
   const key = dayKey(reference)

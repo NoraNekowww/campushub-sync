@@ -57,6 +57,17 @@ class SyncOutcome:
         }
 
 
+def _same_value(left: Any, right: Any) -> bool:
+    """两个字段值是否等价 —— datetime 先统一成 aware 再比。
+
+    SQLite 存回来的 datetime 是 naive（时区被抹掉），直接 ``!=`` 比一个 aware 值
+    永远为真，会让「内容没变」被判成「变了」。
+    """
+    if isinstance(left, datetime) and isinstance(right, datetime):
+        return as_aware(left) == as_aware(right)
+    return left == right
+
+
 def upsert_events(
     session: Session, events: Sequence[Event], user_id: Optional[int] = None
 ) -> tuple[int, int]:
@@ -82,11 +93,29 @@ def upsert_events(
             existing.user_id = user_id
         if existing.local_override:
             # keep the user's edited/protected columns, refresh the rest
-            protected = {"status", "title", "description", "location", "reminder_minutes", "completed_at"}
+            # 改过时间的日程也算「用户的版本」：教务后面调课、待办那边改期，
+            # 都不该把它拽回去（要跟随就再编辑一次）。
+            protected = {
+                "status",
+                "title",
+                "description",
+                "location",
+                "reminder_minutes",
+                "completed_at",
+                "start_time",
+                "end_time",
+            }
+            # 只有真的改了东西才刷新 updated_at：它决定订阅 feed 里的 DTSTAMP /
+            # LAST-MODIFIED —— 每轮同步都变一次的话，手机日历会把整份日程当成
+            # 「刚改过」，课上一半又弹一次提醒（也是 X-CAMPUSHUB 的 etag 抖动源）。
+            touched = False
             for name in SYNCED_FIELDS:
                 if name in protected:
                     continue
-                setattr(existing, name, getattr(incoming, name))
+                value = getattr(incoming, name)
+                if not _same_value(getattr(existing, name), value):
+                    setattr(existing, name, value)
+                    touched = True
             # 例外：完成状态按「谁最后动」定。用户在微软待办那边勾掉一条日程，
             # 客户端要跟着划掉；而本地划掉会立刻推回待办，所以正常情况两边一致。
             # 只有对面确实更晚动过（lastModifiedDateTime / updated_at 更新）才让
@@ -104,13 +133,26 @@ def upsert_events(
                 log.info("sync: %s marked completed by the source", event_id)
                 existing.status = "completed"
                 existing.completed_at = incoming.completed_at or utcnow()
-            existing.updated_at = utcnow()
+                touched = True
+            if touched:
+                existing.updated_at = utcnow()
         else:
+            touched = False
             for name in SYNCED_FIELDS:
-                setattr(existing, name, getattr(incoming, name))
-            existing.status = incoming.status
-            existing.completed_at = incoming.completed_at
-            existing.updated_at = incoming.updated_at
+                value = getattr(incoming, name)
+                if not _same_value(getattr(existing, name), value):
+                    setattr(existing, name, value)
+                    touched = True
+            if not _same_value(existing.status, incoming.status):
+                existing.status = incoming.status
+                touched = True
+            if not _same_value(existing.completed_at, incoming.completed_at):
+                existing.completed_at = incoming.completed_at
+                touched = True
+            # 内容没变就别动 updated_at：订阅 feed 的 DTSTAMP / LAST-MODIFIED 跟着它走，
+            # 每轮同步刷新一次的话，手机日历会把整份日程当成「刚改过」→ 重复提醒。
+            if touched:
+                existing.updated_at = incoming.updated_at
         session.add(existing)
         updated += 1
     return created, updated

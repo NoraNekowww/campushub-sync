@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>今日日程 · 桌面组件</title>
+  <meta name="theme-color" content="#0b1220">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: rgba(255, 255, 255, 0.85);
+      --card-bg: rgba(241, 245, 249, 0.9);
+      --text: #0f172a;
+      --subtext: #64748b;
+      --brand: #2563eb;
+      --brand-light: #dbeafe;
+      --brand-text: #1e40af;
+      --accent: #f59e0b;
+      --accent-light: #fef3c7;
+      --accent-text: #92400e;
+      --border: rgba(226, 232, 240, 0.8);
+      --badge-now: #10b981;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: rgba(15, 23, 42, 0.85);
+        --card-bg: rgba(30, 41, 59, 0.8);
+        --text: #f8fafc;
+        --subtext: #94a3b8;
+        --brand: #3b82f6;
+        --brand-light: rgba(59, 130, 246, 0.2);
+        --brand-text: #93c5fd;
+        --accent: #f59e0b;
+        --accent-light: rgba(245, 158, 11, 0.2);
+        --accent-text: #fcd34d;
+        --border: rgba(51, 65, 85, 0.8);
+        --badge-now: #34d399;
+      }
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: transparent;
+      color: var(--text);
+      overflow-x: hidden;
+      padding: 8px;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .widget-container {
+      background: var(--bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 12px 14px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .date-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .date-meta {
+      font-size: 11px;
+      color: var(--subtext);
+      font-weight: normal;
+    }
+    .current-clock {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--brand);
+      background: var(--brand-light);
+      padding: 2px 6px;
+      border-radius: 6px;
+      letter-spacing: -0.2px;
+    }
+    .hero-card {
+      background: var(--brand-light);
+      border: 1px solid var(--brand);
+      border-radius: 12px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+    .hero-card:active {
+      transform: scale(0.98);
+    }
+    .hero-badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 800;
+      padding: 1px 4px;
+      border-radius: 4px;
+      margin-bottom: 3px;
+      text-transform: uppercase;
+    }
+    .hero-badge.ongoing {
+      background: var(--badge-now);
+      color: #fff;
+      animation: pulse 1.8s infinite;
+    }
+    .hero-badge.upcoming {
+      background: var(--brand);
+      color: #fff;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .hero-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+    }
+    .hero-time {
+      font-size: 10px;
+      color: var(--subtext);
+      margin-top: 2px;
+    }
+    .hero-loc {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--brand-text);
+      background: rgba(255, 255, 255, 0.6);
+      padding: 4px 8px;
+      border-radius: 8px;
+      margin-left: 8px;
+      white-space: nowrap;
+    }
+    .list-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .item-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: var(--card-bg);
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .item-left {
+      min-width: 0;
+      flex: 1;
+    }
+    .item-title {
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .item-time {
+      font-size: 10px;
+      color: var(--subtext);
+    }
+    .item-loc {
+      margin-left: 8px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--brand-text);
+      white-space: nowrap;
+    }
+    .empty-tip {
+      text-align: center;
+      padding: 16px 0;
+      font-size: 11px;
+      color: var(--subtext);
+    }
+    .token-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+    .token-modal.active { display: flex; }
+    .token-box {
+      background: var(--bg);
+      border-radius: 16px;
+      padding: 16px;
+      width: 85%;
+      max-width: 320px;
+      border: 1px solid var(--border);
+    }
+    .token-box input {
+      width: 100%;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
+      font-size: 12px;
+      margin: 8px 0;
+      outline: none;
+    }
+    .btn {
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-primary { background: var(--brand); color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="widget-container" id="app" onclick="openApp(event)">
+    <div class="header">
+      <div class="date-title">
+        <span id="dateLabel">加载中…</span>
+        <span class="date-meta" id="dateMeta"></span>
+      </div>
+      <div class="current-clock" id="clock" onclick="promptToken(event)">--:--</div>
+    </div>
+
+    <!-- 当前/下一节课聚焦卡片 -->
+    <div id="heroCard" class="hero-card" style="display: none;">
+      <div>
+        <span id="heroBadge" class="hero-badge upcoming">下一节课</span>
+        <div id="heroTitle" class="hero-title">--</div>
+        <div id="heroTime" class="hero-time">--</div>
+      </div>
+      <div id="heroLoc" class="hero-loc">--</div>
+    </div>
+
+    <!-- 今日课程列表 -->
+    <div class="list-wrap" id="listWrap">
+      <div class="empty-tip">正在同步今日日程…</div>
+    </div>
+  </div>
+
+  <div class="token-modal" id="tokenModal">
+    <div class="token-box" onclick="event.stopPropagation()">
+      <h3 style="font-size: 13px; font-weight: 700;">设置小组件访问令牌</h3>
+      <p style="font-size: 11px; color: var(--subtext); margin-top: 4px;">如未自动登录，可在此填入 ADMIN_TOKEN 授权小组件：</p>
+      <input type="password" id="tokenInput" placeholder="输入访问令牌">
+      <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <button class="btn" onclick="closeTokenModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveToken()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = './api/widgets/today';
+    const MAIN_APP = './';
+
+    function getToken() {
+      try {
+        return localStorage.getItem('campushub.adminToken') || localStorage.getItem('campushub.token') || '';
+      } catch (e) {
+        return '';
+      }
+    }
+
+    function openApp(e) {
+      if (e && e.target && e.target.closest('#clock')) return;
+      window.location.href = MAIN_APP;
+    }
+
+    function promptToken(e) {
+      if (e) e.stopPropagation();
+      document.getElementById('tokenInput').value = getToken();
+      document.getElementById('tokenModal').classList.add('active');
+    }
+
+    function closeTokenModal() {
+      document.getElementById('tokenModal').classList.remove('active');
+    }
+
+    function saveToken() {
+      const val = document.getElementById('tokenInput').value.trim();
+      try {
+        localStorage.setItem('campushub.adminToken', val);
+      } catch (e) {}
+      closeTokenModal();
+      loadData();
+    }
+
+    function updateClock() {
+      const d = new Date();
+      const h = String(d.getHours()).padStart(2, '0');
+      const m = String(d.getMinutes()).padStart(2, '0');
+      document.getElementById('clock').textContent = `${h}:${m}`;
+    }
+
+    async function loadData() {
+      updateClock();
+      const token = getToken();
+      const url = token ? `${API_BASE}?token=${encodeURIComponent(token)}` : API_BASE;
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          if (resp.status === 401) {
+            document.getElementById('listWrap').innerHTML = '<div class="empty-tip" onclick="promptToken(event)" style="cursor:pointer;color:var(--brand)">点击设置令牌后点亮小组件 ›</div>';
+            return;
+          }
+          throw new Error('加载失败');
+        }
+        const data = await resp.json();
+        render(data);
+      } catch (err) {
+        document.getElementById('listWrap').innerHTML = '<div class="empty-tip">离线或加载失败，点击重试</div>';
+      }
+    }
+
+    function render(data) {
+      document.getElementById('dateLabel').textContent = data.date_label || '今日日程';
+      document.getElementById('dateMeta').textContent = `(${data.total_classes}课·${data.total_deadlines}待办)`;
+
+      const hero = data.current_class || data.next_class;
+      const heroCard = document.getElementById('heroCard');
+      if (hero) {
+        heroCard.style.display = 'flex';
+        const isNow = hero.status === 'ongoing';
+        const badge = document.getElementById('heroBadge');
+        badge.textContent = isNow ? '正在上课' : '下一节课';
+        badge.className = `hero-badge ${isNow ? 'ongoing' : 'upcoming'}`;
+        document.getElementById('heroTitle').textContent = hero.title;
+        document.getElementById('heroTime').textContent = hero.time;
+        document.getElementById('heroLoc').textContent = hero.location ? hero.location : '无教室';
+      } else {
+        heroCard.style.display = 'none';
+      }
+
+      const listWrap = document.getElementById('listWrap');
+      const items = (data.classes || []).concat(data.deadlines || []);
+      if (!items.length) {
+        listWrap.innerHTML = '<div class="empty-tip">今天没有待办和课程，好好休息吧~</div>';
+        return;
+      }
+
+      listWrap.innerHTML = items.slice(0, 4).map(item => {
+        const isDdl = item.type === 'deadline' || !item.end_time;
+        const loc = item.location ? item.location : '';
+        return `
+          <div class="item-row">
+            <div class="item-left">
+              <div class="item-title">${item.title}</div>
+              <div class="item-time">${item.time} ${isDdl ? '· DDL' : ''}</div>
+            </div>
+            ${loc ? `<div class="item-loc">📍${loc}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    loadData();
+    setInterval(loadData, 60000);
+  </script>
+</body>
+</html>

@@ -316,16 +316,9 @@ def parse_classtable(payload: Any, total_weeks: int = 16) -> ClasstableImport:
                     weeks=weeks,
                     location=str(slot.get("room") or "").strip() or None,
                     teacher=teacher,
-                    description=" ".join(
-                        part
-                        for part in (
-                            f"教师：{teacher}" if teacher else "",
-                            f"地点：{str(slot.get('room')).strip()}" if slot.get("room") else "",
-                            f"学期：{result.term}" if result.term else "",
-                        )
-                        if part
-                    )
-                    or None,
+                    # 描述里只留老师：地点卡片自己会显示（`location` 字段），学期每周都一样、
+                    # 摆进备注只是噪音。用户 2026-10-13 明确：「官方就留老师相关的就行」。
+                    description=f"教师：{teacher}" if teacher else None,
                 )
             )
     return result

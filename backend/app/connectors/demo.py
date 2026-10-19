@@ -104,7 +104,10 @@ class DemoConnector(BaseConnector):
                     priority=priority_map[importance],
                     reminder_minutes=60,
                     updated_at=now,
-                    raw=json.dumps({"demo": True, "importance": importance}, ensure_ascii=False),
+                    raw=json.dumps(
+                        {"demo": True, "importance": importance, "listId": "demo-list"},
+                        ensure_ascii=False,
+                    ),
                 )
             )
         return FetchResult(

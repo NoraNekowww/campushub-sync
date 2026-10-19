@@ -15,7 +15,6 @@ from ..timeutil import as_aware, get_tz
 
 PRODID = "-//CampusHub Sync//nzlab.online//CN"
 DEADLINE_BLOCK = timedelta(minutes=30)
-CLASS_LEAD = 10  # minutes before a class
 DEADLINE_LEAD = 60  # fallback lead time for deadlines without an explicit reminder
 
 SOURCE_LABELS = {
@@ -56,10 +55,17 @@ def _alarms(event: Event) -> list[Alarm]:
             leads.append(24 * 60)
         if lead is None:
             leads.append(24 * 60)
+    elif lead is None:
+        # 课表事件不再自动挂提醒：一周十几节课天天响，用户要的是「课表不带提醒、
+        # 只留 DDL 的」（2026-10-13）。自定义日程想提醒，就在编辑框里填一个提前量。
+        return []
     else:
-        leads = [lead if lead is not None else CLASS_LEAD]
+        leads = [lead]
 
-    for minutes in sorted({int(m) for m in leads if m and m > 0}):
+    # `m >= 0`（不是 `m > 0`）：待办里把提醒设在**截止那一刻**（提前 0 分钟）也是要提醒的。
+    # 直接读线上库，6 个未完成待办里 5 个的 `reminder_minutes` 就是 0，原来这批在 feed 里
+    # 一个闹钟都不挂 —— 而用户要的恰恰是「只留 DDL 的提醒」（2026-10-13）。
+    for minutes in sorted({int(m) for m in leads if m is not None and int(m) >= 0}):
         alarm = Alarm()
         alarm.add("ACTION", "DISPLAY")
         alarm.add("DESCRIPTION", event.title)

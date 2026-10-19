@@ -4,23 +4,24 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Sequence
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status as http_status
 from pydantic import BaseModel
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from ..config import get_settings
 from ..connectors import build_connectors
+from ..connectors.ms_todo import note_with_meta
 from ..db import get_session
 from ..models import Event, EventStatus, Source, User, make_event_id
 from ..schemas import EventListOut, EventOut, EventPatchIn, MsTaskIn
 from ..security import require_read, timeline_owner
 from ..services import events as event_service
 from ..services.sync_engine import upsert_events
-from ..timeutil import as_stored, get_tz, iso_local, parse_iso, utcnow
+from ..timeutil import as_aware, as_stored, get_tz, iso_local, parse_iso, utcnow
 
 log = logging.getLogger("campushub.api.events")
 
@@ -38,10 +39,34 @@ class EventCreateIn(BaseModel):
     is_deadline: bool = False
     reminder_minutes: Optional[int] = None
     priority: int = 5
+    repeat_frequency: Optional[str] = None  # None | "day" | "week" | "month"
+    repeat_interval: int = 1
+    repeat_count: int = 1
+
+
+def _add_months(dt: datetime, months: int) -> datetime:
+    """给 datetime 增加若干个月，月末超出时自动回拨到当月最后一天（如 1/31 + 1月 -> 2/28 或 2/29）。"""
+    import calendar
+    year = dt.year + (dt.month - 1 + months) // 12
+    month = (dt.month - 1 + months) % 12 + 1
+    max_day = calendar.monthrange(year, month)[1]
+    day = min(dt.day, max_day)
+    return dt.replace(year=year, month=month, day=day)
 
 
 def _as_utc(value: str) -> datetime:
     return parse_iso(value.strip(), assume=get_tz())
+
+
+def _span_hours(event: Event) -> Optional[float]:
+    """日程的时长（小时）；没结束时间给 ``None``。
+
+    待办任务本身不存时长，按约定并进备注的 ``⏱ 1h`` 行（``note_with_meta``）。
+    """
+    if not event.start_time or not event.end_time:
+        return None
+    span = (event.end_time - event.start_time).total_seconds() / 3600
+    return span if span > 0 else None
 
 
 @router.get("", response_model=EventListOut, summary="Query the unified timeline")
@@ -119,29 +144,85 @@ def create_event(
     end = _as_utc(payload.end_time) if payload.end_time else None
     if end is not None and end < start:
         raise HTTPException(status_code=422, detail="end_time must be after start_time")
-    source_id = f"custom-{utcnow().timestamp():.0f}-{payload.title[:24]}"
-    event = Event(
-        id=make_event_id(Source.custom, source_id),
-        source=Source.custom.value,
-        source_id=source_id,
-        user_id=user.id,
-        title=payload.title.strip(),
-        description=payload.description,
-        start_time=start,
-        end_time=end,
-        is_deadline=payload.is_deadline,
-        location=payload.location,
-        status=EventStatus.pending.value,
-        priority=max(1, min(9, payload.priority)),
-        reminder_minutes=payload.reminder_minutes,
-        local_override=True,  # locally authored — sync must never touch it
-        updated_at=utcnow(),
-        raw=json.dumps({"origin": "api"}, ensure_ascii=False),
-    )
-    session.add(event)
+
+    repeat_freq = payload.repeat_frequency
+    repeat_interval = max(1, payload.repeat_interval or 1)
+    repeat_count = max(1, min(100, payload.repeat_count or 1))
+
+    events_to_create: list[Event] = []
+    base_ts = utcnow().timestamp()
+    duration = (end - start) if end else None
+
+    if repeat_freq in ("day", "week", "month") and repeat_count > 1:
+        for i in range(repeat_count):
+            if repeat_freq == "day":
+                cur_start = start + timedelta(days=i * repeat_interval)
+            elif repeat_freq == "week":
+                cur_start = start + timedelta(days=i * repeat_interval * 7)
+            elif repeat_freq == "month":
+                cur_start = _add_months(start, i * repeat_interval)
+            cur_end = (cur_start + duration) if duration else None
+
+            sid = f"custom-{base_ts:.0f}-{payload.title[:20]}-{i+1}"
+            ev = Event(
+                id=make_event_id(Source.custom, sid),
+                source=Source.custom.value,
+                source_id=sid,
+                user_id=user.id,
+                title=payload.title.strip(),
+                description=payload.description,
+                start_time=cur_start,
+                end_time=cur_end,
+                is_deadline=payload.is_deadline,
+                location=payload.location,
+                status=EventStatus.pending.value,
+                priority=max(1, min(9, payload.priority)),
+                reminder_minutes=payload.reminder_minutes,
+                local_override=True,  # locally authored — sync must never touch it
+                updated_at=utcnow(),
+                raw=json.dumps(
+                    {
+                        "origin": "api",
+                        "recurrence": {
+                            "group_id": f"rec-{base_ts:.0f}",
+                            "freq": repeat_freq,
+                            "interval": repeat_interval,
+                            "index": i + 1,
+                            "total": repeat_count,
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+            session.add(ev)
+            events_to_create.append(ev)
+    else:
+        sid = f"custom-{base_ts:.0f}-{payload.title[:24]}"
+        ev = Event(
+            id=make_event_id(Source.custom, sid),
+            source=Source.custom.value,
+            source_id=sid,
+            user_id=user.id,
+            title=payload.title.strip(),
+            description=payload.description,
+            start_time=start,
+            end_time=end,
+            is_deadline=payload.is_deadline,
+            location=payload.location,
+            status=EventStatus.pending.value,
+            priority=max(1, min(9, payload.priority)),
+            reminder_minutes=payload.reminder_minutes,
+            local_override=True,  # locally authored — sync must never touch it
+            updated_at=utcnow(),
+            raw=json.dumps({"origin": "api"}, ensure_ascii=False),
+        )
+        session.add(ev)
+        events_to_create.append(ev)
+
     session.commit()
-    session.refresh(event)
-    return EventOut.from_event(event, tz=get_settings().timezone)
+    first_event = events_to_create[0]
+    session.refresh(first_event)
+    return EventOut.from_event(first_event, tz=get_settings().timezone)
 
 
 # --------------------------------------------------------- 微软待办（反向写入）
@@ -181,6 +262,63 @@ async def push_ms_status(event: Event) -> dict:
         )
     except Exception as exc:  # noqa: BLE001 - 反向同步失败只提示，不动本地
         log.warning("ms push failed for %s: %s", event.id, exc)
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    return {"ok": True, "error": None}
+
+
+async def push_ms_edit(
+    event: Event, *, title: Optional[str], due: Optional[datetime]
+) -> dict:
+    """把网页端对一条待办日程的改动推回微软待办。
+
+    地点在待办那边没有字段，所以备注每次都是「正文 + ``📍 地点``」整段重算后再推。
+    """
+    if event.source != Source.microsoft_todo.value:
+        return {}
+    connector = _ms_connector()
+    if connector is None:
+        return {"ok": False, "error": "没有启用微软待办连接器"}
+    if not connector.auth_state().get("authorized"):
+        return {"ok": False, "error": "微软授权已失效，请去设置里重新连接"}
+    list_id = _ms_list_id(event)
+    if not list_id:
+        return {"ok": False, "error": "这条日程没记住微软清单 id，先跑一次同步"}
+    try:
+        await connector.update_task(
+            event.source_id,
+            list_id,
+            title=title,
+            due=due,
+            note=note_with_meta(event.description, event.location, _span_hours(event)),
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("ms edit push failed for %s: %s", event.id, exc)
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    return {"ok": True, "error": None}
+
+
+async def push_ms_delete(event: Event) -> dict:
+    """把网页端的「删除」推到微软待办（用户点名要的「删除日程同步删微软」）。
+
+    和本地那套软删除（隐藏 + ``local_override``）不一样，这是**远程真删**，
+    撤不回来：撤销只把本地这条恢复，微软那边得用户自己重建。所以调用方只在
+    ``source == microsoft_todo`` 时调，而且失败也不阻断本地删除 —— 用户在这儿
+    点的删除一定要算数，微软那边删不掉只是多留一条废任务。
+    """
+    if event.source != Source.microsoft_todo.value:
+        return {}
+    connector = _ms_connector()
+    if connector is None:
+        return {"ok": False, "error": "没有启用微软待办连接器"}
+    if not connector.auth_state().get("authorized"):
+        return {"ok": False, "error": "微软授权已失效，请去设置里重新连接"}
+    list_id = _ms_list_id(event)
+    if not list_id:
+        return {"ok": False, "error": "这条日程没记住微软清单 id，没法删远程那条"}
+    try:
+        await connector.delete_task(event.source_id, list_id)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("ms delete push failed for %s: %s", event.id, exc)
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
     return {"ok": True, "error": None}
 
@@ -225,7 +363,8 @@ async def create_ms_task(
             payload.title,
             due=start,
             list_id=payload.list_id,
-            note=payload.note,
+            # 待办任务没有地点、也没有时长字段：都并进备注（网页端读回来再摘出去）
+            note=note_with_meta(payload.note, payload.location, payload.duration_hours),
             importance=payload.importance,
         )
     except Exception as exc:  # noqa: BLE001
@@ -243,6 +382,19 @@ async def create_ms_task(
     return EventOut.from_event(event, tz=settings.timezone)
 
 
+def _recurrence_group_of(event: Event) -> Optional[str]:
+    raw = event.raw_dict()
+    if isinstance(raw, dict):
+        rec = raw.get("recurrence")
+        if isinstance(rec, dict) and rec.get("group_id"):
+            return str(rec["group_id"])
+    if event.source_id and event.source_id.startswith("custom-"):
+        parts = event.source_id.split("-")
+        if len(parts) >= 3:
+            return f"rec-{parts[1]}"
+    return None
+
+
 @router.patch("/{event_id}", response_model=EventOut)
 async def update_event(
     event_id: str,
@@ -250,9 +402,70 @@ async def update_event(
     session: Session = Depends(get_session),
     user: User = Depends(timeline_owner),
 ) -> EventOut:
+    """改一条日程：标题 / 时间 / 地点 / 备注 / 划掉 / 隐藏 —— 什么来源都能改。
+
+    若指定了 ``apply_scope`` 为 ``all`` 或 ``future`` 且该日程属于批量生成的重复系列，
+    将自动对整个系列或后续日程执行批量修改。
+    """
     owned = session.get(Event, event_id)
-    if owned is not None and owned.user_id != user.id:
+    if owned is None or owned.user_id != user.id:
         raise HTTPException(status_code=404, detail="event not found")
+
+    start = as_stored(payload.start_time, assume=get_tz()) if payload.start_time else None
+    end = as_stored(payload.end_time, assume=get_tz()) if payload.end_time else None
+    effective_start = start or as_aware(owned.start_time)
+    effective_end = None if payload.clear_end_time else (end or as_aware(owned.end_time))
+    if effective_end is not None and effective_end <= effective_start:
+        raise HTTPException(status_code=422, detail="结束时间要晚于开始时间")
+
+    group_id = _recurrence_group_of(owned)
+    # 批量修改处理
+    if payload.apply_scope in ("all", "future") and group_id:
+        all_user_events = session.exec(select(Event).where(Event.user_id == user.id)).all()
+        siblings = [ev for ev in all_user_events if _recurrence_group_of(ev) == group_id and not ev.hidden]
+        if payload.apply_scope == "future":
+            siblings = [ev for ev in siblings if ev.start_time >= owned.start_time]
+
+        # 计算时间偏移量（墙钟时刻与时长的变化）
+        time_offset: Optional[timedelta] = None
+        new_duration: Optional[timedelta] = None
+        if start is not None:
+            time_offset = as_aware(start) - as_aware(owned.start_time)
+            if end is not None:
+                new_duration = as_aware(end) - as_aware(start)
+
+        for sib in siblings:
+            sib_start = None
+            sib_end = None
+            if time_offset is not None:
+                sib_tz_start = as_aware(sib.start_time) + time_offset
+                sib_start = as_stored(sib_tz_start, assume=get_tz())
+                if payload.clear_end_time:
+                    sib_end = None
+                elif new_duration is not None:
+                    sib_tz_end = sib_tz_start + new_duration
+                    sib_end = as_stored(sib_tz_end, assume=get_tz())
+                elif sib.end_time:
+                    old_dur = as_aware(sib.end_time) - as_aware(sib.start_time)
+                    sib_end = as_stored(sib_tz_start + old_dur, assume=get_tz())
+
+            event_service.patch_event(
+                session,
+                sib.id,
+                status=payload.status.value if payload.status else None,
+                title=payload.title,
+                description=payload.description,
+                location=payload.location,
+                reminder_minutes=payload.reminder_minutes,
+                hidden=payload.hidden,
+                start_time=sib_start,
+                end_time=sib_end,
+                clear_end_time=payload.clear_end_time,
+            )
+        session.commit()
+        session.refresh(owned)
+        return EventOut.from_event(owned, tz=get_settings().timezone)
+
     event = event_service.patch_event(
         session,
         event_id,
@@ -262,18 +475,28 @@ async def update_event(
         location=payload.location,
         reminder_minutes=payload.reminder_minutes,
         hidden=payload.hidden,
+        start_time=start,
+        end_time=end,
+        clear_end_time=payload.clear_end_time,
     )
     if event is None:
         raise HTTPException(status_code=404, detail="event not found")
     session.commit()
     session.refresh(event)
 
-    # 「划掉」要顺手推回微软待办（异步，失败只提示不回滚）。
-    ms_sync = (
-        await push_ms_status(event)
-        if payload.status is not None and event.source == Source.microsoft_todo.value
-        else {}
-    )
+    # 微软待办来源：划掉 / 改标题 / 改时间 / 改备注（地点在备注里）都推回去。
+    ms_sync: dict = {}
+    if event.source == Source.microsoft_todo.value:
+        if payload.status is not None:
+            ms_sync = await push_ms_status(event) or ms_sync
+        if (
+            payload.title is not None
+            or start is not None
+            or payload.clear_end_time
+            or payload.description is not None
+            or payload.location is not None
+        ):
+            ms_sync = await push_ms_edit(event, title=payload.title, due=start) or ms_sync
     out = EventOut.from_event(event, tz=get_settings().timezone)
     if ms_sync:
         out.ms_sync = ms_sync
@@ -283,25 +506,47 @@ async def update_event(
 @router.delete("/{event_id}", response_model=EventOut)
 async def delete_event(
     event_id: str,
+    apply_scope: str = Query(default="single", pattern="^(single|all|future)$"),
     session: Session = Depends(get_session),
     user: User = Depends(timeline_owner),
 ) -> EventOut:
-    """删除一条日程 —— 对任何来源都走「软删除」（隐藏）。
+    """删除一条日程。支持批量删除重复任务系列。"""
+    owned = session.get(Event, event_id)
+    if owned is None or owned.user_id != user.id:
+        raise HTTPException(status_code=404, detail="event not found")
 
-    以前这里对外部事件直接 409（"删了下次同步还会回来"）。现在改成隐藏 +
-    ``local_override``：时间线、统计、订阅日历里立刻消失，同步也不会再把它拉回来，
-    而且用户能撤销（``PATCH {"hidden": false}``）。
+    group_id = _recurrence_group_of(owned)
+    if apply_scope in ("all", "future") and group_id:
+        all_user_events = session.exec(select(Event).where(Event.user_id == user.id)).all()
+        siblings = [ev for ev in all_user_events if _recurrence_group_of(ev) == group_id and not ev.hidden]
+        if apply_scope == "future":
+            siblings = [ev for ev in siblings if ev.start_time >= owned.start_time]
+        for sib in siblings:
+            event_service.patch_event(session, sib.id, hidden=True)
+        session.commit()
+        session.refresh(owned)
+        return EventOut.from_event(owned, tz=get_settings().timezone)
+    """删除一条日程。
 
-    微软待办来源的任务只在本站隐藏，不去动微软那边 —— 远程删除不可逆，留在
-    待办 App 里由用户自己决定。
+    本地对任何来源都走「软删除」（隐藏 + ``local_override``）：时间线、统计、
+    订阅日历里立刻消失，同步也不会再把它拉回来，用户还能撤销（``PATCH
+    {"hidden": false}``）。
+
+    微软待办来源的额外**真删**远端那条 —— 用户明确要求「删除日程同步删微软」。
+    远端删除不可逆，所以响应里带上 ``ms_sync``，前端据此把「撤销」换掉：本地能
+    恢复，微软那边恢复不了。远端失败不影响本地删除，只在 ``ms_sync`` 里报错。
     """
     event = session.get(Event, event_id)
     if event is None or event.user_id != user.id:
         raise HTTPException(status_code=404, detail="event not found")
+    ms_sync = await push_ms_delete(event)
     event_service.set_hidden(session, event_id, True)
     session.commit()
     session.refresh(event)
-    return EventOut.from_event(event, tz=get_settings().timezone)
+    out = EventOut.from_event(event, tz=get_settings().timezone)
+    if ms_sync:
+        out.ms_sync = ms_sync
+    return out
 
 
 @router.get("/{event_id}/debug", include_in_schema=False, dependencies=[Depends(timeline_owner)])
