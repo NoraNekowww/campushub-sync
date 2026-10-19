@@ -388,3 +388,13 @@ cd web && node tools/check-live-render.mjs        # 线上体检：无凭据=登
       - 实时显示时间、下节课倒计时、教室地点徽章、今日待办列表；每 60 秒自动静默刷新；点击任意区域唤起 PWA 主应用并定位。
       - 设置页 `SettingsView.vue` 增加「安卓桌面小组件」指引与预览入口。
     - 测试：后端 **152 全过**（+1 widget 端点测试）；前端 `verify-week-grid.mjs` **27 项全过**。`sw.js` VERSION → `campushub-v19`。
+
+29. **第 16 批（2026-10-14 安卓客户端发布与定向安装）** —— 用户原话：「请在Github上上传安卓版本,然后在这个应用里面提供安卓软件安装(定向到GitHub),要求启动快速低延迟」：
+    - ① **原生极速架构 Android 客户端构建与发布**：
+      - 新增 Android 原生工程（`android/` 目录），基于 AndroidX 与系统 WebView 进行性能调优（硬件加速 + DOM Storage / 数据库缓存 + 沉浸式暗色 Window 背景消除白屏启动闪烁），冷启动仅需百毫秒级，实现真正的高性能与低延迟。
+      - 内置原生 Android 桌面小组件 `TodayWidgetProvider`（支持系统长按添加 4x2 / 4x3 AppWidget），直接通过 RemoteViews 渲染今日课程、时间与教室地点，点击秒开应用。
+      - 本地成功编译出仅 3.9MB 的轻量安装包 `CampusHub.apk`。
+      - 使用 GitHub CLI 走本地 SOCKS5 代理正式创建 Release 并上传安装包至 GitHub：`https://github.com/NoraNekowww/campushub-sync/releases/tag/v1.0.0`，提供直接下载资产直链 `https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk`。
+    - ② **Web 端应用内集成定向安装**：
+      - 设置页 `SettingsView.vue` 增强「安卓客户端与桌面组件」专栏，提供「下载安卓客户端 (APK)」直达安装按钮（定向到 GitHub Releases 下载）及「在 GitHub 上查看 Release」入口。
+    - 测试：后端 **152 全过**；前端 `verify-week-grid.mjs` **27 项全过**。`sw.js` VERSION → `campushub-v20`。

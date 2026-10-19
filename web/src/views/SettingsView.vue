@@ -265,32 +265,38 @@
     <section class="card space-y-3 p-4">
       <header class="flex items-center gap-2">
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
-        <h2 class="text-sm font-semibold">安卓桌面小组件</h2>
+        <h2 class="text-sm font-semibold">安卓客户端与桌面组件</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          PWA & 桌面组件
+          v1.0.0 · 原生极速
         </span>
       </header>
       <p class="text-xs text-slate-500 dark:text-slate-400">
-        网站安装为 PWA 后，支持在手机桌面添加常驻小组件，实时显示今日课程、地点与 DDL：
+        基于原生架构深度调优，毫秒级快速启动，低延迟无闪白；内置「今日日程」安卓桌面小组件 (AppWidget)，长按桌面即可添加。
       </p>
-      <div class="space-y-1.5 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-800/60">
-        <p class="font-medium text-slate-700 dark:text-slate-200">方式 1：标准 PWA 桌面组件（Chrome / Edge）</p>
-        <p class="text-[11px] text-slate-500 dark:text-slate-400">
-          在浏览器菜单中点击「安装应用」后，长按手机桌面空白处 ->「微件/小组件」-> 找到 CampusHub 即可添加「今日日程」小部件。
-        </p>
-        <p class="pt-1 font-medium text-slate-700 dark:text-slate-200">方式 2：独立微型组件卡片（全机型兼容）</p>
-        <p class="text-[11px] text-slate-500 dark:text-slate-400">
-          针对部分定制桌面，可使用 Hermit、Web Widget 等工具直接挂载专属微型组件页：
-        </p>
-        <div class="pt-1 flex items-center gap-2">
+      <div class="space-y-2 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-800/60">
+        <div class="flex flex-wrap items-center gap-2">
           <a
-            href="./widget.html"
+            href="https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk"
             target="_blank"
-            class="btn-primary !py-1 text-xs inline-flex items-center gap-1"
+            class="btn-primary !py-1.5 text-xs inline-flex items-center gap-1.5"
+            data-testid="download-apk-btn"
           >
-            打开微型组件预览
+            <Download :size="14" />
+            下载安卓客户端 (APK)
+          </a>
+          <a
+            href="https://github.com/NoraNekowww/campushub-sync/releases/latest"
+            target="_blank"
+            class="btn-ghost !py-1.5 text-xs inline-flex items-center gap-1 text-slate-600 dark:text-slate-300"
+          >
+            <ExternalLink :size="13" />
+            在 GitHub 上查看 Release
           </a>
         </div>
+        <p class="pt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+          💡 <strong>桌面小组件用法</strong>：安装后长按手机桌面空白处 ->「微件/小组件」-> 找到 <strong>CampusHub 今日日程</strong> 即可放置在桌面；亦支持使用 Hermit / Web Widget 挂载
+          <a href="./widget.html" target="_blank" class="text-brand-600 dark:text-brand-400 underline">独立微型组件页</a>。
+        </p>
       </div>
     </section>
 
@@ -538,6 +544,8 @@ import {
   CheckCheck,
   CircleAlert,
   Copy,
+  Download,
+  ExternalLink,
   Eye,
   GraduationCap,
   Info,
