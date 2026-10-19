@@ -288,8 +288,9 @@ class ClassEntry:
             # id 里放**周次**而不是日期：学期锚点一旦修正（比如教务周次换算改了），
             # 日期会变而周次不变 ⇒ 同一行被就地改期，不会留下一份旧日期的孤儿行；
             # 用户划掉/删掉（hidden）和被本地改过的标记也因此能跟着走，不会"复活"。
+            # id 里包含周次、星期和节次，避免同周次不同星期的同时间段排课 ID 冲突互相覆盖
             source_id = (
-                f"{semester.name}:{self.name}:w{week}"
+                f"{semester.name}:{self.name}:w{week}:d{self.weekday}"
                 f":p{self.start_period}-{self.end_period}:{self.location or ''}"
             )
             events.append(

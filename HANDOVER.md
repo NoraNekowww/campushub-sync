@@ -425,3 +425,20 @@ cd web && node tools/check-live-render.mjs        # 线上体检：无凭据=登
       - `sw.js` 版本升级至 `campushub-v22`。
       - 将更新后的前端构建产物（含离线秒出缓存逻辑）重新同步至 Android 工程 `assets/web/`，重新编译生成 `CampusHub.apk`（4.0MB）并覆盖上传至 GitHub Releases `v1.0.0`。
     - 测试：后端 **152 全过**；前端 `verify-week-grid.mjs` **27 项全过**。`sw.js` VERSION → `campushub-v22`。
+
+32. **第 19 批（2026-10-14 修复周二第一节微积分/高数课消失 Bug）** —— 用户原话：「网页端和移动端里周二第一节高数课都消失了，你看看是什么bug导致的，修复它」：
+    - ① **Bug 根因定位**：
+      - 在 `backend/app/connectors/tju_schedule.py` 中，课表解析生成各周日程时计算 `source_id` 的模版为：  
+        `f"{semester.name}:{self.name}:w{week}:p{self.start_period}-{self.end_period}:{self.location or ''}"`
+      - 注意到这里**缺失了星期维度 `weekday`**！
+      - 微积分 I 在周二第 1-2 节（`weekday=2, p1-2`）和周四第 1-2 节（`weekday=4, p1-2`）均有排课，且地点同为 `45楼B203`。由于 `source_id` 仅包含了周次与节次而没有包含星期，导致同一周的周二与周四微积分生成的 `source_id` 完全相同，进而计算出完全一致的主键 `id = make_event_id(...)`。
+      - 在数据入库与同步时，周四的微积分覆盖写入了周二的微积分（主键碰撞），造成数据库中仅存在周四记录，周二第一节高数/微积分课彻底消失！
+    - ② **修复与验证**：
+      - 修复 `source_id` 生成逻辑，补全星期区分：  
+        `f"{semester.name}:{self.name}:w{week}:d{self.weekday}:p{self.start_period}-{self.end_period}:{self.location or ''}"`
+      - 新增回归测试 `backend/tests/test_course_collision.py`，断言同周不同星期的相同节次课程 ID 不碰撞。
+      - 服务端重走同步流水线，周二微积分课全部重新恢复入库（已验证周二 08:30–10:05 正常呈现）。
+    - ③ **版本构建与发布**：
+      - 前端 `sw.js` VERSION → `campushub-v23`。
+      - 重新构建前端静态产物并打包进 Android assets，离线编译生成 `CampusHub.apk` 覆盖上传至 GitHub Release `v1.0.0`。
+    - 测试：后端 **153 全过**；前端 `verify-week-grid.mjs` **27 项全过**。`sw.js` VERSION → `campushub-v23`。
