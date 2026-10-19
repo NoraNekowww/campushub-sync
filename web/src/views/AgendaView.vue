@@ -26,7 +26,7 @@
       data-testid="day-group"
       :data-day="group.key"
     >
-      <header class="sticky top-[112px] z-10 -mx-4 flex items-center gap-2 bg-slate-100/90 px-4 py-1.5
+      <header class="sticky top-[49px] z-10 -mx-4 flex items-center gap-2 bg-slate-100/90 px-4 py-1.5
                      text-xs font-semibold uppercase tracking-wide text-slate-500 backdrop-blur
                      dark:bg-slate-900/90 dark:text-slate-400">
         <span :class="group.key === today ? 'text-brand-600 dark:text-brand-400' : ''">
@@ -48,8 +48,65 @@
       />
     </section>
 
+    <!-- 无日程且未接入时：显示接入卡片 -->
+    <section
+      v-if="!state.loading && !groups.length && !overdue.length && !hasConnected && !state.authRequired"
+      class="card space-y-4 p-5 animate-fade-up"
+      data-testid="onboarding-card-in-agenda"
+    >
+      <header class="space-y-1">
+        <div class="flex items-center gap-2 text-brand-600 dark:text-brand-400 font-semibold text-sm">
+          <Sparkles :size="16" />
+          <span>接入你的日程与课表</span>
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-400">
+          当前还没有日程。连接学校教务或待办账号，课程和 DDL 会自动同步进来。
+        </p>
+      </header>
+
+      <div class="grid gap-2.5 sm:grid-cols-2">
+        <div class="flex flex-col justify-between rounded-xl border border-slate-200/80 bg-slate-50/60 p-3.5 dark:border-slate-800 dark:bg-slate-800/40">
+          <div class="space-y-1">
+            <div class="flex items-center gap-1.5 font-medium text-xs text-slate-800 dark:text-slate-200">
+              <GraduationCap :size="15" class="text-brand-600 dark:text-brand-400" />
+              <span>天津大学教务系统</span>
+            </div>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">
+              一键同步全学期课表、教室地点与节次
+            </p>
+          </div>
+          <button class="btn-primary !py-1 text-xs mt-3 w-full justify-center" @click="goToSection('tju-section')">
+            去连接教务
+          </button>
+        </div>
+
+        <div class="flex flex-col justify-between rounded-xl border border-slate-200/80 bg-slate-50/60 p-3.5 dark:border-slate-800 dark:bg-slate-800/40">
+          <div class="space-y-1">
+            <div class="flex items-center gap-1.5 font-medium text-xs text-slate-800 dark:text-slate-200">
+              <ListTodo :size="15" class="text-indigo-600 dark:text-indigo-400" />
+              <span>Microsoft To Do</span>
+            </div>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">
+              授权微软账号，双向同步待办与任务
+            </p>
+          </div>
+          <button class="btn-ghost !py-1 text-xs mt-3 w-full justify-center border border-slate-200 dark:border-slate-700" @click="goToSection('ms-section')">
+            去连接待办
+          </button>
+        </div>
+      </div>
+
+      <div class="pt-1 flex items-center justify-between text-xs text-slate-400 border-t border-slate-100 dark:border-slate-800">
+        <span>或者手动添加个人安排：</span>
+        <button class="btn-ghost !py-1 text-xs text-brand-600 dark:text-brand-400" @click="openCustomEditor()">
+          <Plus :size="13" /> 添加自定义日程
+        </button>
+      </div>
+    </section>
+
+    <!-- 已接入但当前无日程时：显示常规空状态 -->
     <EmptyState
-      v-if="!state.loading && !groups.length && !overdue.length"
+      v-else-if="!state.loading && !groups.length && !overdue.length"
       :kind="emptyKind"
       :message="emptyMessage"
     >
@@ -67,11 +124,11 @@
 
 <script setup>
 import { computed, onMounted } from 'vue'
-import { AlertTriangle, KeyRound, RefreshCw } from 'lucide-vue-next'
+import { AlertTriangle, GraduationCap, KeyRound, ListTodo, Plus, RefreshCw, Sparkles } from 'lucide-vue-next'
 import EmptyState from '../components/EmptyState.vue'
 import EventCard from '../components/EventCard.vue'
 import SkeletonList from '../components/SkeletonList.vue'
-import { filterEvents, notify, refresh, removeEvent, state, toggleCompleted } from '../store'
+import { filterEvents, notify, openCustomEditor, refresh, removeEvent, state, toggleCompleted } from '../store'
 import { groupByDay, todayKey } from '../utils/datetime'
 
 const today = todayKey()
@@ -92,6 +149,27 @@ const groups = computed(() => {
   const overdueIds = new Set(overdue.value.map((event) => event.id))
   return groupByDay(visible.value.filter((event) => !overdueIds.has(event.id)))
 })
+
+const hasConnected = computed(() => {
+  const connectors = state.status?.connectors || []
+  const tjuOk = connectors.find((item) => item.name === 'tju_schedule')?.ok
+  const msOk = connectors.find((item) => item.name === 'microsoft_todo')?.ok
+  let hasTjuToken = false
+  try {
+    hasTjuToken = Boolean(localStorage.getItem('campushub.tju-token'))
+  } catch {
+    hasTjuToken = false
+  }
+  return Boolean(tjuOk || msOk || hasTjuToken)
+})
+
+function goToSection(anchorId) {
+  state.view = 'settings'
+  setTimeout(() => {
+    const el = document.getElementById(anchorId)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, 100)
+}
 
 const emptyKind = computed(() => (state.authRequired ? 'auth' : state.online ? 'empty' : 'offline'))
 const emptyMessage = computed(() => {

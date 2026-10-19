@@ -68,14 +68,6 @@ function releaseSwipe(closer) {
             class="text-slate-300 transition-colors peer-focus-visible:text-brand-500 dark:text-slate-600"
           />
         </label>
-        <div
-          v-else
-          class="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl bg-brand-50 text-brand-700
-                 dark:bg-brand-500/15 dark:text-brand-300"
-        >
-          <span class="text-sm font-semibold leading-none">{{ timeLabel(event.start_time) }}</span>
-          <span v-if="durationShort" class="mt-0.5 text-[10px] leading-none">{{ durationShort }}</span>
-        </div>
 
         <div
           class="min-w-0 flex-1"
@@ -140,10 +132,6 @@ function releaseSwipe(closer) {
             v-else
             class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400"
           >
-            <span class="inline-flex items-center gap-1">
-              <component :is="sourceIcon" :size="12" />
-              {{ sourceLabel }}
-            </span>
             <span v-if="event.is_deadline" class="inline-flex items-center gap-1">
               <Clock :size="12" />{{ deadlineLabel }}
             </span>
@@ -158,22 +146,6 @@ function releaseSwipe(closer) {
               <AlertTriangle v-if="countdownInfo.tone === 'danger'" :size="11" />
               {{ countdownInfo.text }}
             </span>
-            <button
-              v-if="tickable"
-              class="inline-flex items-center gap-1"
-              :class="
-                event.status === 'completed'
-                  ? 'text-emerald-600 dark:text-emerald-400'
-                  : 'text-slate-400 hover:text-brand-600 dark:hover:text-brand-400'
-              "
-              :aria-label="event.status === 'completed' ? `取消划掉：${event.title}` : `划掉：${event.title}`"
-              data-testid="tick-event"
-              @click.stop="$emit('toggle', event)"
-            >
-              <CheckCircle2 v-if="event.status === 'completed'" :size="12" />
-              <Circle v-else :size="12" />
-              {{ event.status === 'completed' ? '已划掉' : '划掉' }}
-            </button>
             <button
               v-if="event.source !== 'tju_schedule'"
               class="inline-flex items-center gap-1 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400"
@@ -206,10 +178,6 @@ function releaseSwipe(closer) {
             <div v-if="event.week" class="flex gap-1.5">
               <dt class="shrink-0 text-slate-400">周次</dt>
               <dd>第 {{ event.week }} 周</dd>
-            </div>
-            <div class="flex gap-1.5">
-              <dt class="shrink-0 text-slate-400">来源</dt>
-              <dd>{{ sourceLabel }}</dd>
             </div>
             <div v-if="noteText && !event.teacher" class="col-span-2 flex gap-1.5">
               <dt class="shrink-0 text-slate-400">备注</dt>

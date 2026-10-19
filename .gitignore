@@ -43,6 +43,7 @@ Thumbs.db
 desktop.ini
 
 # ===== Android 构建 =====
+*.apk
 .gradle/
 android/.gradle/
 android/**/build/

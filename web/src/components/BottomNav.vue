@@ -11,16 +11,16 @@
         data-testid="nav-tab"
         :data-tab="tab.value"
         :aria-current="state.view === tab.value ? 'page' : 'false'"
-        class="flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors"
+        :title="tab.label"
+        class="flex flex-1 items-center justify-center py-3 text-slate-400 transition-colors"
         :class="
           state.view === tab.value
-            ? 'text-brand-600 dark:text-brand-400'
-            : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+            ? '!text-brand-600 dark:!text-brand-400'
+            : 'hover:text-slate-600 dark:hover:text-slate-200'
         "
         @click="state.view = tab.value"
       >
-        <component :is="tab.icon" :size="20" :stroke-width="state.view === tab.value ? 2.4 : 2" />
-        {{ tab.label }}
+        <component :is="tab.icon" :size="22" :stroke-width="state.view === tab.value ? 2.3 : 1.8" />
       </button>
     </div>
   </nav>
