@@ -403,8 +403,30 @@ const deadlineLabel = computed(() => {
 
 const priority = computed(() => {
   const value = props.event.priority ?? 5
-  if (value <= 2) return { label: '高', classes: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300' }
-  if (value <= 5) return { label: '中', classes: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' }
+  const startTime = props.event.start_time
+  let daysDiff = 999
+  if (startTime) {
+    const targetMs = new Date(startTime).getTime()
+    if (!Number.isNaN(targetMs)) {
+      daysDiff = (targetMs - Date.now()) / (1000 * 60 * 60 * 24)
+    }
+  }
+
+  // 显式高优（如星标重要任务）或已逾期/24小时内紧急到期 -> 高
+  if (value <= 2 || (daysDiff <= 1 && daysDiff >= -100)) {
+    return { label: '高', classes: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300' }
+  }
+
+  // 远期任务（超过 3 天截止）：绝不显示为“中”，判定为低紧迫度
+  if (daysDiff > 3) {
+    return { label: '低', classes: 'bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300' }
+  }
+
+  // 3 天内临近到期的普通任务 -> 中
+  if (value <= 5) {
+    return { label: '中', classes: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' }
+  }
+
   return { label: '低', classes: 'bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300' }
 })
 

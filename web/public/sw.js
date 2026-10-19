@@ -9,7 +9,7 @@
  * Every path is derived from the registration scope, so one bundle works both
  * at `/` (local, Docker) and at `/schedule/` (nzlab.online).
  */
-const VERSION = 'campushub-v25'
+const VERSION = 'campushub-v26'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 
@@ -17,6 +17,7 @@ const BASE = new URL(self.registration.scope).pathname // '/', '/schedule/'
 const SHELL = [
   BASE,
   `${BASE}index.html`,
+  `${BASE}favicon.ico`,
   `${BASE}widget.html`,
   `${BASE}manifest.webmanifest`,
   `${BASE}widgets/today-template.json`,
