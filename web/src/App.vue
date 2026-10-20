@@ -3,6 +3,7 @@
     <AuthGate v-if="showGate" />
 
     <template v-else>
+      <UpdateNotification />
       <TokenBanner v-if="state.authRequired" />
 
       <AppHeader />
@@ -53,6 +54,7 @@ import AuthGate from './components/AuthGate.vue'
 import BottomNav from './components/BottomNav.vue'
 import FloatingAdd from './components/FloatingAdd.vue'
 import TokenBanner from './components/TokenBanner.vue'
+import UpdateNotification from './components/UpdateNotification.vue'
 import AgendaView from './views/AgendaView.vue'
 import EventEditor from './components/EventEditor.vue'
 import SettingsView from './views/SettingsView.vue'

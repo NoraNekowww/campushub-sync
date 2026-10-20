@@ -88,10 +88,11 @@ function releaseSwipe(closer) {
             >
               {{ event.title }}
             </h3>
+            <!-- 仅单点无时间段的 DDL 任务才显示紧迫性 -->
             <span
-              v-if="event.is_deadline && priority"
+              v-if="isPointDeadline && priority"
               class="chip shrink-0 border-transparent"
-              :class="priority.classes"
+              :class="urgencyColorClass"
             >
               {{ priority.label }}
             </span>
@@ -142,7 +143,8 @@ function releaseSwipe(closer) {
             <span v-if="noteLocation" class="inline-flex items-center gap-1">
               <MapPin :size="12" />{{ noteLocation }}
             </span>
-            <span v-if="countdownInfo" class="chip border-transparent" :class="countdownClasses">
+            <!-- 仅单点非时间段任务显示剩几天/倒计时，且颜色与中高低标签保持严格一致 -->
+            <span v-if="isPointDeadline && countdownInfo" class="chip border-transparent" :class="urgencyColorClass">
               <AlertTriangle v-if="countdownInfo.tone === 'danger'" :size="11" />
               {{ countdownInfo.text }}
             </span>
@@ -401,7 +403,20 @@ const deadlineLabel = computed(() => {
   }).format(date)
 })
 
+// 是否为带时间跨度/定期发生的时间段任务（如带结束时间、或者有节次安排的任务）
+const isRangeTask = computed(() => {
+  const ev = props.event
+  if (!ev) return false
+  if (Array.isArray(ev.periods) && ev.periods.length > 0) return true
+  if (ev.end_time && ev.start_time && ev.end_time !== ev.start_time) return true
+  return false
+})
+
+// 仅真正的单点截止任务才计算紧迫性及倒计时（时间段任务是定期发生的，不显示剩几天和紧迫性）
+const isPointDeadline = computed(() => Boolean(props.event.is_deadline) && !isRangeTask.value)
+
 const priority = computed(() => {
+  if (!isPointDeadline.value) return null
   const value = Number(props.event.priority ?? 5)
   const startTime = props.event.start_time
   let daysDiff = 999
@@ -413,33 +428,36 @@ const priority = computed(() => {
   }
 
   // 1. 显式高优（如微软待办加星/高重要度）或已逾期/当天即将截止
-  if (value <= 2) {
-    return { label: '高', classes: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300' }
-  }
-  if (daysDiff <= 1 && daysDiff >= -30) {
-    return { label: '高', classes: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300' }
+  if (value <= 2 || (daysDiff <= 1 && daysDiff >= -30)) {
+    return { label: '高', level: 'high' }
   }
 
-  // 2. 远期任务（超过 3 天截止）：绝对不能是黄色“中”，显示为灰色“低”
+  // 2. 远期任务（超过 3 天截止）：绝对不能是黄色“中”，判定为低紧迫度
   if (daysDiff > 3 || value > 5) {
-    return { label: '低', classes: 'bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300' }
+    return { label: '低', level: 'low' }
   }
 
   // 3. 仅 1-3 天内临近截止的普通任务才标记为黄色“中”
   if (daysDiff <= 3 && daysDiff > 1) {
-    return { label: '中', classes: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' }
+    return { label: '中', level: 'medium' }
   }
 
-  return { label: '低', classes: 'bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300' }
+  return { label: '低', level: 'low' }
 })
 
 const countdownInfo = computed(() =>
-  props.event.is_deadline && props.event.status !== 'completed' ? countdown(props.event.start_time) : null,
+  isPointDeadline.value && props.event.status !== 'completed' ? countdown(props.event.start_time) : null,
 )
-const countdownClasses = computed(() => {
-  const tone = countdownInfo.value?.tone
-  if (tone === 'danger') return 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'
-  if (tone === 'warn') return 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+
+// 让「剩几天」和「中高低」图标颜色完全一致：
+// 高 -> 红色 (bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300)
+// 中 -> 黄色 (bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300)
+// 低 -> 灰色 (bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300)
+const urgencyColorClass = computed(() => {
+  const p = priority.value
+  if (!p) return 'bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300'
+  if (p.level === 'high') return 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'
+  if (p.level === 'medium') return 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
   return 'bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300'
 })
 </script>

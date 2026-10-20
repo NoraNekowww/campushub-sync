@@ -69,3 +69,20 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* DDL 重叠呼吸交替动画 (3秒循环，两项交替呈现淡入淡出与高亮层级) */
+@keyframes breatheAlternate {
+  0%, 100% {
+    opacity: 0.25;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+.animate-breathe-alternate {
+  animation: breatheAlternate 3s ease-in-out infinite;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}

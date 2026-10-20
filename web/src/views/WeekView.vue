@@ -146,12 +146,13 @@
                   </span>
                 </button>
 
-                <!-- 没有结束时间（DDL）：一条线，信息写在线上方。 -->
+                <!-- 没有结束时间（DDL）：显示在真实时间轴位置上，如果有重叠，呼吸交替显示 -->
                 <button
                   v-else
                   data-testid="line-event"
                   :data-day="day.key"
                   class="absolute inset-x-0 z-10 px-0 py-2 text-left"
+                  :class="item.overlapGroupSize > 1 ? 'animate-breathe-alternate' : ''"
                   :style="lineStyle(item)"
                   :aria-pressed="selected?.id === item.event.id"
                   @click="selected = selected?.id === item.event.id ? null : item.event"
@@ -434,6 +435,16 @@ function layoutItems(items) {
     clusterEnd = Math.max(clusterEnd, item.end === null ? item.start + LINE_MINUTES : item.end)
   }
   flush()
+
+  // 针对 DDL（end === null 无结束时间线事件），计算真实时间轴位置上的重叠分组
+  // 若同一天内两个 DDL 发生时间在 ±15 分钟以内，视为在时间轴上重叠，交替呼吸显示
+  const lineItems = sorted.filter((it) => it.end === null)
+  lineItems.forEach((item) => {
+    const overlapping = lineItems.filter((other) => Math.abs(other.start - item.start) <= 15)
+    item.overlapGroupSize = overlapping.length
+    item.overlapIndex = overlapping.indexOf(item)
+  })
+
   return sorted
 }
 
@@ -448,8 +459,15 @@ function blockStyle(item) {
 }
 
 function lineStyle(item) {
-  const push = (item.stack || 0) * STACK_STEP_PX - LINE_PAD_PX
-  return { top: `calc(${pct(item.start)}% + ${push}px)` }
+  // DDL 严格定位在真实时间轴位置上（根据其具体分钟数计算百分比）
+  const topPct = pct(item.start)
+  const zIdx = 10 + (item.overlapIndex || 0)
+  const delaySec = ((item.overlapIndex || 0) * 1.5).toFixed(1)
+  return {
+    top: `${topPct}%`,
+    zIndex: zIdx,
+    animationDelay: `${delaySec}s`,
+  }
 }
 
 async function loadWeek() {
