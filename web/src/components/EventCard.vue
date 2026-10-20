@@ -402,7 +402,7 @@ const deadlineLabel = computed(() => {
 })
 
 const priority = computed(() => {
-  const value = props.event.priority ?? 5
+  const value = Number(props.event.priority ?? 5)
   const startTime = props.event.start_time
   let daysDiff = 999
   if (startTime) {
@@ -412,18 +412,21 @@ const priority = computed(() => {
     }
   }
 
-  // 显式高优（如星标重要任务）或已逾期/24小时内紧急到期 -> 高
-  if (value <= 2 || (daysDiff <= 1 && daysDiff >= -100)) {
+  // 1. 显式高优（如微软待办加星/高重要度）或已逾期/当天即将截止
+  if (value <= 2) {
+    return { label: '高', classes: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300' }
+  }
+  if (daysDiff <= 1 && daysDiff >= -30) {
     return { label: '高', classes: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300' }
   }
 
-  // 远期任务（超过 3 天截止）：绝不显示为“中”，判定为低紧迫度
-  if (daysDiff > 3) {
+  // 2. 远期任务（超过 3 天截止）：绝对不能是黄色“中”，显示为灰色“低”
+  if (daysDiff > 3 || value > 5) {
     return { label: '低', classes: 'bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300' }
   }
 
-  // 3 天内临近到期的普通任务 -> 中
-  if (value <= 5) {
+  // 3. 仅 1-3 天内临近截止的普通任务才标记为黄色“中”
+  if (daysDiff <= 3 && daysDiff > 1) {
     return { label: '中', classes: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' }
   }
 
