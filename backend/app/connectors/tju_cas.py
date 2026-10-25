@@ -461,6 +461,52 @@ def _name_match(course_name: str, arrange_name: str) -> bool:
     return _judge_subtitle(course_name, arrange_name) or _judge_subtitle(arrange_name, course_name)
 
 
+def _resolve_slot_weeks(
+    bitmap_weeks: list[int],
+    table_weeks_text: Optional[str],
+    total_weeks: int = 25,
+) -> list[int]:
+    """
+    系统级对齐单双周与教学周：
+    同时结合 JS 排课位图与课程表格原文中教务明确标注的周次文本（如 "1-16周(单)", "2-16(双)"）。
+    不再针对单一学年或新生报到周做硬编码全局偏移，而是由表格语义保障单双周绝对正确。
+    """
+    if not table_weeks_text:
+        return sorted(set(bitmap_weeks))
+
+    from .tju_schedule import parse_week_spec
+
+    text_weeks, parity = parse_week_spec(table_weeks_text, total_weeks=total_weeks)
+    if not text_weeks:
+        return sorted(set(bitmap_weeks))
+    if not bitmap_weeks:
+        return sorted(text_weeks)
+
+    # 1. 如果表格明确指定了「单周」或「双周」：
+    # 无论位图是否存在偏移，单双周的奇偶性必须以教务表格文字为金标准！
+    if parity == "odd":
+        if all(w % 2 == 0 for w in bitmap_weeks):
+            # 位图被误偏移了 1 周（如 2,4,6... 对应原周 1,3,5...），优先采用表格确切指定的单周集合
+            return sorted(text_weeks)
+        return sorted(w for w in (set(bitmap_weeks) | text_weeks) if w % 2 == 1)
+
+    if parity == "even":
+        if all(w % 2 == 1 for w in bitmap_weeks):
+            # 位图被误偏移了 1 周（如 1,3,5... 对应原周 2,4,6...），优先采用表格确切指定的双周集合
+            return sorted(text_weeks)
+        return sorted(w for w in (set(bitmap_weeks) | text_weeks) if w % 2 == 0)
+
+    # 2. 如果表格周次与位图周次存在系统性差 1（比如表格 1-16，位图算成 2-17 或 0-15）：
+    if len(text_weeks) == len(bitmap_weeks):
+        diffs = [b - t for b, t in zip(sorted(bitmap_weeks), sorted(text_weeks))]
+        if len(set(diffs)) == 1 and diffs[0] != 0:
+            return sorted(text_weeks)
+
+    # 3. 常规课程：位图与表格交集，兼具位图的精确节次与表格的学期范围
+    merged = set(bitmap_weeks) & text_weeks
+    return sorted(merged if merged else (bitmap_weeks or text_weeks))
+
+
 def _weeks_text(weeks: list[int]) -> str:
     """``[1,2,3,5]`` -> ``"1-3,5"``。"""
     if not weeks:
@@ -657,11 +703,12 @@ def _parse_course_html(html: str) -> list[dict[str, Any]]:
             )
             room_index += 1
             matched.add(arrange["name"])
+            slot_weeks = _resolve_slot_weeks(arrange["weeks"], row["weeks"])
             slot = {
                 "weekday": arrange["day"],
                 "unitList": arrange["unit"],
                 "location": room or None,
-                "weekList": arrange["weeks"],
+                "weekList": slot_weeks,
             }
             if slot not in slots:
                 slots.append(slot)
@@ -799,11 +846,34 @@ async def fetch_classes(
     # 无论哪种都要在 meta 里如实标出来源，否则用户会把推算值当成教务的权威值。
     calendar_start = _find_date(calendar_raw)
     start = calendar_start or _term_start_from_week(week)
-    notes["term_start_source"] = (
-        "教务返回的开学日期"
-        if calendar_start
-        else (f"按第 {week} 教学周 + 今天推算" if week else None)
-    )
+    if not start:
+        # 系统级学期兜底：如果教务未返回学期开始日期，且没有当前周反推，
+        # 则使用当前学年的统一校历开学日（秋季通常为 8 月最后一个周一，春季为 2 月下旬周一），
+        # 绝不直接退化为 today，避免新注册用户（如大二老生）将今天误判为第 1 周导致全学期单双周翻转！
+        from datetime import date, timedelta
+        now_date = date.today()
+        if now_date.month >= 8:
+            # 秋季学期（8月最后一个周一，2026年即 8月31日）
+            candidate = date(now_date.year, 8, 31)
+            candidate -= timedelta(days=candidate.weekday())
+        elif now_date.month <= 1:
+            # 跨年秋季学期
+            candidate = date(now_date.year - 1, 8, 31)
+            candidate -= timedelta(days=candidate.weekday())
+        else:
+            # 春季学期（通常 2 月底或 3 月初周一）
+            candidate = date(now_date.year, 2, 23)
+            candidate -= timedelta(days=candidate.weekday())
+        from datetime import datetime, timezone
+        tz_beijing = timezone(timedelta(hours=8))
+        start = int(datetime(candidate.year, candidate.month, candidate.day, tzinfo=tz_beijing).timestamp())
+        notes["term_start_source"] = f"校历系统级基准推算 ({candidate.isoformat()})"
+    else:
+        notes["term_start_source"] = (
+            "教务返回的开学日期"
+            if calendar_start
+            else (f"按第 {week} 教学周 + 今天推算" if week else None)
+        )
     payload: dict[str, Any] = {
         "code": 200,
         "data": {"courses": {"major": courses, "minor": []}},

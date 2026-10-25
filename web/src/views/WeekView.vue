@@ -321,6 +321,23 @@ const gridStyle = computed(() => ({
 const centeredWeekOffset = ref(0)
 const isCurrentWeekCentered = computed(() => centeredWeekOffset.value === 0)
 
+const currentTeachingWeek = computed(() => {
+  const startRaw = state.config?.tju_schedule?.semester?.start_date
+  let startDate
+  if (startRaw) {
+    startDate = new Date(startRaw)
+  } else {
+    // 默认校历基准
+    const now = new Date()
+    const year = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1
+    startDate = new Date(year, 7, 31) // 8月31日
+    startDate.setDate(startDate.getDate() - ((startDate.getDay() + 6) % 7))
+  }
+  const today = new Date()
+  const diffDays = Math.floor((today.getTime() - startDate.getTime()) / 86400000)
+  return Math.max(1, Math.floor(diffDays / 7) + 1)
+})
+
 const currentVisibleWeekLabel = computed(() => {
   const offset = centeredWeekOffset.value
   const targetDay = days.value.find((d) => d.weekOffset === offset && d.isMonday)
@@ -329,8 +346,12 @@ const currentVisibleWeekLabel = computed(() => {
   const sunDate = new Date(new Date(`${monKey}T00:00:00Z`).getTime() + 6 * 86400000)
   const sunKey = sunDate.toISOString().slice(0, 10)
   const fmt = (k) => `${Number(k.slice(5, 7))}月${Number(k.slice(8, 10))}日`
-  const title = offset === 0 ? '本周' : offset === 1 ? '下周' : offset === -1 ? '上周' : `第 ${offset > 0 ? '+' : ''}${offset} 周`
-  return `${title} · ${fmt(monKey)} – ${fmt(sunKey)}`
+  
+  const weekNum = currentTeachingWeek.value + offset
+  const parityText = weekNum % 2 === 1 ? '单周' : '双周'
+  const relativeText = offset === 0 ? '本周' : offset === 1 ? '下周' : offset === -1 ? '上周' : `第 ${offset > 0 ? '+' : ''}${offset} 周`
+  
+  return `第 ${weekNum} 周 · ${parityText} (${relativeText}) · ${fmt(monKey)} – ${fmt(sunKey)}`
 })
 
 function onScrollerScroll() {

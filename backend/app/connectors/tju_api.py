@@ -207,10 +207,13 @@ def _weeks_for(start: Optional[int], end: Optional[int], spec: Any, total_weeks:
     if low > high:
         low, high = high, low
     if isinstance(spec, (list, tuple, set, frozenset)):
-        # An explicit week list (the 教务 payload's ``weekList``) is exact: it can
-        # skip weeks that a start/end span plus parity cannot express, e.g.
-        # ``[1, 3, 5, 9]``. Clamp to the semester.
         explicit = {num for num in (_as_int(item) for item in spec) if num is not None}
+        # 系统级单双周保护：如果原始列表中带单双周标注或明确为单双周
+        parity = _parity(spec)
+        if parity == "odd":
+            explicit = {w for w in explicit if w % 2 == 1}
+        elif parity == "even":
+            explicit = {w for w in explicit if w % 2 == 0}
         return {week for week in explicit if 1 <= week <= total_weeks}
     weeks = set(range(max(1, low), min(total_weeks, high) + 1))
     parity = _parity(spec)

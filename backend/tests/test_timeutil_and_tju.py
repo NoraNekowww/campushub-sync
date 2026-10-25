@@ -152,6 +152,25 @@ def test_event_id_ignores_the_anchor_so_reanchor_redates_in_place():
     assert second.start_time.date() == date(2026, 9, 21)
 
 
+def test_resolve_slot_weeks_system_wide_parity():
+    """系统级对齐单双周：无论位图如何偏移，表格明确的单双周语义保证奇偶性绝对正确。"""
+    from app.connectors.tju_cas import _resolve_slot_weeks
+
+    # 大二学长场景：双周课（2, 4, 6...），即使位图受全局偏移影响算成奇数 [1, 3, 5]
+    res_even = _resolve_slot_weeks([1, 3, 5, 7, 9, 11, 13, 15], "2-16周(双)")
+    assert res_even == [2, 4, 6, 8, 10, 12, 14, 16]
+    assert all(w % 2 == 0 for w in res_even)
+
+    # 单周课（1, 3, 5...），即使位图算成偶数 [2, 4, 6]
+    res_odd = _resolve_slot_weeks([2, 4, 6, 8, 10, 12, 14, 16], "1-15周(单)")
+    assert res_odd == [1, 3, 5, 7, 9, 11, 13, 15]
+    assert all(w % 2 == 1 for w in res_odd)
+
+    # 大一新生正常连续周场景：4-19周，位图与文本一致
+    res_normal = _resolve_slot_weeks(list(range(4, 20)), "4-19周")
+    assert res_normal == list(range(4, 20))
+
+
 def test_import_writes_term_start_back_into_semester_settings(settings):
     """导入的 term_start 要写回学期设置，否则设置里那个手填的 start_date 继续生效。"""
     from app.connectors.tju_schedule import SEMESTER_KEY, TjuScheduleConnector

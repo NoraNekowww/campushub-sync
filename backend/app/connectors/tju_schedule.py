@@ -165,7 +165,20 @@ def build_semester(settings, kv: Optional[KVStore] = None) -> Semester:
         stored = kv.get(SEMESTER_KEY, {}) or {}
         imported_start = kv.get(TERM_START_KEY)
     start_raw = imported_start or stored.get("start_date") or settings.semester_start_date
-    start = date.fromisoformat(str(start_raw)[:10]) if start_raw else date.today()
+    if start_raw:
+        start = date.fromisoformat(str(start_raw)[:10])
+    else:
+        # 系统级校历周一对齐兜底：严禁直接用 date.today()（周中会导致 week 1 错位甚至跨周反转）
+        today = date.today()
+        if today.month >= 8:
+            candidate = date(today.year, 8, 31)
+            start = candidate - timedelta(days=candidate.weekday())
+        elif today.month <= 1:
+            candidate = date(today.year - 1, 8, 31)
+            start = candidate - timedelta(days=candidate.weekday())
+        else:
+            candidate = date(today.year, 2, 23)
+            start = candidate - timedelta(days=candidate.weekday())
     holidays: set[date] = set()
     for item in list(stored.get("holidays") or []) + list(settings.holiday_list):
         try:
