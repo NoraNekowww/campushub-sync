@@ -1,7 +1,7 @@
 <template>
   <nav
-    class="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur
-           dark:border-slate-800 dark:bg-slate-950/95"
+    class="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95
+           dark:border-slate-800 dark:bg-slate-950/95 [transform:translateZ(0)]"
     style="padding-bottom: env(safe-area-inset-bottom)"
   >
     <div class="mx-auto flex max-w-3xl">

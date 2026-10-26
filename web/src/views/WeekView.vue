@@ -88,20 +88,13 @@
             <div
               v-for="day in days"
               :key="`col-${day.key}`"
-              class="relative"
+              class="relative week-grid-lines week-day-col"
               :class="[
                 day.isMonday ? 'border-l-2 border-slate-300 dark:border-slate-700' : 'border-l border-slate-100 dark:border-slate-800',
                 day.isToday ? 'bg-brand-50/40 dark:bg-brand-500/5' : ''
               ]"
               :style="{ height: `${GRID_HEIGHT}px` }"
             >
-              <div
-                v-for="hour in hours"
-                :key="`line-${hour}`"
-                class="absolute inset-x-0 border-t border-dashed border-slate-100 dark:border-slate-800/80"
-                :style="{ top: pct(hour * 60) + '%' }"
-              />
-
               <!-- 当前时间线（仅今天且在 08:00–22:00 内展示，呼吸闪烁） -->
               <div
                 v-if="day.isToday && isNowVisible"
@@ -133,7 +126,7 @@
                 >
                   <span class="font-semibold text-[9px] leading-[10px] line-clamp-2">{{ item.event.title }}</span>
                   <span class="block whitespace-nowrap text-[9px] leading-[11px] tracking-tighter opacity-80">
-                    {{ timeLabel(item.event.start_time) }}-{{ timeLabel(item.event.end_time) }}
+                    {{ timeLabel(item.event.start_time) }}–{{ timeLabel(item.event.end_time) }}
                   </span>
                   <!-- 卡片上加上简短地点（用户要求：不加红色针头，省空间） -->
                   <span
@@ -354,16 +347,21 @@ const currentVisibleWeekLabel = computed(() => {
   return `第 ${weekNum} 周 · ${parityText} (${relativeText}) · ${fmt(monKey)} – ${fmt(sunKey)}`
 })
 
+let scrollRaf = null
 function onScrollerScroll() {
-  const el = scroller.value
-  if (!el) return
-  const centerLeft = el.scrollLeft + el.clientWidth / 2 - GUTTER
-  const colIndex = Math.floor(centerLeft / COL_WIDTH)
-  const clampedIndex = Math.max(0, Math.min(days.value.length - 1, colIndex))
-  const centerDay = days.value[clampedIndex]
-  if (centerDay && centerDay.weekOffset !== centeredWeekOffset.value) {
-    centeredWeekOffset.value = centerDay.weekOffset
-  }
+  if (scrollRaf) return
+  scrollRaf = requestAnimationFrame(() => {
+    scrollRaf = null
+    const el = scroller.value
+    if (!el) return
+    const centerLeft = el.scrollLeft + el.clientWidth / 2 - GUTTER
+    const colIndex = Math.floor(centerLeft / COL_WIDTH)
+    const clampedIndex = Math.max(0, Math.min(days.value.length - 1, colIndex))
+    const centerDay = days.value[clampedIndex]
+    if (centerDay && centerDay.weekOffset !== centeredWeekOffset.value) {
+      centeredWeekOffset.value = centerDay.weekOffset
+    }
+  })
 }
 
 function scrollWeeks(delta) {
@@ -513,9 +511,10 @@ onMounted(() => {
   loadWeek()
   nowTimer = setInterval(() => {
     now.value = new Date()
-  }, 10000)
+  }, 30000)
 })
 onUnmounted(() => {
   if (nowTimer) clearInterval(nowTimer)
+  if (scrollRaf) cancelAnimationFrame(scrollRaf)
 })
 </script>

@@ -26,9 +26,9 @@
       data-testid="day-group"
       :data-day="group.key"
     >
-      <header class="sticky top-[49px] z-10 -mx-4 flex items-center gap-2 bg-slate-100/90 px-4 py-1.5
-                     text-xs font-semibold uppercase tracking-wide text-slate-500 backdrop-blur
-                     dark:bg-slate-900/90 dark:text-slate-400">
+      <header class="sticky top-[49px] z-10 -mx-4 flex items-center gap-2 bg-slate-100/95 px-4 py-1.5
+                     text-xs font-semibold uppercase tracking-wide text-slate-500
+                     dark:bg-slate-900/95 dark:text-slate-400">
         <span :class="group.key === today ? 'text-brand-600 dark:text-brand-400' : ''">
           {{ group.label }}
         </span>
@@ -129,19 +129,17 @@ import EmptyState from '../components/EmptyState.vue'
 import EventCard from '../components/EventCard.vue'
 import SkeletonList from '../components/SkeletonList.vue'
 import { filterEvents, notify, openCustomEditor, refresh, removeEvent, state, toggleCompleted } from '../store'
-import { groupByDay, todayKey } from '../utils/datetime'
+import { groupByDay, todayKey, dayKey } from '../utils/datetime'
 
 const today = todayKey()
 const visible = computed(() => filterEvents())
 
-const now = () => Date.now()
 const overdue = computed(() =>
   visible.value.filter(
     (event) =>
       event.is_deadline &&
       event.status !== 'completed' &&
-      new Date(event.start_time).getTime() < now() &&
-      String(event.start_time).slice(0, 10) !== today,
+      dayKey(event.start_time) < today,
   ),
 )
 

@@ -39,7 +39,7 @@ function releaseSwipe(closer) {
     <div class="swipe-pane" :style="cardStyle" data-testid="event-swipe-pane">
       <article
         ref="cardEl"
-        class="card animate-fade-up"
+        class="card"
         :class="[accentBar, event.status === 'completed' ? 'opacity-60' : '']"
         data-testid="event-card"
         :data-kind="event.is_deadline ? 'deadline' : 'class'"
@@ -119,7 +119,6 @@ function releaseSwipe(closer) {
             </span>
             <!-- 折叠态也要能改：调课、换教室、加备注都从这里进 -->
             <button
-              v-if="event.source !== 'tju_schedule'"
               class="inline-flex items-center gap-1 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400"
               :aria-label="`编辑：${event.title}`"
               data-testid="edit-custom-event"
@@ -149,7 +148,6 @@ function releaseSwipe(closer) {
               {{ countdownInfo.text }}
             </span>
             <button
-              v-if="event.source !== 'tju_schedule'"
               class="inline-flex items-center gap-1 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400"
               :aria-label="`编辑：${event.title}`"
               data-testid="edit-custom-event"
@@ -180,6 +178,10 @@ function releaseSwipe(closer) {
             <div v-if="event.week" class="flex gap-1.5">
               <dt class="shrink-0 text-slate-400">周次</dt>
               <dd>第 {{ event.week }} 周</dd>
+            </div>
+            <div v-if="sourceLabel" class="flex gap-1.5">
+              <dt class="shrink-0 text-slate-400">来源</dt>
+              <dd>{{ sourceLabel }}</dd>
             </div>
             <div v-if="noteText && !event.teacher" class="col-span-2 flex gap-1.5">
               <dt class="shrink-0 text-slate-400">备注</dt>
@@ -249,8 +251,9 @@ let movedDuringDrag = false
 let swallowClick = false
 
 const cardStyle = computed(() => ({
-  transform: `translateX(${offset.value}px)`,
+  transform: `translate3d(${offset.value}px, 0, 0)`,
   transition: dragging.value ? 'none' : 'transform 180ms ease',
+  willChange: dragging.value ? 'transform' : 'auto',
   // 横向手势归我们，纵向留给页面滚动
   touchAction: 'pan-y',
 }))
@@ -258,6 +261,7 @@ const cardStyle = computed(() => ({
 /* 只有落在输入控件上才不接管手势：手指从「划掉」「编辑」上开始滑也应该能滑开，
    那一次点击会被 swallowClick 吃掉（拖过之后不该再触发按钮）。 */
 const GESTURE_BLOCKERS = 'input, textarea, select'
+let moveRaf = null
 
 function onPointerDown(event) {
   if (busy.value) return
@@ -294,10 +298,20 @@ function onPointerMove(event) {
   let next = baseOffset + dx
   if (next > MAX) next = MAX + (next - MAX) * 0.25
   if (next < -MAX) next = -MAX + (next + MAX) * 0.25
-  offset.value = Math.round(next)
+  const rounded = Math.round(next)
+  if (!moveRaf) {
+    moveRaf = requestAnimationFrame(() => {
+      moveRaf = null
+      offset.value = rounded
+    })
+  }
 }
 
 function onPointerUp(event) {
+  if (moveRaf) {
+    cancelAnimationFrame(moveRaf)
+    moveRaf = null
+  }
   if (pointerId === null || (event && event.pointerId !== pointerId)) return
   if (dragging.value) {
     const settled = Math.abs(offset.value) >= THRESHOLD ? Math.sign(offset.value) * REVEAL : 0
@@ -347,6 +361,7 @@ function remove() {
 }
 
 onBeforeUnmount(() => {
+  if (moveRaf) cancelAnimationFrame(moveRaf)
   releaseSwipe(close)
   if (revealed.value) offset.value = 0
 })

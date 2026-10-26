@@ -104,9 +104,23 @@ export function durationLabel(start, end, periods) {
 export function countdown(value) {
   const date = toDate(value)
   if (!date) return null
+  const key = dayKey(date)
+  const today = todayKey()
   const diffMs = date.getTime() - Date.now()
   const hours = Math.round(diffMs / 3600000)
-  if (diffMs < 0) return { text: `已逾期 ${Math.abs(Math.round(hours / 24)) || 1} 天`, tone: 'danger', overdue: true }
+
+  // 1. 今日任务：无论具体时间点是否已过，今天截止的任务一律显示为「今日待办」，绝不能显示「已逾期一天」
+  if (key === today) {
+    return { text: '今日待办', tone: 'danger', overdue: false }
+  }
+
+  // 2. 真正过去日期的逾期任务：按日历天数准确计算逾期天数
+  if (diffMs < 0 || key < today) {
+    const days = Math.max(1, dayDiff(today, key))
+    return { text: `已逾期 ${days} 天`, tone: 'danger', overdue: true }
+  }
+
+  // 3. 未来任务
   if (hours < 1) return { text: '不到 1 小时', tone: 'danger', overdue: false }
   if (hours < 24) return { text: `剩 ${hours} 小时`, tone: 'warn', overdue: false }
   const days = Math.round(hours / 24)
