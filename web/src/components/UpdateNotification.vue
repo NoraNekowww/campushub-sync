@@ -52,7 +52,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { BellOff, Download, Sparkles } from 'lucide-vue-next'
 
-const CURRENT_VERSION = '2.0.4'
+const CURRENT_VERSION = '2.0.5'
 const DISMISSED_KEY = 'campushub.dismissed_update'
 
 const latestRelease = ref(null)
@@ -99,23 +99,48 @@ function dismissUpdate() {
 async function checkLatestVersion() {
   try {
     const savedDismissed = localStorage.getItem(DISMISSED_KEY)
-    const resp = await fetch('https://api.github.com/repos/NoraNekowww/campushub-sync/releases/latest', {
-      headers: { Accept: 'application/vnd.github.v3+json' },
-    })
-    if (!resp.ok) return
-    const data = await resp.json()
-    const tagName = data.tag_name || ''
-    const version = tagName.replace(/^v/i, '')
+    let version = ''
+    let title = ''
+    let apkUrl = ''
+
+    // 通道 1：优先请求本站 /api/version，国内环境免翻墙直连秒开
+    try {
+      const vResp = await fetch('./api/version')
+      if (vResp.ok) {
+        const vData = await vResp.json()
+        version = String(vData.version || '').replace(/^v/i, '')
+        title = vData.title || ''
+        apkUrl = vData.download_url || vData.github_download_url || ''
+      }
+    } catch {
+      // 忽略，fallback 到通道 2
+    }
+
+    // 通道 2：GitHub API 兜底
+    if (!version) {
+      const resp = await fetch('https://api.github.com/repos/NoraNekowww/campushub-sync/releases/latest', {
+        headers: { Accept: 'application/vnd.github.v3+json' },
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        const tagName = data.tag_name || ''
+        version = tagName.replace(/^v/i, '')
+        title = data.name || ''
+        const apkAsset = data.assets?.find((a) => a.name === 'CampusHub.apk')
+        apkUrl = apkAsset?.browser_download_url || ''
+      }
+    }
+
+    if (!version) return
     if (savedDismissed === version) {
       dismissed.value = true
       return
     }
 
-    const apkAsset = data.assets?.find((a) => a.name === 'CampusHub.apk')
     latestRelease.value = {
       version,
-      title: data.name || '',
-      apkUrl: apkAsset?.browser_download_url || 'https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk',
+      title,
+      apkUrl: apkUrl || 'https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk',
     }
   } catch {
     /* 离线或网络异常时不阻塞主界面 */

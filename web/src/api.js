@@ -136,6 +136,9 @@ export const api = {
   changePassword: (payload) => request('/auth/password', { method: 'POST', body: payload }),
   users: () => request('/auth/users'),
   patchUser: (id, payload) => request(`/auth/users/${id}`, { method: 'PATCH', body: payload }),
+  authStorage: () => request('/auth/storage'),
+  optimizeStorage: () => request('/auth/storage/optimize', { method: 'POST' }),
+  appVersion: () => request('/version'),
   /* ------------------------------------------------ microsoft / schedule */
   msStatus: () => request('/auth/ms/status'),
   msLists: () => request('/events/ms/lists'),

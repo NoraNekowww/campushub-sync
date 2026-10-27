@@ -119,10 +119,10 @@
     <section class="card space-y-3 p-4" data-testid="onboarding-section">
       <header class="flex items-center gap-2">
         <UserRound :size="15" class="text-brand-600 dark:text-brand-400" />
-        <h2 class="text-sm font-semibold">三步接入你自己的账号</h2>
+        <h2 class="text-sm font-semibold">两步接入你自己的账号</h2>
       </header>
       <p class="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-        每个账号的数据互相看不见：课表、待办、自定义日程都只属于你自己。把这一页发给同学，让他注册后走完三步即可。
+        每个账号的数据互相隔离：课表、待办、自定义日程完全保存在服务器数据库中，安全存储并支持本地长期离线查看。
       </p>
       <ol class="space-y-2.5 text-xs">
         <li v-for="step in onboarding" :key="step.key" class="flex items-start gap-2">
@@ -224,6 +224,81 @@
       </p>
     </section>
 
+    <!-- --------------------------------------- 用户存储占用与数据库监控 (admin) -->
+    <section v-if="isAdminUser" class="card space-y-3 p-4" data-testid="storage-monitor-section">
+      <header class="flex flex-wrap items-center gap-2">
+        <HardDrive :size="15" class="text-brand-600 dark:text-brand-400" />
+        <h2 class="text-sm font-semibold">用户存储占用与空间监控</h2>
+        <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
+          {{ storageStats?.total_physical_formatted || '0 KB' }}
+        </span>
+        <div class="ml-auto flex items-center gap-2">
+          <button
+            class="btn-ghost !py-1 text-[11px]"
+            :disabled="storageBusy"
+            title="刷新存储状态"
+            @click="loadStorageStats"
+          >
+            <RefreshCw :size="12" :class="storageBusy ? 'animate-spin' : ''" /> 刷新
+          </button>
+          <button
+            class="btn-primary !py-1 text-[11px]"
+            :disabled="storageBusy"
+            title="将 WAL 刷盘并执行 VACUUM 回收磁盘碎片"
+            @click="runOptimizeStorage"
+          >
+            优化与压缩存储
+          </button>
+        </div>
+      </header>
+
+      <p class="text-[11px] text-slate-500 dark:text-slate-400">
+        日程与待办已全部统一保存在服务端 SQLite 数据库中，索引紧凑高效；下表展示各用户的真实日程数据量与存储占用比例：
+      </p>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="border-b border-slate-100 text-[11px] font-semibold text-slate-400 dark:border-slate-800">
+              <th class="pb-1.5 font-normal">用户</th>
+              <th class="pb-1.5 font-normal text-right">课程</th>
+              <th class="pb-1.5 font-normal text-right">待办</th>
+              <th class="pb-1.5 font-normal text-right">总日程</th>
+              <th class="pb-1.5 font-normal text-right">估算占用</th>
+              <th class="pb-1.5 font-normal pl-3">空间占比</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100/60 dark:divide-slate-800/40">
+            <tr v-for="user in storageStats?.users || []" :key="user.id" class="text-slate-700 dark:text-slate-300">
+              <td class="py-2 font-medium">
+                {{ user.username }}
+                <span v-if="user.role === 'admin'" class="text-[10px] text-brand-600 dark:text-brand-400">· 管理员</span>
+                <span v-if="!user.is_active" class="text-[10px] text-rose-500">· 已停用</span>
+              </td>
+              <td class="py-2 text-right font-mono text-slate-500 dark:text-slate-400">{{ user.class_count }}</td>
+              <td class="py-2 text-right font-mono font-medium text-amber-600 dark:text-amber-400">{{ user.deadline_count }}</td>
+              <td class="py-2 text-right font-mono font-semibold">{{ user.total_events }}</td>
+              <td class="py-2 text-right font-mono text-slate-500 dark:text-slate-400">{{ user.storage_est_formatted }}</td>
+              <td class="py-2 pl-3">
+                <div class="flex items-center gap-1.5">
+                  <div class="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                    <div
+                      class="h-full rounded-full bg-brand-500"
+                      :style="{ width: `${Math.min(100, user.storage_percent || 0)}%` }"
+                    />
+                  </div>
+                  <span class="text-[10px] font-mono text-slate-400">{{ user.storage_percent }}%</span>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="!(storageStats?.users || []).length">
+              <td colspan="6" class="py-3 text-center text-slate-400">暂无用户数据</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- ------------------------------------------------------------ access -->
     <section class="card space-y-3 p-4">
       <header class="flex items-center gap-2">
@@ -267,7 +342,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.0.4 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.0.5 · 原生极速' }}
         </span>
       </header>
 
@@ -304,6 +379,15 @@
               <Download :size="14" />
               下载安卓客户端 (APK)
             </a>
+            <button
+              type="button"
+              class="btn-ghost !py-1.5 text-xs inline-flex items-center gap-1 text-slate-600 dark:text-slate-300"
+              :disabled="checkingUpdate"
+              @click="checkAppUpdate(true)"
+            >
+              <RefreshCw :size="13" :class="checkingUpdate ? 'animate-spin' : ''" />
+              {{ checkingUpdate ? '检查中…' : '检查新版本' }}
+            </button>
             <a
               href="https://github.com/NoraNekowww/campushub-sync/releases/latest"
               target="_blank"
@@ -404,45 +488,6 @@
           </div>
           <p v-if="connector.error" class="mt-1 break-all text-[11px] text-rose-500">{{ connector.error }}</p>
         </div>
-      </div>
-    </section>
-
-    <!-- --------------------------------------------------------- microsoft -->
-    <section id="ms-section" class="card space-y-3 p-4">
-      <header class="flex items-center gap-2">
-        <CalendarDays :size="15" class="text-brand-600 dark:text-brand-400" />
-        <h2 class="text-sm font-semibold">Microsoft To Do</h2>
-        <span
-          class="chip ml-auto border-transparent"
-          :class="ms.authorized
-            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
-            : 'bg-slate-100 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300'"
-        >
-          {{ ms.authorized ? '已授权' : '未授权' }}
-        </span>
-      </header>
-
-      <DetailList :data="ms" :labels="{ account: '账号', expires_in: 'access 有效期(秒)', scopes: '权限', authority: '租户', enabled: '启用' }" />
-
-      <div v-if="deviceFlow" class="space-y-2 rounded-xl bg-brand-50 p-3 text-xs dark:bg-brand-500/10">
-        <p class="font-semibold">在浏览器中打开并输入代码：</p>
-        <p class="font-mono text-lg tracking-widest">{{ deviceFlow.user_code }}</p>
-        <a class="block break-all text-brand-700 underline dark:text-brand-300" :href="deviceFlow.verification_uri" target="_blank" rel="noreferrer">
-          {{ deviceFlow.verification_uri_complete || deviceFlow.verification_uri }}
-        </a>
-        <p class="text-slate-500 dark:text-slate-400">{{ pollHint }}</p>
-      </div>
-
-      <div class="flex flex-wrap gap-2">
-        <button class="btn-primary !py-1.5 text-xs" :disabled="deviceBusy" @click="startDeviceFlow">
-          <LogIn :size="13" /> 设备代码登录
-        </button>
-        <button class="btn-ghost !py-1.5 text-xs" :disabled="!deviceFlow || deviceBusy" @click="pollDeviceFlow(true)">
-          <CheckCheck :size="13" /> 我已授权
-        </button>
-        <button class="btn-ghost !py-1.5 text-xs" @click="forgetTokens">
-          <Trash2 :size="13" /> 撤销令牌
-        </button>
       </div>
     </section>
 
@@ -569,6 +614,7 @@ import {
   ExternalLink,
   Eye,
   GraduationCap,
+  HardDrive,
   Info,
   KeyRound,
   LogIn,
@@ -644,10 +690,6 @@ const tokenPresent = ref(false)
 const busy = ref(false)
 const preview = ref(null)
 const fileInput = ref(null)
-const deviceFlow = ref(null)
-const deviceBusy = ref(false)
-const pollHint = ref('等待授权…')
-let pollTimer = null
 
 /* ------------------------------------------------------------ 接入向导 */
 const tjuConnected = computed(
@@ -655,7 +697,6 @@ const tjuConnected = computed(
     Boolean(state.status?.connectors?.find((item) => item.name === 'tju_schedule')?.ok) ||
     Boolean(tju.value?.mode),
 )
-const msConnectedUi = computed(() => Boolean(ms.value?.authorized))
 
 const onboarding = computed(() => [
   {
@@ -669,17 +710,10 @@ const onboarding = computed(() => [
     key: 'tju',
     title: '② 连我的教务（教务系统）',
     hint: tjuConnected.value
-      ? '已连上，课表会自己同步进来'
+      ? '已连上，课表会自动同步进来并长期保存在本地'
       : '填一次学号 + 教务系统密码（统一身份认证那套），课表就进来了',
     done: tjuConnected.value,
     target: 'tju-section',
-  },
-  {
-    key: 'ms',
-    title: '③ 连我的微软待办',
-    hint: msConnectedUi.value ? '已授权，新建日程可以同步到待办' : '设备码授权一次，待办双向同步',
-    done: msConnectedUi.value,
-    target: 'ms-section',
   },
 ])
 
@@ -743,7 +777,10 @@ const isAdminUser = computed(() => Boolean(state.user?.is_admin) || Boolean(stat
 watch(
   isAdminUser,
   (on) => {
-    if (on) loadRegistration()
+    if (on) {
+      loadRegistration()
+      loadStorageStats()
+    }
   },
   { immediate: true },
 )
@@ -922,65 +959,94 @@ async function toggleMember(row) {
   }
 }
 
-/* ---------------------------------------------------------- device flow */
+/* -------------------------------------------------- storage & update */
 
-async function startDeviceFlow() {
-  deviceBusy.value = true
-  pollHint.value = '等待授权…'
+const storageStats = ref(null)
+const storageBusy = ref(false)
+const checkingUpdate = ref(false)
+
+async function loadStorageStats() {
+  if (!isAdminUser.value) return
+  storageBusy.value = true
   try {
-    deviceFlow.value = await api.msStartDevice()
-    pollHint.value = deviceFlow.value.message || '等待授权…'
-    startPolling(Math.max(3, deviceFlow.value.interval || 5))
+    const res = await api.authStorage()
+    if (res?.ok) storageStats.value = res
   } catch (error) {
-    notify(error.message || '无法启动设备代码流程', 'danger')
+    // 静默忽略非管理员报错
   } finally {
-    deviceBusy.value = false
+    storageBusy.value = false
   }
 }
 
-function startPolling(seconds) {
-  stopPolling()
-  pollTimer = setInterval(() => pollDeviceFlow(false), seconds * 1000)
-}
-
-function stopPolling() {
-  if (pollTimer) clearInterval(pollTimer)
-  pollTimer = null
-}
-
-async function pollDeviceFlow(manual) {
-  if (!deviceFlow.value) return
+async function runOptimizeStorage() {
+  storageBusy.value = true
   try {
-    const result = await api.msPollDevice()
-    if (result.state === 'authorized') {
-      stopPolling()
-      deviceFlow.value = null
-      notify(`Microsoft 账号已连接${result.account ? `：${result.account}` : ''}`, 'ok')
-      await Promise.all([loadConfig(), runSync()])
-      return
-    }
-    if (result.state === 'expired' || result.state === 'error') {
-      stopPolling()
-      pollHint.value = result.message || '代码已过期，请重新发起'
-      notify(result.message || '设备代码已过期', 'warn')
-      return
-    }
-    pollHint.value = result.message || '仍在等待授权…'
-    if (manual) notify('尚未完成授权', 'warn')
+    const res = await api.optimizeStorage()
+    notify(res.message || '数据库优化完成', 'ok')
+    await loadStorageStats()
   } catch (error) {
-    if (manual) notify(error.message || '轮询失败', 'danger')
+    notify(error.message || '优化失败', 'danger')
+  } finally {
+    storageBusy.value = false
   }
 }
 
-async function forgetTokens() {
+async function checkAppUpdate(manual = false) {
+  checkingUpdate.value = true
   try {
-    const result = await api.msSignOut()
-    stopPolling()
-    deviceFlow.value = null
-    notify(result.message || '已撤销令牌', 'ok')
-    await loadConfig()
-  } catch (error) {
-    notify(error.message || '撤销失败', 'danger')
+    let latestVer = ''
+    let dlUrl = ''
+    try {
+      const verRes = await api.appVersion()
+      if (verRes?.version) {
+        latestVer = verRes.version
+        dlUrl = verRes.download_url || verRes.github_download_url
+      }
+    } catch {
+      // 尝试 GitHub API
+      const resp = await fetch('https://api.github.com/repos/NoraNekowww/campushub-sync/releases/latest', {
+        headers: { Accept: 'application/vnd.github.v3+json' },
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        latestVer = (data.tag_name || '').replace(/^v/i, '')
+        const apkAsset = data.assets?.find((a) => a.name === 'CampusHub.apk')
+        dlUrl = apkAsset?.browser_download_url || 'https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk'
+      }
+    }
+
+    if (!latestVer) {
+      if (manual) notify('检查更新失败，请稍后重试', 'warn')
+      return
+    }
+
+    const current = '2.0.5'
+    const parse = (v) => String(v).replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0)
+    const l = parse(latestVer)
+    const c = parse(current)
+    let isNew = false
+    for (let i = 0; i < Math.max(l.length, c.length); i++) {
+      const lv = l[i] || 0
+      const cv = c[i] || 0
+      if (lv > cv) { isNew = true; break }
+      if (lv < cv) { break }
+    }
+
+    if (isNew) {
+      notify(`发现新版本 v${latestVer}，点击前往下载更新`, 'ok', {
+        action: {
+          label: '立即下载',
+          run: () => window.open(dlUrl || 'https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk', '_blank'),
+        },
+        duration: 9000,
+      })
+    } else if (manual) {
+      notify(`当前已是最新版本 (v${current})`, 'ok')
+    }
+  } catch (err) {
+    if (manual) notify('检查更新失败，网络异常', 'warn')
+  } finally {
+    checkingUpdate.value = false
   }
 }
 

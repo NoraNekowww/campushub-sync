@@ -371,12 +371,11 @@ const revealed = computed(() => offset.value !== 0)
 /* ------------------------------------------------------------ 展示用 */
 
 const SOURCE_LABELS = {
-  microsoft_todo: 'Microsoft To Do',
   tju_schedule: '天津大学课表',
-  custom: '自定义',
+  custom: '个人日程',
 }
 
-const sourceLabel = computed(() => SOURCE_LABELS[props.event.source] || props.event.source)
+const sourceLabel = computed(() => SOURCE_LABELS[props.event.source] || '个人日程')
 
 /* 待办任务没有地点字段，地点是并进备注的（`📍 45楼B203`）：摘出来当地点用，
    备注里只留用户自己写的那部分 —— 界面上不会重复出现那行文本。 */
@@ -397,12 +396,11 @@ const durationText = computed(() => durationLabel(props.event.start_time, props.
 const durationPlain = computed(() => durationLabel(props.event.start_time, props.event.end_time, null))
 const durationShort = computed(() => periodsShort(props.event.start_time, props.event.end_time, props.event.periods))
 
-/* 能划掉的：待办 + 自定义 + 微软待办任务。课表课程不给划 —— 它不是"完成/未完成"语义。 */
+/* 能划掉的：待办 + 自定义日程。课表课程不给划 —— 它不是"完成/未完成"语义。 */
 const tickable = computed(
   () =>
     props.event.is_deadline ||
-    props.event.source === 'custom' ||
-    props.event.source === 'microsoft_todo',
+    props.event.source === 'custom',
 )
 
 const deadlineLabel = computed(() => {

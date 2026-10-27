@@ -217,7 +217,7 @@ import ClassDetail from '../components/ClassDetail.vue'
 import EmptyState from '../components/EmptyState.vue'
 import EventCard from '../components/EventCard.vue'
 import { api } from '../api'
-import { matchesQuery, removeEvent, state, toggleCompleted } from '../store'
+import { loadWeekCache, matchesQuery, removeEvent, saveWeekCache, state, toggleCompleted } from '../store'
 import { dayKey, dayLabel, isEventEnded, minutesOfDay, periodLabel, timeLabel, todayKey, weekOffsetOf, weekWindow } from '../utils/datetime'
 
 const DAY_START = 8 * 60 // 08:00
@@ -231,7 +231,7 @@ const hours = Array.from({ length: 14 }, (_, index) => index + 8) // 08..21
 const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
 const loading = ref(false)
-const events = ref([])
+const events = ref(loadWeekCache())
 const selected = ref(null)
 const scroller = ref(null)
 
@@ -490,7 +490,9 @@ function lineStyle(item) {
 }
 
 async function loadWeek() {
-  loading.value = true
+  if (!events.value || events.value.length === 0) {
+    loading.value = true
+  }
   try {
     const list = multiWeekWindow.value
     if (!list.length) return
@@ -498,9 +500,12 @@ async function loadWeek() {
     const end = list[list.length - 1].key
     const payload = await api.events({ start_date: start, end_date: end, limit: 1200 })
     events.value = payload.items || []
+    saveWeekCache(events.value)
   } catch (error) {
-    events.value = []
-    state.error = error.message || '加载失败'
+    if (!events.value || events.value.length === 0) {
+      events.value = []
+      state.error = error.message || '加载失败'
+    }
   } finally {
     loading.value = false
   }

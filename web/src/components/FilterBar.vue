@@ -46,8 +46,7 @@ const kinds = [
 
 const sources = [
   { value: 'all', label: '全部来源' },
-  { value: 'tju_schedule', label: '天津大学' },
-  { value: 'microsoft_todo', label: 'To Do' },
-  { value: 'custom', label: '自定义' },
+  { value: 'tju_schedule', label: '天津大学课表' },
+  { value: 'custom', label: '个人日程' },
 ]
 </script>

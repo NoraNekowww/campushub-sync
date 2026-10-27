@@ -45,8 +45,6 @@ class SchedulerService:
             misfire_grace_time=300,
             next_run_time=first_run,
         )
-        # 待办快通道：勾掉一条只改一条任务，抓一次十几个清单不到一秒；教务那边
-        # 每次都要现场登录 CAS，不能这么勤。所以待办单独用更短的间隔刷。
         ms_minutes = max(0, int(self.settings.ms_sync_interval_minutes))
         if ms_minutes and self.settings.ms_enabled:
             self._scheduler.add_job(

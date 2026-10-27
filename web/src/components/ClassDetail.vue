@@ -144,9 +144,7 @@ const periodText = computed(() => {
 const sourceText = computed(() => {
   const source = props.event?.source
   if (source === 'tju_schedule') return '天津大学课表'
-  if (source === 'microsoft_todo') return 'Microsoft To Do'
-  if (source === 'custom') return '自定义'
-  return source || '未知来源'
+  return '个人日程'
 })
 
 const reminderText = computed(() => {
@@ -167,7 +165,6 @@ const editable = computed(() => props.event?.source !== 'tju_schedule')
 const removeLabel = computed(() => {
   const source = props.event?.source
   if (source === 'tju_schedule') return '移除这次课'
-  if (source === 'microsoft_todo') return '从日历里移除'
   return '删除'
 })
 

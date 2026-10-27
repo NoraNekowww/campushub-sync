@@ -9,6 +9,7 @@ import { browserClasstable, browserLogin, TwtError } from './twt-sign'
 
 const THEME_KEY = 'campushub.theme'
 const EVENTS_CACHE_KEY = 'campushub.events_cache.v1'
+const WEEK_CACHE_KEY = 'campushub.week_cache.v1'
 const USER_CACHE_KEY = 'campushub.user_cache.v1'
 const LOOKAHEAD_DAYS = 60
 
@@ -29,9 +30,6 @@ export const state = reactive({
   /* 搜索框：课程名 / 老师 / 地点 / 备注 / DDL 标题里命中哪个字都算 */
   query: '',
   includeCompleted: false,
-  /* 微软待办（反向写入）：清单列表 + 是否已授权，给「新建到微软」下拉用 */
-  msLists: [],
-  msConnected: false,
   status: null,
   config: null,
   toast: null,
@@ -407,29 +405,48 @@ export async function removeCustomEvent(id, options = {}) {
  * 删掉 = 软删除：这条日程从时间线、以及对外订阅的日历（ICS）里一起消失，
  * 同步也不会再把它拉回来。所以撤销只要把 hidden 抹掉。
  */
+export function loadWeekCache() {
+  try {
+    const raw = localStorage.getItem(WEEK_CACHE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed?.items) && parsed.items.length > 0) {
+        return parsed.items
+      }
+    }
+  } catch (e) {
+    /* ignore */
+  }
+  return []
+}
+
+export function saveWeekCache(items) {
+  try {
+    if (Array.isArray(items) && items.length > 0) {
+      localStorage.setItem(
+        WEEK_CACHE_KEY,
+        JSON.stringify({
+          items,
+          timestamp: Date.now(),
+        })
+      )
+    }
+  } catch (e) {
+    /* ignore storage quota */
+  }
+}
+
 export async function removeEvent(event) {
   const index = state.events.findIndex((item) => item.id === event.id)
   const snapshot = index >= 0 ? state.events[index] : null
   if (index >= 0) state.events.splice(index, 1) // 先动 UI，失败再放回去
 
   try {
-    const out = await api.deleteEvent(event.id)
-    const ms = out?.ms_sync
-    if (ms && ms.ok === false) {
-      // 本地删掉了，微软那条没删掉 —— 给「撤销」，让用户能自己收场
-      notify(`${removedText(event)}；微软待办里那条没删掉（${ms.error || '未知原因'}）`, 'warn', {
-        action: { label: '撤销', run: () => restoreEvent(event.id, event.title) },
-        duration: 8000,
-      })
-    } else if (event.source === 'microsoft_todo') {
-      // 微软那条是真删了，远程撤不回来 —— 不挂「撤销」，免得让人以为还能还原
-      notify(`已删除「${event.title}」，微软待办里的任务也一起删了`, 'info', { duration: 6000 })
-    } else {
-      notify(removedText(event), 'info', {
-        action: { label: '撤销', run: () => restoreEvent(event.id, event.title) },
-        duration: 6000,
-      })
-    }
+    await api.deleteEvent(event.id)
+    notify(removedText(event), 'info', {
+      action: { label: '撤销', run: () => restoreEvent(event.id, event.title) },
+      duration: 6000,
+    })
     await refresh({ silent: true })
     return true
   } catch (error) {

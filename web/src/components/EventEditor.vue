@@ -117,27 +117,6 @@
           </div>
         </div>
 
-        <!-- 接了微软待办就默认同步过去（用户要求）；不想传的可以取消勾选 -->
-        <div
-          v-if="!isEdit && state.msConnected"
-          class="space-y-2 rounded-xl bg-brand-50/70 p-2.5 text-xs dark:bg-brand-500/10"
-        >
-          <label class="flex items-center gap-2">
-            <input v-model="form.toMs" type="checkbox" data-testid="custom-to-ms" @change="onToMsChange" />
-            <span class="text-slate-700 dark:text-slate-200">同步到微软待办（手机待办里也会出现、会响提醒）</span>
-          </label>
-          <label v-if="form.toMs" class="block space-y-1">
-            <span class="text-slate-500 dark:text-slate-400">放进哪个清单</span>
-            <select v-model="form.listId" class="input" data-testid="custom-ms-list">
-              <option value="">默认（第一个清单）</option>
-              <option v-for="item in state.msLists" :key="item.id" :value="item.id">{{ item.name }}</option>
-            </select>
-          </label>
-          <p class="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-            勾上 = 建在微软待办里（在这里划掉，手机那边也划掉）；取消勾选 = 只存本站，走自定义日程。
-          </p>
-        </div>
-
         <label class="block space-y-1 text-xs">
           <span class="text-slate-500 dark:text-slate-400">备注（可空）</span>
           <textarea v-model="form.description" class="input h-16 resize-none" maxlength="500" />
@@ -212,7 +191,7 @@
             {{ removeLabel }}
           </button>
           <button type="submit" class="btn-primary ml-auto" :disabled="busy || !form.title.trim()" data-testid="custom-save">
-            {{ busy ? '保存中…' : isEdit ? '保存' : form.toMs ? '建到微软待办' : '添加' }}
+            {{ busy ? '保存中…' : isEdit ? '保存' : '添加' }}
           </button>
         </div>
         <p class="text-[11px] leading-relaxed text-slate-400">
@@ -226,7 +205,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { Pencil, RotateCcw, X } from 'lucide-vue-next'
-import { closeCustomEditor, fetchMsLists, notify, removeCustomEvent, saveCustomEvent, saveMsTask, state } from '../store'
+import { closeCustomEditor, removeCustomEvent, saveCustomEvent, state } from '../store'
 
 const busy = ref(false)
 const error = ref('')
@@ -240,9 +219,6 @@ const form = reactive({
   allDay: false,
   location: '',
   description: '',
-  /* 接没接微软待办决定默认值：接了默认同步过去，可以直接取消（只存本站） */
-  toMs: false,
-  listId: '',
   /* 重复任务支持：每几天/周/月重复一次，共生成几次 */
   recurring: false,
   repeatInterval: 1,
@@ -255,14 +231,13 @@ const form = reactive({
 const editing = computed(() => state.customEditor.event)
 const isEdit = computed(() => Boolean(editing.value))
 const editingRecurrence = computed(() => editing.value?.recurrence)
-// 来源决定这个弹窗的语气：自定义日程可以整个删掉；课表 / 待办是外部来源，
-// 只能「改这一条」或「从日历里移除」（同步永远不动用户改过的字段）。
+// 来源决定这个弹窗的语气：自定义日程可以整个删掉；课表是外部来源
 const source = computed(() => editing.value?.source || 'custom')
 const isCustom = computed(() => source.value === 'custom')
 const editorTitle = computed(() => {
   if (!isEdit.value) return '新建日程'
   if (source.value === 'tju_schedule') return '编辑这节课'
-  if (source.value === 'microsoft_todo') return '编辑这条待办'
+  if (editing.value?.is_deadline || source.value === 'microsoft_todo') return '编辑这条待办'
   return '编辑日程'
 })
 const removeLabel = computed(() => {
@@ -273,13 +248,7 @@ const footerNote = computed(() => {
   if (source.value === 'tju_schedule') {
     return '改的是这一周的这节课（还可以顺手写备注，比如带什么书）；改过的字段不会被下次课表同步覆盖。'
   }
-  if (source.value === 'microsoft_todo') {
-    return '改动会推回微软待办，手机上的待办跟着变；「从日历里移除」只在日历里拿掉，待办 App 里还留着。'
-  }
-  if (isEdit.value) {
-    return '纯自定义日程归「自定义」来源，教务/微软同步永远不会删它或改它。'
-  }
-  return '纯自定义日程归「自定义」来源，教务/微软同步永远不会删它或改它。'
+  return '自定义日程安全存储在服务器端数据库中，支持本地无网长期缓存离线查看。'
 })
 
 function today() {
@@ -328,36 +297,19 @@ watch(
     form.start = start ? start.slice(11, 16) : '09:00'
     // 结束时间不再单独编辑，由「时长」反推：老数据有 end_time 就算出来，没有就是 0h
     form.duration = durationOf(start, (event?.end_time || '').slice(0, 16))
-    // 课表 / 待办这些外部来源没有「全天」开关（勾了也发不出去），时间照常可改
+    // 课表外部来源没有「全天」开关，时间照常可改
     const external = Boolean(event) && event.source !== 'custom'
     form.allDay = external ? false : Boolean(event?.is_deadline)
     form.location = event?.location || ''
     form.description = event?.description || ''
-    form.listId = ''
     form.recurring = false
     form.repeatInterval = 1
     form.repeatUnit = 'week'
     form.repeatCount = 5
     form.applyScope = 'single'
-    // 新建时探测微软待办列表；默认不强行捆绑外部网络，遵循用户明确偏好且微软服务真实畅通
-    const msConnected = await fetchMsLists()
-    let prefToMs = false
-    try {
-      const stored = localStorage.getItem('campushub.pref.toMs')
-      prefToMs = stored !== null ? (stored === '1' && msConnected) : false
-    } catch (e) {
-      prefToMs = false
-    }
-    form.toMs = event ? false : prefToMs
   },
   { immediate: true },
 )
-
-function onToMsChange() {
-  try {
-    localStorage.setItem('campushub.pref.toMs', form.toMs ? '1' : '0')
-  } catch (e) {}
-}
 
 function close() {
   closeCustomEditor()
@@ -392,54 +344,9 @@ async function submit() {
   // 只有自定义日程有「全天 / 当截止日期用」这个概念；外部来源发过去也会被忽略
   if (isCustom.value) payload.is_deadline = form.allDay
 
-  // 勾了「同步到微软待办」：先建到 To Do，后端同时把它落成一条本地日程
-  if (form.toMs && !isEdit.value) {
-    const totalRuns = form.recurring ? Math.max(1, Math.min(60, form.repeatCount || 1)) : 1
-    let msResult = { ok: false }
-    for (let i = 0; i < totalRuns; i++) {
-      let curDate = form.date
-      if (i > 0) {
-        const [y, m, d] = form.date.split('-').map(Number)
-        const dateObj = new Date(y, m - 1, d)
-        if (form.repeatUnit === 'day') dateObj.setDate(dateObj.getDate() + i * (form.repeatInterval || 1))
-        else if (form.repeatUnit === 'week') dateObj.setDate(dateObj.getDate() + i * (form.repeatInterval || 1) * 7)
-        else if (form.repeatUnit === 'month') dateObj.setMonth(dateObj.getMonth() + i * (form.repeatInterval || 1))
-        const pad = (n) => String(n).padStart(2, '0')
-        curDate = `${dateObj.getFullYear()}-${pad(dateObj.getMonth() + 1)}-${pad(dateObj.getDate())}`
-      }
-      msResult = await saveMsTask({
-        title: form.title.trim(),
-        // To Do 是「截止时间」制：全天日程按早上 9 点提醒
-        start: `${curDate}T${form.allDay ? '09:00' : form.start}:00`,
-        // 待办任务没有地点字段：后端把地点并进备注（读回来时再摘出去当 location）
-        location: form.location.trim() || null,
-        note: form.description.trim() || null,
-        list_id: form.listId || null,
-        importance: form.allDay ? 'high' : null,
-        // 有结束时间的话，时长也写进备注（`⏱ 1h`），网页端会把那行隐藏掉
-        duration_hours: form.allDay ? 0 : form.duration,
-      })
-    }
-
-    if (msResult.ok) {
-      busy.value = false
-      return
-    }
-
-    // 关键降级兜底：微软待办如果网络超时或写入失败，绝不丢弃用户的日程，自动无缝保存为本站日程！
-    const fallbackSaved = await saveCustomEvent(payload)
-    busy.value = false
-    if (fallbackSaved) {
-      notify(`已为您保存到本地日程；同步到微软待办失败（${msResult.error || '网络连接超时'}）`, 'warn', { duration: 6000 })
-    } else {
-      error.value = '保存失败，请检查网络后重试'
-    }
-    return
-  }
-
   const saved = await saveCustomEvent(payload)
   busy.value = false
-  if (!saved) error.value = '没保存成功，看一眼上面的提示'
+  if (!saved) error.value = '没保存成功，请检查网络后重试'
 }
 
 async function remove() {

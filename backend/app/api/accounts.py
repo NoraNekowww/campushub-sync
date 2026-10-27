@@ -10,15 +10,17 @@ from __future__ import annotations
 
 import logging
 import secrets
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy import text
 from sqlmodel import Session, select
 
 from .. import accounts, app_settings, captcha
 from ..config import get_settings
 from ..db import get_session
-from ..models import User
+from ..models import Event, User
 from ..schemas import (
     LoginIn,
     PasswordChangeIn,
@@ -280,3 +282,146 @@ def patch_user(
     session.commit()
     session.refresh(target)
     return {"ok": True, "user": accounts.user_payload(target)}
+
+
+def _format_bytes(size: int) -> str:
+    """人类可读的文件大小格式化。"""
+    if size < 1024:
+        return f"{size} B"
+    if size < 1024 * 1024:
+        return f"{size / 1024:.1f} KB"
+    return f"{size / (1024 * 1024):.2f} MB"
+
+
+@router.get("/storage", summary="Storage stats per user and database footprint (admin)")
+def get_storage_stats(
+    _admin: User = Depends(current_admin),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """管理员专用：查看数据库物理磁盘占用及各个用户的日程/存储占用统计。"""
+    settings = get_settings()
+
+    # 1. 探查物理数据库文件体积
+    db_path_str = settings.db_url.replace("sqlite:///", "").split("?")[0]
+    db_file = Path(db_path_str)
+    if not db_file.is_absolute():
+        db_file = Path(settings.data_dir) / db_file.name
+
+    db_bytes = db_file.stat().st_size if db_file.exists() else 0
+    wal_file = Path(f"{db_file}-wal")
+    wal_bytes = wal_file.stat().st_size if wal_file.exists() else 0
+    shm_file = Path(f"{db_file}-shm")
+    shm_bytes = shm_file.stat().st_size if shm_file.exists() else 0
+    total_physical_bytes = db_bytes + wal_bytes + shm_bytes
+
+    # 2. 统计各用户日程数据
+    users = session.exec(select(User).order_by(User.id)).all()  # type: ignore[attr-defined]
+    all_events = session.exec(select(Event)).all()
+
+    # 按 user_id 归纳事件
+    user_events: dict[int, list[Event]] = {u.id: [] for u in users}
+    orphan_count = 0
+    for ev in all_events:
+        if ev.user_id in user_events:
+            user_events[ev.user_id].append(ev)
+        else:
+            orphan_count += 1
+
+    total_est_all_users = 0
+    user_stats = []
+    for u in users:
+        evs = user_events.get(u.id, [])
+        class_cnt = sum(1 for e in evs if e.source == "tju_schedule" and not e.is_deadline)
+        ddl_cnt = sum(1 for e in evs if e.is_deadline)
+        custom_cnt = sum(1 for e in evs if e.source == "custom" and not e.is_deadline)
+        hidden_cnt = sum(1 for e in evs if e.hidden)
+
+        # 估算存储体积：事件行开销 (~256B) + 字段文本 UTF-8 长度
+        est_bytes = 0
+        latest_ts = u.created_at
+        for e in evs:
+            est_bytes += 256
+            if e.title:
+                est_bytes += len(e.title.encode("utf-8", errors="ignore"))
+            if e.description:
+                est_bytes += len(e.description.encode("utf-8", errors="ignore"))
+            if e.location:
+                est_bytes += len(e.location.encode("utf-8", errors="ignore"))
+            if e.raw:
+                est_bytes += len(e.raw.encode("utf-8", errors="ignore"))
+            if e.updated_at and (not latest_ts or e.updated_at > latest_ts):
+                latest_ts = e.updated_at
+
+        total_est_all_users += est_bytes
+        user_stats.append({
+            "id": u.id,
+            "username": u.username,
+            "display_name": u.display_name or u.username,
+            "role": u.role,
+            "is_active": u.is_active,
+            "class_count": class_cnt,
+            "deadline_count": ddl_cnt,
+            "custom_count": custom_cnt,
+            "hidden_count": hidden_cnt,
+            "total_events": len(evs),
+            "storage_est_bytes": est_bytes,
+            "storage_est_formatted": _format_bytes(est_bytes),
+            "storage_percent": 0.0,  # 稍后算
+            "last_active": latest_ts.isoformat() if latest_ts else None,
+        })
+
+    # 计算占比百分比
+    for item in user_stats:
+        if total_est_all_users > 0:
+            item["storage_percent"] = round((item["storage_est_bytes"] / total_est_all_users) * 100, 1)
+        else:
+            item["storage_percent"] = 0.0
+
+    return {
+        "ok": True,
+        "db_size_bytes": db_bytes,
+        "wal_size_bytes": wal_bytes,
+        "total_physical_bytes": total_physical_bytes,
+        "total_physical_formatted": _format_bytes(total_physical_bytes),
+        "total_events": len(all_events),
+        "orphan_events": orphan_count,
+        "total_users": len(users),
+        "users": user_stats,
+    }
+
+
+@router.post("/storage/optimize", summary="Optimize database and reclaim disk space (admin)")
+def optimize_storage(
+    _admin: User = Depends(current_admin),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """管理员专用：执行 WAL checkpoint 及数据库整理压缩，清除多余碎片。"""
+    settings = get_settings()
+    db_path_str = settings.db_url.replace("sqlite:///", "").split("?")[0]
+    db_file = Path(db_path_str)
+    if not db_file.is_absolute():
+        db_file = Path(settings.data_dir) / db_file.name
+
+    before_bytes = (db_file.stat().st_size if db_file.exists() else 0) + \
+                   (Path(f"{db_file}-wal").stat().st_size if Path(f"{db_file}-wal").exists() else 0)
+
+    try:
+        # 1. 将 WAL 日志全部归档写入主文件并截断清空
+        session.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))
+        # 2. 回收空闲页面和整理碎片
+        session.execute(text("VACUUM"))
+        session.commit()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Storage optimize error: %s", exc)
+
+    after_bytes = (db_file.stat().st_size if db_file.exists() else 0) + \
+                  (Path(f"{db_file}-wal").stat().st_size if Path(f"{db_file}-wal").exists() else 0)
+
+    freed = max(0, before_bytes - after_bytes)
+    return {
+        "ok": True,
+        "message": f"数据库已完成压缩优化，释放空间 {_format_bytes(freed)}",
+        "before_formatted": _format_bytes(before_bytes),
+        "after_formatted": _format_bytes(after_bytes),
+        "freed_bytes": freed,
+    }
