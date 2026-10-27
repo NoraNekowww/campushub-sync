@@ -6,6 +6,7 @@ import json
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, Sequence
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status as http_status
@@ -152,6 +153,8 @@ def create_event(
     events_to_create: list[Event] = []
     base_ts = utcnow().timestamp()
     duration = (end - start) if end else None
+    series_uuid = uuid4().hex[:8]
+    rec_group_id = f"rec-{int(base_ts * 1000)}-{series_uuid[:6]}"
 
     if repeat_freq in ("day", "week", "month") and repeat_count > 1:
         for i in range(repeat_count):
@@ -163,7 +166,8 @@ def create_event(
                 cur_start = _add_months(start, i * repeat_interval)
             cur_end = (cur_start + duration) if duration else None
 
-            sid = f"custom-{base_ts:.0f}-{payload.title[:20]}-{i+1}"
+            # 采用毫秒戳 + 系列随机后缀，同一系列内索引唯一，彻底杜绝主键冲突
+            sid = f"custom-{int(base_ts * 1000)}-{series_uuid}-{i+1}"
             ev = Event(
                 id=make_event_id(Source.custom, sid),
                 source=Source.custom.value,
@@ -184,7 +188,7 @@ def create_event(
                     {
                         "origin": "api",
                         "recurrence": {
-                            "group_id": f"rec-{base_ts:.0f}",
+                            "group_id": rec_group_id,
                             "freq": repeat_freq,
                             "interval": repeat_interval,
                             "index": i + 1,
@@ -197,7 +201,8 @@ def create_event(
             session.add(ev)
             events_to_create.append(ev)
     else:
-        sid = f"custom-{base_ts:.0f}-{payload.title[:24]}"
+        # 采用毫秒戳 + 随机后缀，彻底杜绝主键碰撞
+        sid = f"custom-{int(base_ts * 1000)}-{series_uuid}"
         ev = Event(
             id=make_event_id(Source.custom, sid),
             source=Source.custom.value,
@@ -333,7 +338,7 @@ async def ms_lists() -> dict:
         lists = await connector.list_options()
     except Exception as exc:  # noqa: BLE001
         log.warning("ms list fetch failed: %s", exc)
-        return {"connected": True, "lists": [], "error": f"{type(exc).__name__}: {exc}"}
+        return {"connected": False, "lists": [], "error": f"{type(exc).__name__}: {exc}"}
     return {"connected": True, "lists": lists}
 
 

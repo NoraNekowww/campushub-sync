@@ -549,7 +549,7 @@ export async function fetchMsLists() {
   try {
     const payload = await api.msLists()
     state.msLists = payload?.lists || []
-    state.msConnected = Boolean(payload?.connected)
+    state.msConnected = Boolean(payload?.connected && !payload?.error && state.msLists.length > 0)
   } catch (error) {
     state.msLists = []
     state.msConnected = false
@@ -559,17 +559,16 @@ export async function fetchMsLists() {
 }
 
 /** 在微软待办里新建一条日程：微软先建，成功后再刷新本地（后端已就地落库）。 */
-export async function saveMsTask(payload) {
+export async function saveMsTask(payload, { silent = false } = {}) {
   try {
     await api.createMsTask(payload)
-    notify('已建到微软待办，手机待办里也会显示', 'ok')
+    if (!silent) notify('已建到微软待办，手机待办里也会显示', 'ok')
     closeCustomEditor()
     await refresh({ silent: true })
-    return true
+    return { ok: true }
   } catch (error) {
     if (isAuthError(error)) state.authRequired = true
-    notify(error.message || '微软待办写入失败', 'danger')
-    return false
+    return { ok: false, error: error.message || '微软待办写入失败' }
   }
 }
 

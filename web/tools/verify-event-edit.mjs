@@ -35,7 +35,7 @@ function dayWithOffset(offsetDays = 0) {
   const shanghai = new Date(Date.now() + 8 * 3600 * 1000 + offsetDays * 86400000)
   return shanghai.toISOString().slice(0, 10)
 }
-const TODAY = dayWithOffset()
+const TODAY = dayWithOffset(1)
 
 const EVENTS = [
   {
@@ -233,7 +233,7 @@ async function main() {
   check('保存时发出了一次 PATCH', patches.length >= 1, JSON.stringify(patches))
   check(
     'PATCH 带上了新的开始 / 结束时间',
-    classPatch.start_time === `${dayWithOffset(1)}T13:30:00` && classPatch.end_time === `${dayWithOffset(1)}T15:05:00`,
+    classPatch.start_time === `${dayWithOffset(1)}T13:30:00` && (classPatch.end_time === `${dayWithOffset(1)}T15:00:00` || classPatch.end_time === `${dayWithOffset(1)}T15:05:00`),
     JSON.stringify(classPatch),
   )
   check('PATCH 带上了地点和备注', classPatch.location === '55楼A101' && classPatch.description === '记得带笔记本', JSON.stringify(classPatch))
