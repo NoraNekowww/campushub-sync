@@ -4,25 +4,28 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="12dp"
+    android:padding="10dp"
     android:background="@drawable/widget_bg">
 
+    <!-- 顶部状态栏：应用名、日期元信息与当前时间 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingBottom="6dp">
+        android:paddingBottom="5dp">
 
         <TextView
             android:id="@+id/widgetTitle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="CampusHub 今日日程"
-            android:textSize="12sp"
+            android:text="CampusHub · 今日日程"
+            android:textSize="11sp"
             android:textStyle="bold"
-            android:textColor="#ffffff" />
+            android:textColor="#ffffff"
+            android:singleLine="true"
+            android:ellipsize="end" />
 
         <TextView
             android:id="@+id/widgetClock"
@@ -34,15 +37,17 @@
             android:textColor="#93c5fd" />
     </LinearLayout>
 
+    <!-- 焦点日程卡片：当前正在进行或紧接着的下一节课 -->
     <LinearLayout
         android:id="@+id/heroCard"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="8dp"
+        android:padding="6dp"
         android:background="@drawable/widget_hero_bg"
         android:gravity="center_vertical"
-        android:layout_marginBottom="6dp">
+        android:layout_marginBottom="4dp"
+        android:visibility="gone">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -50,32 +55,41 @@
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/heroStatus"
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="下一节课"
-                android:textSize="9sp"
-                android:textStyle="bold"
-                android:textColor="#60a5fa" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/heroStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="下一节课"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:textColor="#60a5fa" />
+
+                <TextView
+                    android:id="@+id/heroClassTime"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginLeft="6dp"
+                    android:text="10:20–12:00"
+                    android:textSize="9sp"
+                    android:textColor="#94a3b8" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/heroClassTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="无待上课程"
-                android:textSize="12sp"
+                android:text="课程标题"
+                android:textSize="11sp"
                 android:textStyle="bold"
                 android:textColor="#ffffff"
-                android:singleLine="true" />
-
-            <TextView
-                android:id="@+id/heroClassTime"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="今天好好休息~"
-                android:textSize="10sp"
-                android:textColor="#94a3b8" />
+                android:singleLine="true"
+                android:ellipsize="end" />
         </LinearLayout>
 
         <TextView
@@ -83,21 +97,282 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text=""
-            android:textSize="11sp"
+            android:textSize="10sp"
             android:textStyle="bold"
             android:textColor="#bfdbfe"
             android:paddingLeft="6dp"
             android:paddingRight="6dp"
             android:paddingTop="2dp"
-            android:paddingBottom="2dp" />
+            android:paddingBottom="2dp"
+            android:singleLine="true"
+            android:visibility="gone" />
     </LinearLayout>
 
+    <!-- 多日程列表容器：展示后续的多个课程与待办 -->
+    <LinearLayout
+        android:id="@+id/itemsContainer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_vertical">
+
+        <!-- 条目 1 -->
+        <LinearLayout
+            android:id="@+id/itemRow1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/itemTag1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="8.5sp"
+                android:textStyle="bold"
+                android:paddingLeft="4dp"
+                android:paddingRight="4dp"
+                android:paddingTop="1dp"
+                android:paddingBottom="1dp"
+                android:background="@drawable/widget_tag_class"
+                android:textColor="#93c5fd"
+                android:text="课" />
+
+            <TextView
+                android:id="@+id/itemTime1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="9.5sp"
+                android:textStyle="bold"
+                android:textColor="#cbd5e1"
+                android:layout_marginLeft="5dp"
+                android:text="14:00" />
+
+            <TextView
+                android:id="@+id/itemTitle1"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="9.5sp"
+                android:textColor="#f8fafc"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:layout_marginLeft="6dp"
+                android:text="日程标题" />
+
+            <TextView
+                android:id="@+id/itemLoc1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="8.5sp"
+                android:textColor="#94a3b8"
+                android:singleLine="true"
+                android:layout_marginLeft="4dp"
+                android:text="地点" />
+        </LinearLayout>
+
+        <!-- 条目 2 -->
+        <LinearLayout
+            android:id="@+id/itemRow2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/itemTag2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="8.5sp"
+                android:textStyle="bold"
+                android:paddingLeft="4dp"
+                android:paddingRight="4dp"
+                android:paddingTop="1dp"
+                android:paddingBottom="1dp"
+                android:background="@drawable/widget_tag_class"
+                android:textColor="#93c5fd"
+                android:text="课" />
+
+            <TextView
+                android:id="@+id/itemTime2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="9.5sp"
+                android:textStyle="bold"
+                android:textColor="#cbd5e1"
+                android:layout_marginLeft="5dp"
+                android:text="15:45" />
+
+            <TextView
+                android:id="@+id/itemTitle2"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="9.5sp"
+                android:textColor="#f8fafc"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:layout_marginLeft="6dp"
+                android:text="日程标题" />
+
+            <TextView
+                android:id="@+id/itemLoc2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="8.5sp"
+                android:textColor="#94a3b8"
+                android:singleLine="true"
+                android:layout_marginLeft="4dp"
+                android:text="地点" />
+        </LinearLayout>
+
+        <!-- 条目 3 -->
+        <LinearLayout
+            android:id="@+id/itemRow3"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/itemTag3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="8.5sp"
+                android:textStyle="bold"
+                android:paddingLeft="4dp"
+                android:paddingRight="4dp"
+                android:paddingTop="1dp"
+                android:paddingBottom="1dp"
+                android:background="@drawable/widget_tag_todo"
+                android:textColor="#fcd34d"
+                android:text="待办" />
+
+            <TextView
+                android:id="@+id/itemTime3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="9.5sp"
+                android:textStyle="bold"
+                android:textColor="#cbd5e1"
+                android:layout_marginLeft="5dp"
+                android:text="23:59" />
+
+            <TextView
+                android:id="@+id/itemTitle3"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="9.5sp"
+                android:textColor="#f8fafc"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:layout_marginLeft="6dp"
+                android:text="待办标题" />
+
+            <TextView
+                android:id="@+id/itemLoc3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="8.5sp"
+                android:textColor="#94a3b8"
+                android:singleLine="true"
+                android:layout_marginLeft="4dp"
+                android:text="地点" />
+        </LinearLayout>
+
+        <!-- 条目 4 -->
+        <LinearLayout
+            android:id="@+id/itemRow4"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/itemTag4"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="8.5sp"
+                android:textStyle="bold"
+                android:paddingLeft="4dp"
+                android:paddingRight="4dp"
+                android:paddingTop="1dp"
+                android:paddingBottom="1dp"
+                android:background="@drawable/widget_tag_todo"
+                android:textColor="#fcd34d"
+                android:text="待办" />
+
+            <TextView
+                android:id="@+id/itemTime4"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="9.5sp"
+                android:textStyle="bold"
+                android:textColor="#cbd5e1"
+                android:layout_marginLeft="5dp"
+                android:text="23:59" />
+
+            <TextView
+                android:id="@+id/itemTitle4"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="9.5sp"
+                android:textColor="#f8fafc"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:layout_marginLeft="6dp"
+                android:text="待办标题" />
+
+            <TextView
+                android:id="@+id/itemLoc4"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="8.5sp"
+                android:textColor="#94a3b8"
+                android:singleLine="true"
+                android:layout_marginLeft="4dp"
+                android:text="地点" />
+        </LinearLayout>
+
+        <!-- 全天无安排空闲状态 -->
+        <TextView
+            android:id="@+id/emptyNotice"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="今天没有待办和课程，好好休息吧~"
+            android:textSize="10sp"
+            android:textColor="#94a3b8"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 底部状态指示与点击引导 -->
     <TextView
         android:id="@+id/widgetSummary"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="点击进入课表与待办详情"
-        android:textSize="10sp"
-        android:textColor="#64748b" />
+        android:text="点击进入完整课表与待办"
+        android:textSize="9.5sp"
+        android:textColor="#64748b"
+        android:paddingTop="3dp"
+        android:singleLine="true"
+        android:ellipsize="end" />
 
 </LinearLayout>

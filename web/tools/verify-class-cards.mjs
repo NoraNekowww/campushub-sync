@@ -36,7 +36,7 @@ function dayWithOffset(offsetDays = 0) {
   const shanghai = new Date(Date.now() + 8 * 3600 * 1000 + offsetDays * 86400000)
   return shanghai.toISOString().slice(0, 10)
 }
-const TODAY = dayWithOffset()
+const TODAY = dayWithOffset(1)
 
 const CLASS_EVENTS = [
   {

@@ -52,7 +52,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { BellOff, Download, Sparkles } from 'lucide-vue-next'
 
-const CURRENT_VERSION = '2.0.3'
+const CURRENT_VERSION = '2.0.4'
 const DISMISSED_KEY = 'campushub.dismissed_update'
 
 const latestRelease = ref(null)

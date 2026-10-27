@@ -134,6 +134,32 @@ def get_today_widget_data(
                 next_class = c
                 break
 
+    # 合并生成今天的所有综合日程项（按开始时刻升序排序，支持桌面小组件多项展示）
+    all_items = []
+    for c in today_classes:
+        all_items.append({
+            "id": c["id"],
+            "type": "class",
+            "title": c["title"],
+            "time": c["time"],
+            "start_time": c["start_time"],
+            "location": c.get("location") or "",
+            "status": c.get("status", "upcoming"),
+            "priority": None,
+        })
+    for d in today_deadlines:
+        all_items.append({
+            "id": d["id"],
+            "type": "deadline",
+            "title": d["title"],
+            "time": d["time"],
+            "start_time": f"{today_str}T{d['time']}:00",
+            "location": d.get("location") or "",
+            "status": d.get("status", "pending"),
+            "priority": d.get("priority", 5),
+        })
+    all_items.sort(key=lambda x: x["start_time"])
+
     weekday_idx = now.weekday()
     return {
         "ok": True,
@@ -147,4 +173,5 @@ def get_today_widget_data(
         "next_class": next_class,
         "classes": today_classes,
         "deadlines": today_deadlines,
+        "all_items": all_items,
     }
