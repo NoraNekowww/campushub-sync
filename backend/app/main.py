@@ -148,17 +148,17 @@ def create_app() -> FastAPI:
     @app.get("/api/version", summary="Version check for in-app update notification")
     async def app_version() -> dict:
         return {
-            "version": "2.1.1",
-            "tag": "v2.1.1",
-            "title": "CampusHub Android v2.1.1",
+            "version": "2.1.2",
+            "tag": "v2.1.2",
+            "title": "CampusHub Android v2.1.2",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
             "features": [
-                "移动端全面本地化重构：除手动同步外一切操作本地即时完成，0网络等待",
-                "移动端彻底关闭开屏静默教务轮询，秒开省电",
-                "仅在移动原生端主动推送新版本弹窗与一键更新",
-                "历史归档页纯净化、严格倒序排列"
+                "移动端全面重构为 Local-First 纯本地离线优先架构，0等待无感秒开",
+                "开屏鉴权、配置与日程全量本地持久化，彻底消灭首屏网络请求卡顿",
+                "新建、编辑、划掉、删除全在本地即时生效，后台静默队列同步",
+                "历史归档页纯净化、严格倒序排列，仅在移动端推送新版本"
             ]
         }
 

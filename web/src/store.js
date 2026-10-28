@@ -373,6 +373,13 @@ export async function bootstrap() {
 
 /** Ask the backend who we are; safe to call when signed out. */
 export async function fetchSession() {
+  const isMobile = isMobileNativeApp()
+  // 移动端：若本地已有用户信息缓存，优先快速标记就绪，杜绝开屏白屏或被网络请求阻塞
+  if (isMobile && state.user) {
+    state.accountsReady = true
+    return state.user
+  }
+
   try {
     const payload = await api.session()
     state.user = payload.user || null
@@ -381,8 +388,6 @@ export async function fetchSession() {
     saveUserCache(state.user)
     return state.user
   } catch (error) {
-    // Endpoint missing (old backend) or unreachable → treat accounts as absent
-    // so the app never trades a working timeline for a login wall.
     state.accountsReady = true
     state.accounts = state.accounts || { enabled: false }
     return null
