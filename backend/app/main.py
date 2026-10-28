@@ -148,17 +148,17 @@ def create_app() -> FastAPI:
     @app.get("/api/version", summary="Version check for in-app update notification")
     async def app_version() -> dict:
         return {
-            "version": "2.0.6",
-            "tag": "v2.0.6",
-            "title": "CampusHub Android v2.0.6",
+            "version": "2.0.7",
+            "tag": "v2.0.7",
+            "title": "CampusHub Android v2.0.7",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
             "features": [
-                "最右侧栏新增历史完成归档，随时回溯完结日程与待办",
-                "系统设置移至右上角轻量 icon，优化屏幕空间",
-                "网络检测到新版本时主动弹窗推送，支持一键更新",
-                "底层日期解析与 DOM 渲染性能深度优化，低性能设备更流畅"
+                "历史完成日程优先展示最近（倒序倒排），回溯更直观",
+                "新增轻量流畅的划掉任务动画，GPU 硬件加速丝滑低负载",
+                "最右侧栏历史归档与右上角设置 icon 全面集成",
+                "软件内检测新版主动弹窗推送，一键升级"
             ]
         }
 

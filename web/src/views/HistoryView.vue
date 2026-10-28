@@ -83,14 +83,23 @@ const filterSource = ref('all')
  * 历史完成过的所有日程：
  * 1. 状态为 completed 的日程 / 待办；
  * 2. 或者已经自然结束（已上完）的课程/日程活动。
+ *
+ * 排序逻辑：优先显示最近的（降序倒排）。
  */
 const completedEvents = computed(() => {
   const nowTs = Date.now()
-  return (state.events || []).filter((event) => {
-    const isTicked = event.status === 'completed'
-    const isEnded = isEventEnded(event, nowTs)
-    return isTicked || isEnded
-  })
+  return (state.events || [])
+    .filter((event) => {
+      const isTicked = event.status === 'completed'
+      const isEnded = isEventEnded(event, nowTs)
+      return isTicked || isEnded
+    })
+    .sort((a, b) => {
+      // 优先按结束时间（或开始时间）倒序，最近完成/结束的排最前
+      const tA = new Date(a.end_time || a.start_time).getTime() || 0
+      const tB = new Date(b.end_time || b.start_time).getTime() || 0
+      return tB - tA
+    })
 })
 
 const filteredCompleted = computed(() => {
@@ -101,6 +110,27 @@ const filteredCompleted = computed(() => {
 })
 
 const groups = computed(() => {
-  return groupByDay(filteredCompleted.value)
+  // groupByDay 保持降序倒排（最近的日期在最上方）
+  const buckets = new Map()
+  filteredCompleted.value.forEach((event) => {
+    const when = event.start_time ? String(event.start_time).slice(0, 10) : ''
+    if (!when) return
+    if (!buckets.has(when)) {
+      buckets.set(when, { key: when, label: when, events: [] })
+    }
+    buckets.get(when).events.push(event)
+  })
+  // 日期从近到远排序（降序）
+  return [...buckets.values()]
+    .sort((a, b) => b.key.localeCompare(a.key))
+    .map((bucket) => ({
+      ...bucket,
+      // 组内同样按时间倒序排列（晚完成的在前）
+      events: bucket.events.sort((a, b) => {
+        const tA = new Date(a.end_time || a.start_time).getTime() || 0
+        const tB = new Date(b.end_time || b.start_time).getTime() || 0
+        return tB - tA
+      }),
+    }))
 })
 </script>

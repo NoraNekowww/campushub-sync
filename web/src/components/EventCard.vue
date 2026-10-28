@@ -59,18 +59,24 @@ function releaseSwipe(closer) {
             :checked="event.status === 'completed'"
             :aria-label="`${event.status === 'completed' ? '标记为未完成' : '标记为已完成'}：${event.title}`"
             class="peer sr-only"
-            @change="$emit('toggle', event)"
+            @change="handleToggle"
           />
-          <CheckCircle2 v-if="event.status === 'completed'" :size="20" class="text-emerald-500" />
+          <CheckCircle2
+            v-if="event.status === 'completed'"
+            :size="20"
+            class="text-emerald-500 transition-transform duration-200"
+            :class="ticking ? 'scale-125' : 'scale-100'"
+          />
           <Circle
             v-else
             :size="20"
-            class="text-slate-300 transition-colors peer-focus-visible:text-brand-500 dark:text-slate-600"
+            class="text-slate-300 transition-all duration-200 peer-focus-visible:text-brand-500 dark:text-slate-600"
+            :class="ticking ? 'scale-90 text-brand-500' : 'scale-100'"
           />
         </label>
 
         <div
-          class="min-w-0 flex-1"
+          class="min-w-0 flex-1 relative"
           :class="collapsible ? 'cursor-pointer' : ''"
           :role="collapsible ? 'button' : undefined"
           :tabindex="collapsible ? 0 : undefined"
@@ -80,11 +86,17 @@ function releaseSwipe(closer) {
           @keydown.enter.prevent="toggleExpanded"
           @keydown.space.prevent="toggleExpanded"
         >
+          <!-- 划掉时的轻量流畅划线动画层 (硬件加速 transform + opacity) -->
+          <div
+            v-if="tickingStrike"
+            class="pointer-events-none absolute left-0 top-[11px] h-[1.5px] w-full rounded-full bg-emerald-500/80 [transform:translateZ(0)] animate-strikethrough"
+          />
+
           <div class="flex items-start gap-2">
             <!-- 标题要能看全：长课名/长待办名换行显示，而不是被截成一行省略号 -->
             <h3
-              class="min-w-0 flex-1 break-words text-sm font-semibold leading-snug"
-              :class="event.status === 'completed' ? 'line-through decoration-slate-400' : ''"
+              class="min-w-0 flex-1 break-words text-sm font-semibold leading-snug transition-all duration-300"
+              :class="event.status === 'completed' ? 'line-through decoration-slate-400 text-slate-400 dark:text-slate-500' : ''"
             >
               {{ event.title }}
             </h3>
@@ -215,6 +227,34 @@ import { openCustomEditor } from '../store'
 
 const props = defineProps({ event: { type: Object, required: true } })
 const emit = defineEmits(['toggle', 'remove'])
+
+/* ----------------------------------------------- 划掉任务时的轻量流畅动效 */
+const ticking = ref(false)
+const tickingStrike = ref(false)
+
+function handleToggle() {
+  const isGoingToComplete = props.event.status !== 'completed'
+  if (isGoingToComplete) {
+    ticking.value = true
+    tickingStrike.value = true
+    // 微触觉反馈 (如果设备支持)
+    try {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(12)
+      }
+    } catch {}
+    // 划线与图标微弹动效播放 220ms 后触发状态变更，低性能手机完全无感知延迟但极具质感
+    setTimeout(() => {
+      emit('toggle', props.event)
+      setTimeout(() => {
+        ticking.value = false
+        tickingStrike.value = false
+      }, 100)
+    }, 220)
+  } else {
+    emit('toggle', props.event)
+  }
+}
 
 /* ----------------------------------------------- 折叠 / 展开（课表卡片） */
 
