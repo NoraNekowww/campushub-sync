@@ -14,6 +14,7 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -75,6 +76,12 @@ public class MainActivity extends AppCompatActivity {
 
         // 极速秒开架构：静态资源本地 0 延迟秒开拦截，API 走网络
         webView.setWebViewClient(new FastLocalWebViewClient());
+
+        // 注入 WebChromeClient：优化渲染管道与控制台日志
+        webView.setWebChromeClient(new WebChromeClient());
+
+        // 进一步提速：允许后台线程优先渲染
+        webView.getSettings().setRenderPriority(WebSettings.RenderPriority.HIGH);
 
         // 下拉刷新
         swipeRefresh.setColorSchemeColors(Color.parseColor("#2563eb"));
