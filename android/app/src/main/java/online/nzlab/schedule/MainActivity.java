@@ -61,7 +61,8 @@ public class MainActivity extends AppCompatActivity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
-        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        // 本地化与秒开体验：优先加载本地离线缓存（LOAD_CACHE_ELSE_NETWORK）
+        settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
@@ -136,27 +137,35 @@ public class MainActivity extends AppCompatActivity {
             }
 
             // 拦截静态资源，直接从本地 assets/web 闪存秒开
-            if (path != null && path.startsWith("/schedule/")) {
-                String subPath = path.substring("/schedule/".length());
-                if (subPath.isEmpty() || subPath.equals("index.html")) {
-                    return getAssetResponse("web/index.html", "text/html");
+            if (path != null) {
+                String subPath = null;
+                if (path.startsWith("/schedule/")) {
+                    subPath = path.substring("/schedule/".length());
+                } else if (path.equals("/") || path.startsWith("/assets/") || path.startsWith("/icons/")) {
+                    subPath = path.startsWith("/") ? path.substring(1) : path;
                 }
-                if (subPath.startsWith("assets/")) {
-                    String mime = subPath.endsWith(".js") ? "application/javascript" :
-                                 subPath.endsWith(".css") ? "text/css" : "application/octet-stream";
-                    return getAssetResponse("web/" + subPath, mime);
-                }
-                if (subPath.startsWith("icons/")) {
-                    return getAssetResponse("web/" + subPath, "image/png");
-                }
-                if (subPath.equals("manifest.webmanifest")) {
-                    return getAssetResponse("web/manifest.webmanifest", "application/manifest+json");
-                }
-                if (subPath.equals("widget.html")) {
-                    return getAssetResponse("web/widget.html", "text/html");
-                }
-                if (subPath.startsWith("widgets/")) {
-                    return getAssetResponse("web/" + subPath, "application/json");
+
+                if (subPath != null) {
+                    if (subPath.isEmpty() || subPath.equals("index.html")) {
+                        return getAssetResponse("web/index.html", "text/html");
+                    }
+                    if (subPath.startsWith("assets/")) {
+                        String mime = subPath.endsWith(".js") ? "application/javascript" :
+                                     subPath.endsWith(".css") ? "text/css" : "application/octet-stream";
+                        return getAssetResponse("web/" + subPath, mime);
+                    }
+                    if (subPath.startsWith("icons/")) {
+                        return getAssetResponse("web/" + subPath, "image/png");
+                    }
+                    if (subPath.equals("manifest.webmanifest")) {
+                        return getAssetResponse("web/manifest.webmanifest", "application/manifest+json");
+                    }
+                    if (subPath.equals("widget.html")) {
+                        return getAssetResponse("web/widget.html", "text/html");
+                    }
+                    if (subPath.startsWith("widgets/")) {
+                        return getAssetResponse("web/" + subPath, "application/json");
+                    }
                 }
             }
 

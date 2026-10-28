@@ -134,7 +134,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { BellOff, Download, Rocket, Sparkles, X } from 'lucide-vue-next'
 
-const CURRENT_VERSION = '2.0.7'
+const CURRENT_VERSION = '2.0.8'
 const DISMISSED_KEY = 'campushub.dismissed_update'
 const POPUP_SEEN_KEY = 'campushub.popup_seen_version'
 
@@ -152,7 +152,21 @@ const isNew = computed(() => {
   return isNewer(latestRelease.value.version, CURRENT_VERSION)
 })
 
+/**
+ * 判断是否属于 Android 原生客户端壳环境
+ */
+function isRunningInAndroidClient() {
+  if (typeof window === 'undefined') return false
+  return Boolean(
+    window.NativeAuthBridge ||
+    window.__CAMPUSHUB_CLIENT__ ||
+    /CampusHubAndroid/i.test(navigator.userAgent || '')
+  )
+}
+
 const showUpdateBanner = computed(() => {
+  // 网页端无需推送更新；仅在 Android 客户端环境展示
+  if (!isRunningInAndroidClient()) return false
   if (bannerDismissed.value) return false
   return isNew.value
 })
@@ -245,8 +259,8 @@ async function checkLatestVersion() {
       apkUrl: apkUrl || 'https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk',
     }
 
-    // 网络检测到有新版本时，自动弹出居中弹窗推送（每个版本只主动弹一次，避免反复打扰）
-    if (isNewer(version, CURRENT_VERSION) && popupSeen !== version) {
+    // 网络检测到有新版本时，自动弹出居中弹窗推送（仅在 Android 客户端环境主动弹，网页端不推送；每个版本只主动弹一次，避免反复打扰）
+    if (isRunningInAndroidClient() && isNewer(version, CURRENT_VERSION) && popupSeen !== version) {
       setTimeout(() => {
         showModal.value = true
         try {

@@ -342,7 +342,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.0.7 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.0.8 · 原生极速' }}
         </span>
       </header>
 
@@ -651,16 +651,14 @@ import {
 } from '../store'
 
 const isAndroid = computed(() => typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || ''))
-const isStandalone = computed(() => {
+const isAndroidClient = computed(() => {
   if (typeof window === 'undefined') return false
   return Boolean(
-    window.matchMedia?.('(display-mode: standalone)')?.matches ||
-    window.navigator?.standalone ||
+    window.NativeAuthBridge ||
     window.__CAMPUSHUB_CLIENT__ ||
-    /wv|WebView/i.test(navigator.userAgent || '')
+    /CampusHubAndroid/i.test(navigator.userAgent || '')
   )
 })
-const isAndroidClient = computed(() => isAndroid.value && isStandalone.value)
 
 const cfg = computed(() => state.config || {})
 const ms = computed(() => cfg.value.microsoft_todo || {})
@@ -1020,7 +1018,7 @@ async function checkAppUpdate(manual = false) {
       return
     }
 
-    const current = '2.0.7'
+    const current = '2.0.8'
     const parse = (v) => String(v).replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0)
     const l = parse(latestVer)
     const c = parse(current)

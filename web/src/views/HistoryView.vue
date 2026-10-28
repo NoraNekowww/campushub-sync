@@ -113,19 +113,21 @@ const groups = computed(() => {
   // groupByDay 保持降序倒排（最近的日期在最上方）
   const buckets = new Map()
   filteredCompleted.value.forEach((event) => {
-    const when = event.start_time ? String(event.start_time).slice(0, 10) : ''
+    // 优先采用 end_time 反映「完成/下课」日期，若无则使用 start_time
+    const refTime = event.end_time || event.start_time
+    const when = refTime ? String(refTime).slice(0, 10) : ''
     if (!when) return
     if (!buckets.has(when)) {
-      buckets.set(when, { key: when, label: when, events: [] })
+      buckets.set(when, { key: when, label: dayLabel(refTime), events: [] })
     }
     buckets.get(when).events.push(event)
   })
-  // 日期从近到远排序（降序）
+  // 日期从近到远排序（降序：今天/昨天在最前）
   return [...buckets.values()]
     .sort((a, b) => b.key.localeCompare(a.key))
     .map((bucket) => ({
       ...bucket,
-      // 组内同样按时间倒序排列（晚完成的在前）
+      // 组内同样按完成/结束时间倒序排列（晚完成的在最前）
       events: bucket.events.sort((a, b) => {
         const tA = new Date(a.end_time || a.start_time).getTime() || 0
         const tB = new Date(b.end_time || b.start_time).getTime() || 0
