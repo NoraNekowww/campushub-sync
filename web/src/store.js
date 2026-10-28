@@ -889,6 +889,9 @@ export async function tjuBrowserImport({ token = '', username = '', password = '
  * 优先走**服务器上的教务凭据**（不用校园网）；没有才退回本机微北洋令牌。失败静默放弃，不打扰用户。
  */
 export async function autoRefreshTju({ maxAgeHours = 6, retryMinutes = 30 } = {}) {
+  // 移动端强本地化：除非用户主动在界面上点击「同步」，否则开屏时不自主向教务发起静默请求，极速启动省电流畅
+  if (isMobileNativeApp()) return null
+
   if (typeof window === 'undefined') return null
   if (!state.config?.tju?.import_meta?.courses) return null
   const now = Date.now()
