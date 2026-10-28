@@ -11,7 +11,20 @@ const THEME_KEY = 'campushub.theme'
 const EVENTS_CACHE_KEY = 'campushub.events_cache.v1'
 const WEEK_CACHE_KEY = 'campushub.week_cache.v1'
 const USER_CACHE_KEY = 'campushub.user_cache.v1'
+const CONFIG_CACHE_KEY = 'campushub.config_cache.v1'
+const STATUS_CACHE_KEY = 'campushub.status_cache.v1'
+const SYNC_QUEUE_KEY = 'campushub.offline_sync_queue.v1'
 const LOOKAHEAD_DAYS = 60
+
+/** 判断当前是否在 Android 原生客户端壳环境中运行 */
+export function isMobileNativeApp() {
+  if (typeof window === 'undefined') return false
+  return Boolean(
+    window.NativeAuthBridge ||
+    window.__CAMPUSHUB_CLIENT__ ||
+    /CampusHubAndroid/i.test(navigator.userAgent || '')
+  )
+}
 
 export const state = reactive({
   view: 'agenda',
@@ -154,6 +167,34 @@ function loadCachedData() {
   } catch (e) {
     /* ignore */
   }
+
+  try {
+    const rawConfig = localStorage.getItem(CONFIG_CACHE_KEY)
+    if (rawConfig) {
+      const parsedConfig = JSON.parse(rawConfig)
+      if (parsedConfig && typeof parsedConfig === 'object') {
+        state.config = parsedConfig
+        state.viewerAdmin = Boolean(parsedConfig?.viewer?.admin)
+        if (parsedConfig?.accounts) {
+          state.accounts = { ...(state.accounts || {}), ...parsedConfig.accounts }
+        }
+      }
+    }
+  } catch (e) {
+    /* ignore */
+  }
+
+  try {
+    const rawStatus = localStorage.getItem(STATUS_CACHE_KEY)
+    if (rawStatus) {
+      const parsedStatus = JSON.parse(rawStatus)
+      if (parsedStatus && typeof parsedStatus === 'object') {
+        state.status = parsedStatus
+      }
+    }
+  } catch (e) {
+    /* ignore */
+  }
 }
 
 function saveEventsCache(items, total) {
@@ -169,6 +210,73 @@ function saveEventsCache(items, total) {
   } catch (e) {
     /* ignore storage quota errors */
   }
+}
+
+function saveConfigCache(config) {
+  try {
+    if (config) {
+      localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(config))
+    }
+  } catch (e) {}
+}
+
+function saveStatusCache(status) {
+  try {
+    if (status) {
+      localStorage.setItem(STATUS_CACHE_KEY, JSON.stringify(status))
+    }
+  } catch (e) {}
+}
+
+/** 离线待同步操作队列管理 */
+function getSyncQueue() {
+  try {
+    const raw = localStorage.getItem(SYNC_QUEUE_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function appendSyncQueue(action) {
+  try {
+    const queue = getSyncQueue()
+    queue.push({ ...action, timestamp: Date.now() })
+    localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue))
+  } catch {}
+}
+
+function clearSyncQueue() {
+  try {
+    localStorage.removeItem(SYNC_QUEUE_KEY)
+  } catch {}
+}
+
+/** 异步向服务器回写离线操作队列（仅在手动或后台同步时触发） */
+export async function flushSyncQueue() {
+  const queue = getSyncQueue()
+  if (!queue.length) return
+  const remaining = []
+  for (const item of queue) {
+    try {
+      if (item.type === 'create') {
+        await api.createEvent(item.payload)
+      } else if (item.type === 'patch') {
+        await api.patchEvent(item.id, item.payload)
+      } else if (item.type === 'delete') {
+        await api.deleteEvent(item.id, item.options || {})
+      }
+    } catch (e) {
+      remaining.push(item)
+    }
+  }
+  try {
+    if (remaining.length) {
+      localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(remaining))
+    } else {
+      clearSyncQueue()
+    }
+  } catch {}
 }
 
 function saveUserCache(user) {
@@ -216,6 +324,7 @@ export async function loadStatus() {
   try {
     state.status = await api.status()
     state.statusLocked = false
+    saveStatusCache(state.status)
   } catch (error) {
     if (isAuthError(error)) {
       // the timeline itself is public; only status/config/actions need auth
@@ -232,6 +341,7 @@ export async function loadConfig() {
       state.accounts = { ...(state.accounts || {}), ...state.config.accounts }
     }
     state.statusLocked = false
+    saveConfigCache(state.config)
   } catch (error) {
     if (isAuthError(error)) {
       state.statusLocked = true
@@ -240,7 +350,22 @@ export async function loadConfig() {
 }
 
 export async function bootstrap() {
+  // 1. 毫秒级闪存恢复全部状态：课表、日程、配置、用户信息全部就绪，0 延迟
   loadCachedData()
+
+  // 2. 移动端强本地化策略：如果本地已有缓存数据，则首屏完全不阻塞等待网络请求
+  const isMobile = isMobileNativeApp()
+  const hasLocalData = state.events && state.events.length > 0
+
+  if (isMobile && hasLocalData) {
+    // 移动端在后台静默尝试同步离线队列，不阻塞 UI 渲染和用户交互
+    setTimeout(() => {
+      flushSyncQueue().catch(() => {})
+    }, 1500)
+    return
+  }
+
+  // 3. 首次启动或 Web 页面下并行拉取更新
   await Promise.all([refresh(), loadStatus(), loadConfig()])
 }
 
@@ -361,15 +486,48 @@ export function closeCustomEditor() {
 
 export async function saveCustomEvent(payload) {
   const existing = state.customEditor.event
+  const isMobile = isMobileNativeApp()
+
+  // 1. 移动端秒存：纯本地立即生成或更新内存与闪存，无需等待服务器返回
+  if (isMobile) {
+    let localItem = null
+    if (existing) {
+      localItem = { ...existing, ...payload, updated_at: new Date().toISOString() }
+      const idx = state.events.findIndex((e) => e.id === existing.id)
+      if (idx >= 0) state.events.splice(idx, 1, localItem)
+      appendSyncQueue({ type: 'patch', id: existing.id, payload })
+    } else {
+      const tempId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+      localItem = {
+        id: tempId,
+        source: 'custom',
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        ...payload,
+      }
+      state.events.unshift(localItem)
+      state.total += 1
+      appendSyncQueue({ type: 'create', payload })
+    }
+    // 立即写回本地永久缓存
+    saveEventsCache(state.events, state.total)
+    closeCustomEditor()
+    notify(existing ? '日程已在本地更新' : '日程已在本地添加', 'ok')
+
+    // 后台静默将变更回传服务器，用户无需等待
+    setTimeout(() => {
+      flushSyncQueue().catch(() => {})
+    }, 500)
+    return localItem
+  }
+
+  // 2. 网页端维持向服务器即时请求
   try {
     const saved = existing
       ? await api.patchEvent(existing.id, payload)
       : await api.createEvent(payload)
     closeCustomEditor()
-    // 微软待办来源的改动会推回待办；推失败只提示，本地改动照样算数。
-    const push = saved && saved.ms_sync
-    if (push && !push.ok) notify(`已保存，但微软待办那边没同步上：${push.error}`, 'warn')
-    else notify(existing ? '日程已更新' : '日程已添加', 'ok')
+    notify(existing ? '日程已更新' : '日程已添加', 'ok')
     await refresh({ silent: true })
     return saved
   } catch (error) {
@@ -381,6 +539,23 @@ export async function saveCustomEvent(payload) {
 export async function removeCustomEvent(id, options = {}) {
   const target = state.events.find((item) => item.id === id)
   const applyScope = options.apply_scope || 'single'
+  const isMobile = isMobileNativeApp()
+
+  if (isMobile) {
+    // 移动端：直接从本地状态剔除并存入同步队列
+    const index = state.events.findIndex((e) => e.id === id)
+    if (index >= 0) {
+      state.events.splice(index, 1)
+      state.total = Math.max(0, state.total - 1)
+      saveEventsCache(state.events, state.total)
+    }
+    closeCustomEditor()
+    appendSyncQueue({ type: 'delete', id, options })
+    notify(`已在本地移除${target ? `「${target.title}」` : '这条日程'}`, 'info')
+    setTimeout(() => flushSyncQueue().catch(() => {}), 500)
+    return true
+  }
+
   try {
     await api.deleteEvent(id, { apply_scope: applyScope })
     closeCustomEditor()
@@ -439,7 +614,22 @@ export function saveWeekCache(items) {
 export async function removeEvent(event) {
   const index = state.events.findIndex((item) => item.id === event.id)
   const snapshot = index >= 0 ? state.events[index] : null
-  if (index >= 0) state.events.splice(index, 1) // 先动 UI，失败再放回去
+  if (index >= 0) {
+    state.events.splice(index, 1) // 先动 UI，本地立即移除
+    state.total = Math.max(0, state.total - 1)
+  }
+
+  const isMobile = isMobileNativeApp()
+  if (isMobile) {
+    saveEventsCache(state.events, state.total)
+    appendSyncQueue({ type: 'delete', id: event.id, options: {} })
+    notify(removedText(event), 'info', {
+      action: { label: '撤销', run: () => restoreEvent(event.id, event.title) },
+      duration: 6000,
+    })
+    setTimeout(() => flushSyncQueue().catch(() => {}), 500)
+    return true
+  }
 
   try {
     await api.deleteEvent(event.id)
@@ -450,7 +640,10 @@ export async function removeEvent(event) {
     await refresh({ silent: true })
     return true
   } catch (error) {
-    if (snapshot) state.events.splice(index, 0, snapshot)
+    if (snapshot) {
+      state.events.splice(index, 0, snapshot)
+      state.total += 1
+    }
     notify(error.message || '删除失败', 'danger')
     return false
   }
@@ -527,8 +720,10 @@ export async function runSync() {
   if (state.syncing) return
   state.syncing = true
   try {
+    // 移动端在执行全量同步前，先将本地累积的离线队列刷入服务器
+    await flushSyncQueue()
     const outcome = await api.sync()
-    await Promise.all([refresh({ silent: true }), loadStatus()])
+    await Promise.all([refresh({ silent: true }), loadStatus(), loadConfig()])
     const summary = `新增 ${outcome.created ?? 0} · 更新 ${outcome.updated ?? 0} · 清理 ${outcome.pruned ?? 0}`
     notify(outcome.ok === false ? `同步部分失败：${summary}` : `同步完成：${summary}`, outcome.ok === false ? 'warn' : 'ok')
   } catch (error) {
@@ -541,13 +736,24 @@ export async function runSync() {
 export async function toggleCompleted(event) {
   const next = event.status === 'completed' ? 'pending' : 'completed'
   const previous = event.status
-  event.status = next // optimistic
+  event.status = next // 乐观更新内存状态
+
+  const isMobile = isMobileNativeApp()
+  if (isMobile) {
+    // 移动端：立即更新本地存储与闪存缓存，0 毫秒等待
+    saveEventsCache(state.events, state.total)
+    appendSyncQueue({ type: 'patch', id: event.id, payload: { status: next } })
+    // 静默在后台将状态回写服务器
+    setTimeout(() => {
+      flushSyncQueue().catch(() => {})
+    }, 600)
+    return
+  }
+
+  // 网页端：发送 PATCH 请求
   try {
     const updated = await api.patchEvent(event.id, { status: next })
     Object.assign(event, updated)
-    // 微软来源的日程会把「划掉」推回 To Do；推失败只提示，本地照样算完成。
-    const push = updated.ms_sync
-    if (push && !push.ok) notify(`本地已${next === 'completed' ? '划掉' : '恢复'}，微软那边没同步上：${push.error}`, 'warn')
   } catch (error) {
     event.status = previous
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
