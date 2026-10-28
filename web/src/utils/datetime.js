@@ -27,15 +27,34 @@ export function weekdayLabel(value) {
 }
 
 /** Local (Asia/Shanghai) calendar day key: YYYY-MM-DD. */
+const dayKeyCache = new Map()
 export function dayKey(value) {
+  if (!value) return ''
+  if (typeof value === 'string' && value.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10)
+  }
   const date = toDate(value)
   if (!date) return ''
+  const time = date.getTime()
+  const cached = dayKeyCache.get(time)
+  if (cached) return cached
   // en-CA renders ISO-like YYYY-MM-DD
-  return new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(date)
+  const res = new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(date)
+  if (dayKeyCache.size > 200) dayKeyCache.clear()
+  dayKeyCache.set(time, res)
+  return res
 }
 
+let cachedTodayStr = ''
+let cachedTodayTs = 0
 export function todayKey() {
-  return dayKey(new Date())
+  const now = Date.now()
+  if (now - cachedTodayTs < 10000 && cachedTodayStr) {
+    return cachedTodayStr
+  }
+  cachedTodayStr = dayKey(new Date(now))
+  cachedTodayTs = now
+  return cachedTodayStr
 }
 
 export function dayLabel(value) {
@@ -172,8 +191,15 @@ export function isEventEnded(event, now = Date.now()) {
   if (!event || event.is_deadline) return false
   const end = event.end_time || event.start_time
   if (!end) return false
+  if (event._endTs !== undefined) {
+    return event._endTs <= now
+  }
   const ts = new Date(end).getTime()
-  return Number.isFinite(ts) && ts <= now
+  if (Number.isFinite(ts)) {
+    event._endTs = ts
+    return ts <= now
+  }
+  return false
 }
 
 /** Monday-based week window (Asia/Shanghai) used by the week grid + fetches. */

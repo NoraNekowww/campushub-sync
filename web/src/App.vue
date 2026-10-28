@@ -11,6 +11,7 @@
       <main class="mx-auto max-w-3xl pb-28 pt-3">
         <AgendaView v-show="state.view === 'agenda'" />
         <WeekView v-show="state.view === 'week'" />
+        <HistoryView v-show="state.view === 'history'" />
         <SettingsView v-show="state.view === 'settings'" />
       </main>
 
@@ -57,6 +58,7 @@ import TokenBanner from './components/TokenBanner.vue'
 import UpdateNotification from './components/UpdateNotification.vue'
 import AgendaView from './views/AgendaView.vue'
 import EventEditor from './components/EventEditor.vue'
+import HistoryView from './views/HistoryView.vue'
 import SettingsView from './views/SettingsView.vue'
 import WeekView from './views/WeekView.vue'
 import {

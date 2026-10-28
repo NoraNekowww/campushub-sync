@@ -245,11 +245,14 @@ def test_completed_and_deleted_events_leave_the_feed(client, admin_headers):
     划掉/删掉只发一条 ``STATUS:CANCELLED`` 墓碑（同一个 UID），客户端才会把它从
     手机日历里删掉 —— 订阅源里单纯「不再出现」的条目，有些客户端会一直留着。
     """
+    # start_time 采用动态相对于当前测试时间的未来时刻，避免写死历史日期导致超出 calendar.ics 的 days_past (7天) 窗口
+    from datetime import datetime, timezone, timedelta
+    test_start = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S")
     created = client.post(
         "/api/events",
         json={
             "title": "交实验报告",
-            "start_time": "2026-10-20T23:00:00",
+            "start_time": test_start,
             "is_deadline": True,
             "reminder_minutes": 60,
         },

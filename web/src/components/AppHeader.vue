@@ -58,6 +58,16 @@
           <RefreshCw :size="15" :class="state.syncing ? 'animate-spin' : ''" />
           <span class="hidden sm:inline">{{ state.syncing ? '同步中' : '同步' }}</span>
         </button>
+
+        <button
+          class="btn-ghost !px-2 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
+          :class="state.view === 'settings' ? '!text-brand-600 dark:!text-brand-400' : ''"
+          title="系统设置"
+          data-testid="header-settings-btn"
+          @click="toggleSettings"
+        >
+          <Settings :size="16" />
+        </button>
       </div>
     </template>
   </header>
@@ -65,7 +75,7 @@
 
 <script setup>
 import { nextTick, ref } from 'vue'
-import { ArrowLeft, RefreshCw, Search, WifiOff, X } from 'lucide-vue-next'
+import { ArrowLeft, RefreshCw, Search, Settings, WifiOff, X } from 'lucide-vue-next'
 import { state, runSync } from '../store'
 
 const searching = ref(false)
@@ -78,5 +88,13 @@ function openSearch() {
 
 function closeSearch() {
   searching.value = false
+}
+
+function toggleSettings() {
+  if (state.view === 'settings') {
+    state.view = 'agenda'
+  } else {
+    state.view = 'settings'
+  }
 }
 </script>
