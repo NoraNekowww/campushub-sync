@@ -16,8 +16,9 @@ function releaseSwipe(closer) {
     data-testid="event-card-row"
     @focusin="revealForFocus"
   >
-    <!-- 卡片底下那层：往左或往右拖开才看得到的「删除」 -->
+    <!-- 卡片底下那层：往左或往右拖开才看得到的「删除」（受 allowDelete 控制） -->
     <div
+      v-if="allowDelete"
       class="absolute inset-y-0 flex items-center px-1.5"
       :class="offset > 0 ? 'left-0' : 'right-0'"
     >
@@ -36,7 +37,7 @@ function releaseSwipe(closer) {
       </button>
     </div>
 
-    <div class="swipe-pane" :style="cardStyle" data-testid="event-swipe-pane">
+    <div class="swipe-pane" :style="allowDelete ? cardStyle : null" data-testid="event-swipe-pane">
       <article
         ref="cardEl"
         class="card"
@@ -45,11 +46,11 @@ function releaseSwipe(closer) {
         :data-kind="event.is_deadline ? 'deadline' : 'class'"
         :data-source="event.source"
         :data-status="event.status"
-        @pointerdown="onPointerDown"
-        @pointermove="onPointerMove"
-        @pointerup="onPointerUp"
-        @pointercancel="onPointerUp"
-        @click.capture="onClickCapture"
+        @pointerdown="allowDelete ? onPointerDown($event) : null"
+        @pointermove="allowDelete ? onPointerMove($event) : null"
+        @pointerup="allowDelete ? onPointerUp($event) : null"
+        @pointercancel="allowDelete ? onPointerUp($event) : null"
+        @click.capture="allowDelete ? onClickCapture($event) : null"
       >
       <div class="flex gap-3 p-3.5">
         <!-- real checkbox for tickable events (deadlines & custom events) -->
@@ -100,9 +101,9 @@ function releaseSwipe(closer) {
             >
               {{ event.title }}
             </h3>
-            <!-- 仅单点无时间段的 DDL 任务才显示紧迫性 -->
+            <!-- 仅单点无时间段的 DDL 任务才显示紧迫性（且受 showPriority 开关控制） -->
             <span
-              v-if="isPointDeadline && priority"
+              v-if="showPriority && isPointDeadline && priority"
               class="chip shrink-0 border-transparent"
               :class="urgencyColorClass"
             >
@@ -154,8 +155,8 @@ function releaseSwipe(closer) {
             <span v-if="noteLocation" class="inline-flex items-center gap-1">
               <MapPin :size="12" />{{ noteLocation }}
             </span>
-            <!-- 仅单点非时间段任务显示剩几天/倒计时，且颜色与中高低标签保持严格一致 -->
-            <span v-if="isPointDeadline && countdownInfo" class="chip border-transparent" :class="urgencyColorClass">
+            <!-- 仅单点非时间段任务显示剩几天/倒计时，且颜色与中高低标签保持严格一致（历史归档页关闭紧迫徽章） -->
+            <span v-if="showPriority && isPointDeadline && countdownInfo" class="chip border-transparent" :class="urgencyColorClass">
               <AlertTriangle v-if="countdownInfo.tone === 'danger'" :size="11" />
               {{ countdownInfo.text }}
             </span>
@@ -225,7 +226,13 @@ import { countdown, durationLabel, periodLabel, periodsShort, timeLabel } from '
 import { splitNoteLocation } from '../utils/note'
 import { openCustomEditor } from '../store'
 
-const props = defineProps({ event: { type: Object, required: true } })
+const props = defineProps({
+  event: { type: Object, required: true },
+  /* 是否允许左右滑开删除（历史归档页禁用，只读呈现与取消划掉） */
+  allowDelete: { type: Boolean, default: true },
+  /* 是否显示中高低优先级紧迫徽章（历史归档页关闭，去除未完成时的标签） */
+  showPriority: { type: Boolean, default: true },
+})
 const emit = defineEmits(['toggle', 'remove'])
 
 /* ----------------------------------------------- 划掉任务时的轻量流畅动效 */
