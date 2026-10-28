@@ -22,14 +22,53 @@
           <button type="button" class="btn-ghost ml-auto !px-2" @click="close"><X :size="15" /></button>
         </header>
 
+        <!-- 自定义日程类型二选一：待办/DDL（带倒计时，划掉完成） vs 课程/活动（有起止时长，上完自动隐退） -->
+        <div v-if="isCustom || !isEdit" class="grid grid-cols-2 gap-2 p-1 bg-slate-100/80 dark:bg-slate-800/60 rounded-xl text-xs">
+          <button
+            type="button"
+            class="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-lg transition-all"
+            :class="form.kind === 'deadline'
+              ? 'bg-white dark:bg-slate-900 shadow-sm text-brand-600 dark:text-brand-400 font-semibold border border-brand-200 dark:border-brand-700/60'
+              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
+            @click="setKind('deadline')"
+          >
+            <div class="flex items-center gap-1.5 font-medium">
+              <Clock :size="13" />
+              <span>待办 / DDL</span>
+            </div>
+            <span class="text-[10px] font-normal opacity-75">带倒计时，划掉完成</span>
+          </button>
+          <button
+            type="button"
+            class="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-lg transition-all"
+            :class="form.kind === 'class'
+              ? 'bg-white dark:bg-slate-900 shadow-sm text-brand-600 dark:text-brand-400 font-semibold border border-brand-200 dark:border-brand-700/60'
+              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
+            @click="setKind('class')"
+          >
+            <div class="flex items-center gap-1.5 font-medium">
+              <GraduationCap :size="13" />
+              <span>课程 / 活动日程</span>
+            </div>
+            <span class="text-[10px] font-normal opacity-75">上完自动隐退，可划掉</span>
+          </button>
+        </div>
+
         <label class="block space-y-1 text-xs">
           <span class="text-slate-500 dark:text-slate-400">标题</span>
-          <input v-model="form.title" class="input" required maxlength="120" placeholder="例如：找导师签字" data-testid="custom-title" />
+          <input
+            v-model="form.title"
+            class="input"
+            required
+            maxlength="120"
+            :placeholder="form.kind === 'deadline' ? '例如：交大作业 / 实验报告' : '例如：临时加课 / 组会 / 自习'"
+            data-testid="custom-title"
+          />
         </label>
 
         <div class="grid grid-cols-2 gap-2">
           <label class="block space-y-1 text-xs">
-            <span class="text-slate-500 dark:text-slate-400">日期</span>
+            <span class="text-slate-500 dark:text-slate-400">{{ form.kind === 'deadline' ? '截止日期' : '活动日期' }}</span>
             <input v-model="form.date" type="date" class="input" required data-testid="custom-date" />
           </label>
           <label class="block space-y-1 text-xs">
@@ -40,35 +79,55 @@
 
         <div class="grid grid-cols-2 gap-2">
           <label class="block space-y-1 text-xs">
-            <span class="text-slate-500 dark:text-slate-400">开始</span>
+            <span class="text-slate-500 dark:text-slate-400">{{ form.kind === 'deadline' ? '开始 / 截止时间' : '开始时间' }}</span>
             <input v-model="form.start" type="time" class="input" :disabled="form.allDay" required />
           </label>
-          <label class="block space-y-1 text-xs">
-            <span class="text-slate-500 dark:text-slate-400">时长（默认 0h）</span>
+          <label v-if="isCustom || !isEdit" class="block space-y-1 text-xs">
+            <span class="text-slate-500 dark:text-slate-400">{{ form.kind === 'deadline' ? '时限模式' : '活动时长' }}</span>
+            <select
+              v-if="form.kind === 'class'"
+              v-model.number="form.duration"
+              class="input"
+              data-testid="custom-duration"
+            >
+              <option :value="0.5">0.5 小时（30分钟）</option>
+              <option :value="1">1 小时</option>
+              <option :value="1.5">1.5 小时（标准大课）</option>
+              <option :value="2">2 小时</option>
+              <option :value="2.5">2.5 小时</option>
+              <option :value="3">3 小时</option>
+              <option :value="4">4 小时（半天活动）</option>
+              <option :value="6">6 小时</option>
+              <option :value="8">8 小时（全天活动）</option>
+            </select>
+            <div v-else class="flex items-center h-[34px] px-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
+              <label class="flex items-center gap-1.5 cursor-pointer text-xs">
+                <input v-model="form.allDay" type="checkbox" class="accent-brand-600" />
+                <span class="text-slate-600 dark:text-slate-300">全天 / 当截止日期用</span>
+              </label>
+            </div>
+          </label>
+          <label v-else class="block space-y-1 text-xs">
+            <span class="text-slate-500 dark:text-slate-400">活动时长</span>
             <select
               v-model.number="form.duration"
               class="input"
-              :disabled="form.allDay"
               data-testid="custom-duration"
             >
-              <option :value="0">0h（不写结束时间）</option>
-              <option :value="0.5">0.5h</option>
-              <option :value="1">1h</option>
-              <option :value="1.5">1.5h</option>
-              <option :value="2">2h</option>
-              <option :value="2.5">2.5h</option>
-              <option :value="3">3h</option>
-              <option :value="4">4h</option>
-              <option :value="6">6h</option>
-              <option :value="8">8h</option>
+              <option :value="0.5">0.5 小时</option>
+              <option :value="1">1 小时</option>
+              <option :value="1.5">1.5 小时</option>
+              <option :value="2">2 小时</option>
+              <option :value="2.5">2.5 小时</option>
+              <option :value="3">3 小时</option>
+              <option :value="4">4 小时</option>
             </select>
           </label>
         </div>
 
-        <label v-if="isCustom || !isEdit" class="flex items-center gap-2 text-xs">
-          <input v-model="form.allDay" type="checkbox" />
-          <span class="text-slate-600 dark:text-slate-300">全天 / 当截止日期用</span>
-        </label>
+        <div v-if="form.kind === 'class'" class="rounded-lg bg-slate-50 dark:bg-slate-800/50 px-2.5 py-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+          💡 <strong>自动隐退说明</strong>：课程型日程上完（到达结束时间）后会自动从今日视图隐退；亦可在日程卡片上随时手动点击勾选划掉。
+        </div>
 
         <!-- 重复任务设置（支持按天/周/月重复，重复几次） -->
         <div
@@ -204,7 +263,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { Pencil, RotateCcw, X } from 'lucide-vue-next'
+import { Clock, GraduationCap, Pencil, RotateCcw, X } from 'lucide-vue-next'
 import { closeCustomEditor, removeCustomEvent, saveCustomEvent, state } from '../store'
 
 const busy = ref(false)
@@ -213,8 +272,9 @@ const form = reactive({
   title: '',
   date: '',
   start: '09:00',
-  /* 结束时间改成一个「时长」：0h = 不写结束时间（课表里就画一条线）。
-     用户不想手算 18:30 + 1.5h，选个时长就完了。 */
+  /* kind: 'deadline'（带倒计时待办） | 'class'（活动日程，上完自动隐退） */
+  kind: 'deadline',
+  /* 结束时间由「时长」推算：0h = 无结束时间 */
   duration: 0,
   allDay: false,
   location: '',
@@ -227,6 +287,16 @@ const form = reactive({
   /* 批量修改/删除范围：single (仅当前) | future (当前及后续) | all (全系列) */
   applyScope: 'single',
 })
+
+function setKind(k) {
+  form.kind = k
+  if (k === 'deadline') {
+    form.duration = 0
+  } else {
+    form.allDay = false
+    if (!form.duration || form.duration <= 0) form.duration = 1.5
+  }
+}
 
 const editing = computed(() => state.customEditor.event)
 const isEdit = computed(() => Boolean(editing.value))
@@ -292,14 +362,17 @@ watch(
     const event = state.customEditor.event
     // start_time 已经是本地时区（后端按 Asia/Shanghai 回），前 16 位即 date+T HH:MM
     const start = (event?.start_time || '').slice(0, 16)
+    const isDdl = event ? Boolean(event.is_deadline) : true
+    form.kind = isDdl ? 'deadline' : 'class'
     form.title = event?.title || ''
     form.date = start ? start.slice(0, 10) : today()
     form.start = start ? start.slice(11, 16) : '09:00'
-    // 结束时间不再单独编辑，由「时长」反推：老数据有 end_time 就算出来，没有就是 0h
-    form.duration = durationOf(start, (event?.end_time || '').slice(0, 16))
+    // 结束时间由「时长」反推：活动型日程默认 1.5h
+    const calculatedDuration = durationOf(start, (event?.end_time || '').slice(0, 16))
+    form.duration = calculatedDuration > 0 ? calculatedDuration : (form.kind === 'class' ? 1.5 : 0)
     // 课表外部来源没有「全天」开关，时间照常可改
     const external = Boolean(event) && event.source !== 'custom'
-    form.allDay = external ? false : Boolean(event?.is_deadline)
+    form.allDay = external ? false : (form.kind === 'deadline' && Boolean(event?.is_deadline && !event?.start_time?.slice(11, 16)))
     form.location = event?.location || ''
     form.description = event?.description || ''
     form.recurring = false
@@ -318,9 +391,10 @@ function close() {
 async function submit() {
   error.value = ''
   busy.value = true
-  // 时长换算成结束时刻；0h = 不写结束时间（课表里画一条线）
+  const isDdl = form.kind === 'deadline' || form.allDay
+  // 时长换算成结束时刻；活动型日程自动算结束时间，上完自动隐退
   const endTime =
-    !form.allDay && form.duration > 0 ? addHours(form.date, form.start, form.duration) : null
+    !isDdl && form.duration > 0 ? addHours(form.date, form.start, form.duration) : null
 
   const payload = {
     title: form.title.trim(),
@@ -328,7 +402,7 @@ async function submit() {
     // end_time 传 null 表示「不改」，所以想清空结束时间得靠 clear_end_time
     end_time: endTime,
     clear_end_time: !endTime,
-    duration_hours: form.allDay ? 0 : form.duration,
+    duration_hours: isDdl ? 0 : form.duration,
     // 空串 = 清空（null 会被后端当成「这一项不动」，地点和备注就删不掉了）
     location: form.location.trim(),
     description: form.description.trim(),
@@ -342,7 +416,7 @@ async function submit() {
     payload.apply_scope = form.applyScope || 'single'
   }
   // 只有自定义日程有「全天 / 当截止日期用」这个概念；外部来源发过去也会被忽略
-  if (isCustom.value) payload.is_deadline = form.allDay
+  if (isCustom.value || !isEdit.value) payload.is_deadline = isDdl
 
   const saved = await saveCustomEvent(payload)
   busy.value = false

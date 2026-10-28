@@ -52,8 +52,8 @@ function releaseSwipe(closer) {
         @click.capture="onClickCapture"
       >
       <div class="flex gap-3 p-3.5">
-        <!-- real checkbox for deadlines (native focus/space-key/AT semantics) -->
-        <label v-if="event.is_deadline" class="mt-0.5 shrink-0 cursor-pointer" :title="event.status === 'completed' ? '标记为未完成' : '标记为已完成'">
+        <!-- real checkbox for tickable events (deadlines & custom events) -->
+        <label v-if="tickable" class="mt-0.5 shrink-0 cursor-pointer" :title="event.status === 'completed' ? '标记为未完成' : '标记为已完成'">
           <input
             type="checkbox"
             :checked="event.status === 'completed'"
