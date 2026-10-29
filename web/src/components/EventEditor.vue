@@ -307,7 +307,7 @@ const isCustom = computed(() => source.value === 'custom')
 const editorTitle = computed(() => {
   if (!isEdit.value) return '新建日程'
   if (source.value === 'tju_schedule') return '编辑这节课'
-  if (editing.value?.is_deadline || source.value === 'microsoft_todo') return '编辑这条待办'
+  if (editing.value?.is_deadline) return '编辑这条待办'
   return '编辑日程'
 })
 const removeLabel = computed(() => {

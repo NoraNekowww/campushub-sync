@@ -342,7 +342,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.1.5 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.1.6 · 原生极速' }}
         </span>
       </header>
 
@@ -472,10 +472,10 @@
         :labels="{ running: '调度器', next_run_time: '下次运行', interval_minutes: '间隔(分)', jobs: '任务数' }"
       />
 
-      <div v-if="connectors.length" class="space-y-2 pt-1">
-        <div v-for="connector in connectors" :key="connector.name" class="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/50">
+      <div v-if="filteredConnectors.length" class="space-y-2 pt-1">
+        <div v-for="connector in filteredConnectors" :key="connector.name" class="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/50">
           <div class="flex items-center gap-2">
-            <span class="text-xs font-semibold">{{ connector.name }}</span>
+            <span class="text-xs font-semibold">{{ connector.name === 'tju_schedule' ? '天津大学教务' : connector.name }}</span>
             <span
               class="chip border-transparent"
               :class="connector.ok
@@ -664,7 +664,6 @@ const isAndroidClient = computed(() => {
 })
 
 const cfg = computed(() => state.config || {})
-const ms = computed(() => cfg.value.microsoft_todo || {})
 const tju = computed(() => cfg.value.tju_schedule || {})
 const semester = computed(() => tju.value.semester || {})
 const subscribeUrl = computed(() => cfg.value.subscribe?.url || '')
@@ -674,6 +673,10 @@ const subscribeConfigured = computed(() => Boolean(cfg.value.subscribe?.configur
 const lastSync = computed(() => state.status?.last_sync || null)
 const scheduler = computed(() => state.status?.scheduler || null)
 const connectors = computed(() => state.status?.connectors || [])
+// 彻底排除已下线的微软待办连接器状态显示
+const filteredConnectors = computed(() =>
+  connectors.value.filter((item) => item.name !== 'microsoft_todo')
+)
 const lastUpdatedLabel = computed(() =>
   state.lastUpdated
     ? new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false }).format(state.lastUpdated)
@@ -1021,7 +1024,7 @@ async function checkAppUpdate(manual = false) {
       return
     }
 
-    const current = '2.1.5'
+    const current = '2.1.6'
     const parse = (v) => String(v).replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0)
     const l = parse(latestVer)
     const c = parse(current)
