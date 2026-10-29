@@ -217,7 +217,7 @@ import ClassDetail from '../components/ClassDetail.vue'
 import EmptyState from '../components/EmptyState.vue'
 import EventCard from '../components/EventCard.vue'
 import { api } from '../api'
-import { loadWeekCache, matchesQuery, removeEvent, saveWeekCache, state, toggleCompleted } from '../store'
+import { isMobileNativeApp, loadWeekCache, matchesQuery, removeEvent, saveWeekCache, state, toggleCompleted } from '../store'
 import { dayKey, dayLabel, isEventEnded, minutesOfDay, periodLabel, timeLabel, todayKey, weekOffsetOf, weekWindow } from '../utils/datetime'
 
 const DAY_START = 8 * 60 // 08:00
@@ -490,6 +490,12 @@ function lineStyle(item) {
 }
 
 async function loadWeek() {
+  // 如果本地已经有持久化课表缓存，且属于移动端环境，绝不亮起加载态也不阻塞界面
+  const isMobile = isMobileNativeApp()
+  if (isMobile && events.value && events.value.length > 0) {
+    return
+  }
+
   if (!events.value || events.value.length === 0) {
     loading.value = true
   }

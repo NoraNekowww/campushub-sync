@@ -28,17 +28,17 @@ _STARTED_AT = time.time()
 @router.get("/version", summary="Version check for in-app update notification")
 async def app_version() -> dict:
     return {
-        "version": "2.1.3",
-        "tag": "v2.1.3",
-        "title": "CampusHub Android v2.1.3",
+        "version": "2.1.4",
+        "tag": "v2.1.4",
+        "title": "CampusHub Android v2.1.4",
         "download_url": "https://nzlab.online/schedule/CampusHub.apk",
         "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
         "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
         "features": [
-            "消灭开屏黑屏/深蓝过度闪烁，WebView 透明底色与硬件加速秒级呈现",
-            "彻底移除微软待办残留接入卡片，已有日程时绝不弹出引导打扰",
-            "修正反向更新判定：网页端彻底静默，移动端精准弹窗推送",
-            "开屏 0 等待、纯本地离线优先秒开"
+            "消灭启动深蓝/黑屏过渡层：原生 WebView 透明底色与硬件加速秒级无感呈现",
+            "彻底清理微软待办接入向导残留代码，已有日程绝不弹出多余卡片",
+            "纠正倒反天罡：桌面网页端彻底静默，仅移动端弹出新版本推送与一键下载",
+            "周课表与日视图移动端全量本地缓存秒开，开屏零等待，速度超越微北洋"
         ]
     }
 
