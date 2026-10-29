@@ -9,7 +9,7 @@ const formatter = new Intl.DateTimeFormat('zh-CN', {
 export const haveEvents = (state) => (state.events || []).length > 0
 
 export function subtitleText(state, hasEvents) {
-  if (state.syncing) return '正在与 Microsoft To Do / 教务同步…'
+  if (state.syncing) return '正在与天大教务同步课表…'
   const last = state.lastUpdated
   if (state.error) return state.error
   if (!hasEvents) return '暂无日程'
