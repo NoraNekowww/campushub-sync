@@ -25,6 +25,24 @@ router = APIRouter(tags=["status"])
 _STARTED_AT = time.time()
 
 
+@router.get("/version", summary="Version check for in-app update notification")
+async def app_version() -> dict:
+    return {
+        "version": "2.1.3",
+        "tag": "v2.1.3",
+        "title": "CampusHub Android v2.1.3",
+        "download_url": "https://nzlab.online/schedule/CampusHub.apk",
+        "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
+        "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
+        "features": [
+            "消灭开屏黑屏/深蓝过度闪烁，WebView 透明底色与硬件加速秒级呈现",
+            "彻底移除微软待办残留接入卡片，已有日程时绝不弹出引导打扰",
+            "修正反向更新判定：网页端彻底静默，移动端精准弹窗推送",
+            "开屏 0 等待、纯本地离线优先秒开"
+        ]
+    }
+
+
 @router.get("/health", summary="Liveness probe (no auth, no secrets)")
 def health() -> dict[str, Any]:
     return {
