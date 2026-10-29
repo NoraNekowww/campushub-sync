@@ -342,7 +342,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.1.7 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.1.9 · 原生极速' }}
         </span>
       </header>
 
@@ -436,59 +436,6 @@
         </p>
       </div>
       <p v-else class="text-xs text-slate-400">需要访问令牌才能读取订阅地址。</p>
-    </section>
-
-    <!-- -------------------------------------------------------------- sync -->
-    <section class="card space-y-3 p-4">
-      <header class="flex items-center gap-2">
-        <RefreshCw :size="15" class="text-brand-600 dark:text-brand-400" />
-        <h2 class="text-sm font-semibold">同步状态</h2>
-        <button class="btn-ghost ml-auto !px-2 !py-1 text-xs" :disabled="state.syncing" @click="runSync()">
-          <RefreshCw :size="12" :class="state.syncing ? 'animate-spin' : ''" /> 立即同步
-        </button>
-      </header>
-
-      <DetailList
-        v-if="lastSync"
-        :data="lastSync"
-        :keys="['trigger', 'started_at', 'finished_at', 'fetched', 'created', 'updated', 'pruned', 'message']"
-        :labels="{
-          trigger: '触发方式',
-          started_at: '开始',
-          finished_at: '结束',
-          fetched: '抓取',
-          created: '新增',
-          updated: '更新',
-          pruned: '清理',
-          message: '信息',
-        }"
-      />
-      <p v-else class="text-xs text-slate-400">还没有同步记录。</p>
-
-      <DetailList
-        v-if="scheduler"
-        :data="scheduler"
-        :keys="['running', 'next_run_time', 'interval_minutes', 'jobs']"
-        :labels="{ running: '调度器', next_run_time: '下次运行', interval_minutes: '间隔(分)', jobs: '任务数' }"
-      />
-
-      <div v-if="filteredConnectors.length" class="space-y-2 pt-1">
-        <div v-for="connector in filteredConnectors" :key="connector.name" class="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/50">
-          <div class="flex items-center gap-2">
-            <span class="text-xs font-semibold">{{ connector.name === 'tju_schedule' ? '天津大学教务' : connector.name }}</span>
-            <span
-              class="chip border-transparent"
-              :class="connector.ok
-                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
-                : 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'"
-            >
-              {{ connector.ok ? '正常' : '异常' }}
-            </span>
-            <span v-if="connector.fetched != null" class="text-[11px] text-slate-400">{{ connector.fetched }} 条</span>
-          </div>
-          <p v-if="connector.error" class="mt-1 break-all text-[11px] text-rose-500">{{ connector.error }}</p>
-        </div>
-      </div>
     </section>
 
     <!-- --------------------------------------------------------------- tju -->
@@ -1024,7 +971,7 @@ async function checkAppUpdate(manual = false) {
       return
     }
 
-    const current = '2.1.7'
+    const current = '2.1.9'
     const parse = (v) => String(v).replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0)
     const l = parse(latestVer)
     const c = parse(current)

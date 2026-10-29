@@ -114,7 +114,7 @@ async function fillForm(page, values) {
     if (values.title != null) setValue(title, values.title)
     const date = document.querySelector('[data-testid="custom-date"]')
     if (values.date != null && date) setValue(date, values.date)
-    const start = byLabel('开始')
+    const start = byLabel('开始') || byLabel('截止时间')
     if (values.start != null && start) setValue(start, values.start)
     const end = byLabel('结束')
     if (values.end != null && end) setValue(end, values.end)

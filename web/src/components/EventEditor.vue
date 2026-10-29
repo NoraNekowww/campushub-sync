@@ -79,13 +79,12 @@
 
         <div class="grid grid-cols-2 gap-2">
           <label class="block space-y-1 text-xs">
-            <span class="text-slate-500 dark:text-slate-400">{{ form.kind === 'deadline' ? '开始 / 截止时间' : '开始时间' }}</span>
-            <input v-model="form.start" type="time" class="input" :disabled="form.allDay" required />
+            <span class="text-slate-500 dark:text-slate-400">{{ form.kind === 'deadline' ? '截止时间' : '开始时间' }}</span>
+            <input v-model="form.start" type="time" class="input" required />
           </label>
-          <label v-if="isCustom || !isEdit" class="block space-y-1 text-xs">
-            <span class="text-slate-500 dark:text-slate-400">{{ form.kind === 'deadline' ? '时限模式' : '活动时长' }}</span>
+          <label v-if="form.kind === 'class' || isEdit" class="block space-y-1 text-xs">
+            <span class="text-slate-500 dark:text-slate-400">活动时长</span>
             <select
-              v-if="form.kind === 'class'"
               v-model.number="form.duration"
               class="input"
               data-testid="custom-duration"
@@ -98,31 +97,14 @@
               <option :value="3">3 小时</option>
               <option :value="4">4 小时（半天活动）</option>
               <option :value="6">6 小时</option>
-              <option :value="8">8 小时（全天活动）</option>
+              <option :value="8">8 小时（整天活动）</option>
             </select>
-            <div v-else class="flex items-center h-[34px] px-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
-              <label class="flex items-center gap-1.5 cursor-pointer text-xs">
-                <input v-model="form.allDay" type="checkbox" class="accent-brand-600" />
-                <span class="text-slate-600 dark:text-slate-300">全天 / 当截止日期用</span>
-              </label>
+          </label>
+          <div v-else class="flex flex-col justify-end">
+            <div class="flex items-center h-[38px] px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 text-[11px]">
+              <span>默认 21:00 到期提醒</span>
             </div>
-          </label>
-          <label v-else class="block space-y-1 text-xs">
-            <span class="text-slate-500 dark:text-slate-400">活动时长</span>
-            <select
-              v-model.number="form.duration"
-              class="input"
-              data-testid="custom-duration"
-            >
-              <option :value="0.5">0.5 小时</option>
-              <option :value="1">1 小时</option>
-              <option :value="1.5">1.5 小时</option>
-              <option :value="2">2 小时</option>
-              <option :value="2.5">2.5 小时</option>
-              <option :value="3">3 小时</option>
-              <option :value="4">4 小时</option>
-            </select>
-          </label>
+          </div>
         </div>
 
         <div v-if="form.kind === 'class'" class="rounded-lg bg-slate-50 dark:bg-slate-800/50 px-2.5 py-1.5 text-[11px] text-slate-500 dark:text-slate-400">
@@ -271,7 +253,8 @@ const error = ref('')
 const form = reactive({
   title: '',
   date: '',
-  start: '09:00',
+  // 默认日程 DDL 在 21:00
+  start: '21:00',
   /* kind: 'deadline'（带倒计时待办） | 'class'（活动日程，上完自动隐退） */
   kind: 'deadline',
   /* 结束时间由「时长」推算：0h = 无结束时间 */
@@ -292,8 +275,10 @@ function setKind(k) {
   form.kind = k
   if (k === 'deadline') {
     form.duration = 0
+    form.start = '21:00'
   } else {
     form.allDay = false
+    form.start = '09:00'
     if (!form.duration || form.duration <= 0) form.duration = 1.5
   }
 }
@@ -366,13 +351,11 @@ watch(
     form.kind = isDdl ? 'deadline' : 'class'
     form.title = event?.title || ''
     form.date = start ? start.slice(0, 10) : today()
-    form.start = start ? start.slice(11, 16) : '09:00'
+    form.start = start ? start.slice(11, 16) : (form.kind === 'deadline' ? '21:00' : '09:00')
     // 结束时间由「时长」反推：活动型日程默认 1.5h
     const calculatedDuration = durationOf(start, (event?.end_time || '').slice(0, 16))
     form.duration = calculatedDuration > 0 ? calculatedDuration : (form.kind === 'class' ? 1.5 : 0)
-    // 课表外部来源没有「全天」开关，时间照常可改
-    const external = Boolean(event) && event.source !== 'custom'
-    form.allDay = external ? false : (form.kind === 'deadline' && Boolean(event?.is_deadline && !event?.start_time?.slice(11, 16)))
+    form.allDay = false
     form.location = event?.location || ''
     form.description = event?.description || ''
     form.recurring = false

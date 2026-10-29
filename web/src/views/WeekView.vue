@@ -14,10 +14,6 @@
             回今天
           </span>
         </div>
-        <p class="text-[11px] text-slate-500 dark:text-slate-400">
-          支持左右无极连续滑动 · 共 {{ classes.length }} 节课
-          <span v-if="loading"> · 加载中…</span>
-        </p>
       </div>
       <button class="btn-ghost !px-2" title="向右平滑滑动" @click="scrollWeeks(1)">
         <ChevronRight :size="16" />
@@ -88,7 +84,7 @@
             <div
               v-for="day in days"
               :key="`col-${day.key}`"
-              class="relative week-grid-lines week-day-col"
+              class="relative week-day-col"
               :class="[
                 day.isMonday ? 'border-l-2 border-slate-300 dark:border-slate-700' : 'border-l border-slate-100 dark:border-slate-800',
                 day.isToday ? 'bg-brand-50/40 dark:bg-brand-500/5' : ''
@@ -333,18 +329,8 @@ const currentTeachingWeek = computed(() => {
 
 const currentVisibleWeekLabel = computed(() => {
   const offset = centeredWeekOffset.value
-  const targetDay = days.value.find((d) => d.weekOffset === offset && d.isMonday)
-  if (!targetDay) return '本周'
-  const monKey = targetDay.key
-  const sunDate = new Date(new Date(`${monKey}T00:00:00Z`).getTime() + 6 * 86400000)
-  const sunKey = sunDate.toISOString().slice(0, 10)
-  const fmt = (k) => `${Number(k.slice(5, 7))}月${Number(k.slice(8, 10))}日`
-  
   const weekNum = currentTeachingWeek.value + offset
-  const parityText = weekNum % 2 === 1 ? '单周' : '双周'
-  const relativeText = offset === 0 ? '本周' : offset === 1 ? '下周' : offset === -1 ? '上周' : `第 ${offset > 0 ? '+' : ''}${offset} 周`
-  
-  return `第 ${weekNum} 周 · ${parityText} (${relativeText}) · ${fmt(monKey)} – ${fmt(sunKey)}`
+  return `第 ${weekNum} 周`
 })
 
 let scrollRaf = null
