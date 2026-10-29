@@ -29,7 +29,8 @@ export function isMobileNativeApp() {
 }
 
 export const state = reactive({
-  view: 'agenda',
+  // 进去之后默认显示课程表（WeekView）
+  view: 'week',
   loading: false,
   syncing: false,
   error: '',

@@ -28,17 +28,16 @@ _STARTED_AT = time.time()
 @router.get("/version", summary="Version check for in-app update notification")
 async def app_version() -> dict:
     return {
-        "version": "2.1.6",
-        "tag": "v2.1.6",
-        "title": "CampusHub Android v2.1.6",
+        "version": "2.1.7",
+        "tag": "v2.1.7",
+        "title": "CampusHub Android v2.1.7",
         "download_url": "https://nzlab.online/schedule/CampusHub.apk",
         "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
         "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
         "features": [
-            "彻底根除冷启动深蓝屏/黑屏闪烁：Android 窗口底色、状态栏与导航栏全面与前端无缝融合",
-            "彻底剔除设置与向导中微软待办所有残留代码与连接器显示",
-            "开屏0网络等待、0白屏、0多余刷新，瞬间呈现本地课表与日程",
-            "更新推送定向修正：网页端彻底静默，移动客户端精准提示新版"
+            "默认进入周课表视图，开屏直达课程排布",
+            "修复同版本检测逻辑，当前版本与最新一致时绝不提示更新",
+            "彻底剔除微软待办残留，冷启动0秒开黑白蓝闪烁消除"
         ]
     }
 

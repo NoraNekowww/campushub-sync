@@ -134,7 +134,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { BellOff, Download, Rocket, Sparkles, X } from 'lucide-vue-next'
 
-const CURRENT_VERSION = '2.1.6'
+const CURRENT_VERSION = '2.1.7'
 const DISMISSED_KEY = 'campushub.dismissed_update'
 const POPUP_SEEN_KEY = 'campushub.popup_seen_version'
 
@@ -176,15 +176,22 @@ const showUpdateBanner = computed(() => {
 })
 
 /**
- * 语义化版本号比较 (例如 '2.0.6' > '2.0.5')
+ * 严格语义化版本号比较：严格只有最新版本大于当前版本 (latest > current) 才返回 true。
+ * 当新版本与当前版本相同 (latest === current) 或小于当前版本时，坚决返回 false，不提示更新。
  */
 function isNewer(latest, current) {
-  const parse = (v) => String(v).replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0)
-  const l = parse(latest)
-  const c = parse(current)
-  for (let i = 0; i < Math.max(l.length, c.length); i++) {
-    const lv = l[i] || 0
-    const cv = c[i] || 0
+  if (!latest || !current) return false
+  const cleanL = String(latest).trim().replace(/^v/i, '')
+  const cleanC = String(current).trim().replace(/^v/i, '')
+  if (cleanL === cleanC) return false
+
+  const parse = (v) => v.split('.').map((n) => parseInt(n, 10) || 0)
+  const l = parse(cleanL)
+  const c = parse(cleanC)
+  const maxLen = Math.max(l.length, c.length)
+  for (let i = 0; i < maxLen; i++) {
+    const lv = l[i] ?? 0
+    const cv = c[i] ?? 0
     if (lv > cv) return true
     if (lv < cv) return false
   }
