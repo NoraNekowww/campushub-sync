@@ -64,7 +64,7 @@
         </p>
       </header>
 
-      <div class="grid gap-2.5 sm:grid-cols-2">
+      <div class="space-y-2.5">
         <div class="flex flex-col justify-between rounded-xl border border-slate-200/80 bg-slate-50/60 p-3.5 dark:border-slate-800 dark:bg-slate-800/40">
           <div class="space-y-1">
             <div class="flex items-center gap-1.5 font-medium text-xs text-slate-800 dark:text-slate-200">
@@ -77,21 +77,6 @@
           </div>
           <button class="btn-primary !py-1 text-xs mt-3 w-full justify-center" @click="goToSection('tju-section')">
             去连接教务
-          </button>
-        </div>
-
-        <div class="flex flex-col justify-between rounded-xl border border-slate-200/80 bg-slate-50/60 p-3.5 dark:border-slate-800 dark:bg-slate-800/40">
-          <div class="space-y-1">
-            <div class="flex items-center gap-1.5 font-medium text-xs text-slate-800 dark:text-slate-200">
-              <ListTodo :size="15" class="text-indigo-600 dark:text-indigo-400" />
-              <span>Microsoft To Do</span>
-            </div>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400">
-              授权微软账号，双向同步待办与任务
-            </p>
-          </div>
-          <button class="btn-ghost !py-1 text-xs mt-3 w-full justify-center border border-slate-200 dark:border-slate-700" @click="goToSection('ms-section')">
-            去连接待办
           </button>
         </div>
       </div>
@@ -124,7 +109,7 @@
 
 <script setup>
 import { computed, onMounted } from 'vue'
-import { AlertTriangle, GraduationCap, KeyRound, ListTodo, Plus, RefreshCw, Sparkles } from 'lucide-vue-next'
+import { AlertTriangle, GraduationCap, KeyRound, Plus, RefreshCw, Sparkles } from 'lucide-vue-next'
 import EmptyState from '../components/EmptyState.vue'
 import EventCard from '../components/EventCard.vue'
 import SkeletonList from '../components/SkeletonList.vue'
@@ -149,16 +134,17 @@ const groups = computed(() => {
 })
 
 const hasConnected = computed(() => {
+  // 如果本地有课表或日程，说明已经处于正常使用状态，绝不呈现初次接入卡片
+  if (state.events && state.events.length > 0) return true
   const connectors = state.status?.connectors || []
   const tjuOk = connectors.find((item) => item.name === 'tju_schedule')?.ok
-  const msOk = connectors.find((item) => item.name === 'microsoft_todo')?.ok
   let hasTjuToken = false
   try {
     hasTjuToken = Boolean(localStorage.getItem('campushub.tju-token'))
   } catch {
     hasTjuToken = false
   }
-  return Boolean(tjuOk || msOk || hasTjuToken)
+  return Boolean(tjuOk || hasTjuToken)
 })
 
 function goToSection(anchorId) {

@@ -148,17 +148,17 @@ def create_app() -> FastAPI:
     @app.get("/api/version", summary="Version check for in-app update notification")
     async def app_version() -> dict:
         return {
-            "version": "2.1.2",
-            "tag": "v2.1.2",
-            "title": "CampusHub Android v2.1.2",
+            "version": "2.1.3",
+            "tag": "v2.1.3",
+            "title": "CampusHub Android v2.1.3",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
             "features": [
-                "移动端全面重构为 Local-First 纯本地离线优先架构，0等待无感秒开",
-                "开屏鉴权、配置与日程全量本地持久化，彻底消灭首屏网络请求卡顿",
-                "新建、编辑、划掉、删除全在本地即时生效，后台静默队列同步",
-                "历史归档页纯净化、严格倒序排列，仅在移动端推送新版本"
+                "消灭开屏黑屏/深蓝过度闪烁，WebView 透明底色与硬件加速秒级呈现",
+                "彻底移除微软待办残留接入卡片，已有日程时绝不弹出引导打扰",
+                "修正反向更新判定：网页端彻底静默，移动端精准弹窗推送",
+                "开屏 0 等待、纯本地离线优先秒开"
             ]
         }
 

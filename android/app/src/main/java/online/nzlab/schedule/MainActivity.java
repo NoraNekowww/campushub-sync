@@ -54,8 +54,8 @@ public class MainActivity extends AppCompatActivity {
         // 彻底根治登录态丢失：启用 CookieManager 并配置强持久化
         setupCookiePersistence();
 
-        // 极致性能调优：硬件加速与本地缓存
-        webView.setBackgroundColor(Color.parseColor("#0b1220"));
+        // 背景色设为透明并让硬件加速生效，消除深蓝/黑屏过渡层
+        webView.setBackgroundColor(Color.TRANSPARENT);
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
 
         WebSettings settings = webView.getSettings();

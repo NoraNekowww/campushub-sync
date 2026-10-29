@@ -342,7 +342,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.1.2 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.1.3 · 原生极速' }}
         </span>
       </header>
 
@@ -656,7 +656,10 @@ const isAndroidClient = computed(() => {
   return Boolean(
     window.NativeAuthBridge ||
     window.__CAMPUSHUB_CLIENT__ ||
-    /CampusHubAndroid/i.test(navigator.userAgent || '')
+    /CampusHubAndroid/i.test(navigator.userAgent || '') ||
+    // 安卓 WebView / 原生 PWA 环境兜底
+    (/Android/i.test(navigator.userAgent || '') && /wv|WebView/i.test(navigator.userAgent || '')) ||
+    (/Android/i.test(navigator.userAgent || '') && window.matchMedia?.('(display-mode: standalone)')?.matches)
   )
 })
 
@@ -1018,7 +1021,7 @@ async function checkAppUpdate(manual = false) {
       return
     }
 
-    const current = '2.1.2'
+    const current = '2.1.3'
     const parse = (v) => String(v).replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0)
     const l = parse(latestVer)
     const c = parse(current)

@@ -22,7 +22,9 @@ export function isMobileNativeApp() {
   return Boolean(
     window.NativeAuthBridge ||
     window.__CAMPUSHUB_CLIENT__ ||
-    /CampusHubAndroid/i.test(navigator.userAgent || '')
+    /CampusHubAndroid/i.test(navigator.userAgent || '') ||
+    (/Android/i.test(navigator.userAgent || '') && /wv|WebView/i.test(navigator.userAgent || '')) ||
+    (/Android/i.test(navigator.userAgent || '') && window.matchMedia?.('(display-mode: standalone)')?.matches)
   )
 }
 
