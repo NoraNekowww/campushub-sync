@@ -342,7 +342,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.2.1 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.2.2 · 原生极速' }}
         </span>
       </header>
 
@@ -504,8 +504,8 @@
         已缓存时间线可离线查看；在浏览器菜单选择「添加到主屏幕」即可作为 PWA 安装。
       </p>
       <div class="flex flex-wrap items-center gap-2">
-        <button class="btn-ghost !py-1.5 text-xs" @click="clearCache">
-          <Trash2 :size="13" /> 清空离线缓存
+        <button class="btn-ghost !py-1.5 text-xs text-rose-500 hover:text-rose-600" @click="clearCache">
+          <Trash2 :size="13" /> 清空所有本地数据与缓存
         </button>
         <span class="text-[11px] text-slate-400">
           {{ cfg.app || 'CampusHub Sync' }} v{{ cfg.version || '—' }}
@@ -580,6 +580,7 @@ import DetailList from '../components/DetailList.vue'
 import TjuConnect from '../components/TjuConnect.vue'
 import {
   changePassword,
+  clearAllLocalData,
   getTokenSafe,
   listUsers,
   loadRegistrationSettings,
@@ -971,7 +972,7 @@ async function checkAppUpdate(manual = false) {
       return
     }
 
-    const current = '2.2.1'
+    const current = '2.2.2'
     const parse = (v) => String(v).replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0)
     const l = parse(latestVer)
     const c = parse(current)
@@ -1004,6 +1005,9 @@ async function checkAppUpdate(manual = false) {
 /* ---------------------------------------------------------------- cache */
 
 async function clearCache() {
+  if (!confirm('确定要清空本设备上的所有缓存、登录状态与离线数据吗？清空后将返回登录界面。')) {
+    return
+  }
   try {
     if (typeof caches !== 'undefined') {
       const keys = await caches.keys()
@@ -1011,7 +1015,13 @@ async function clearCache() {
     }
     const registrations = await navigator.serviceWorker?.getRegistrations?.()
     registrations?.forEach((registration) => registration.unregister())
-    notify('离线缓存已清空，刷新后重建', 'ok')
+    
+    // 清空全部本地持久化缓存、登录凭据和课表数据，并呼出登录门
+    clearAllLocalData()
+    notify('所有本地数据已清空，正在重置…', 'ok')
+    setTimeout(() => {
+      window.location.reload()
+    }, 500)
   } catch (error) {
     notify('清空失败', 'danger')
   }

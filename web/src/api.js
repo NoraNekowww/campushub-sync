@@ -11,8 +11,13 @@ const TOKEN_KEY = 'campushub.adminToken'
 function detectBase() {
   const explicit = import.meta.env.VITE_API_BASE
   if (explicit) return explicit.replace(/\/$/, '')
-  // 如果运行在本地 file:// 协议或者没有 origin 的原生容器中，API 地址回退到远程正式服务器
-  if (typeof window !== 'undefined' && (window.location.protocol === 'file:' || !window.location.host)) {
+  // 如果运行在 Android 原生离线虚拟域 (appassets.androidplatform.net)、本地 file:// 协议或无 host 环境下，API 必须指向远程后端
+  if (
+    typeof window !== 'undefined' &&
+    (window.location.protocol === 'file:' ||
+      window.location.host === 'appassets.androidplatform.net' ||
+      !window.location.host)
+  ) {
     return 'https://nzlab.online/schedule/api'
   }
   const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
@@ -104,6 +109,11 @@ async function request(path, { method = 'GET', body, headers = {}, raw = false }
   }
   if (raw) return response
   if (response.status === 204) return null
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) {
+    const text = await response.text()
+    throw new ApiError(`接口返回了非 JSON 内容 (${response.status}): ${text.slice(0, 100)}`, response.status)
+  }
   return response.json()
 }
 

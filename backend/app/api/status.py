@@ -28,18 +28,17 @@ _STARTED_AT = time.time()
 @router.get("/version", summary="Version check for in-app update notification")
 async def app_version() -> dict:
     return {
-        "version": "2.2.1",
-        "tag": "v2.2.1",
-        "title": "CampusHub Android v2.2.1",
+        "version": "2.2.2",
+        "tag": "v2.2.2",
+        "title": "CampusHub Android v2.2.2",
         "download_url": "https://nzlab.online/schedule/CampusHub.apk",
         "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
         "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
         "features": [
-            "解决离线无法进入问题：引入 Google 官方 WebViewAssetLoader 离线拦截器，100% 纯本地闪存直读，断网离线秒开",
-            "补全响应头 CORS 与 Cache-Control，杜绝本地离线静态代码校验失败",
-            "移除设置页无用的同步状态栏与微软残留，界面精简干练",
-            "新建日程移除全天模式，默认 DDL 截止时间设为 21:00",
-            "课表顶栏精简展示第几周，移除课程表时间轴横线"
+            "修复 API 路由：解决原生虚拟域下请求打到本地返回 HTML 导致 JSON 解析报错的问题",
+            "修复登录门展示：清空全部本地数据或未登录且无课表缓存时，立即自动唤起登录/注册界面",
+            "设置页新增「清空所有本地数据与缓存」，一键重置并返回登录状态",
+            "Google WebViewAssetLoader 离线秒开套件加持，断网环境零延迟加载"
         ]
     }
 

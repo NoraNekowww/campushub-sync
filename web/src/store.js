@@ -397,11 +397,21 @@ export async function fetchSession() {
   }
 }
 
-export const signInRequired = () =>
-  Boolean(state.accounts?.enabled) &&
-  !state.user &&
-  !hasToken() &&
-  (state.authRequired || state.forceAuth)
+export const signInRequired = () => {
+  // 如果开启了账号系统，且既没有已登录用户、也没有 ADMIN_TOKEN
+  const accountsEnabled = Boolean(state.accounts?.enabled)
+  const notLoggedIn = !state.user && !hasToken()
+  if (!accountsEnabled || !notLoggedIn) return false
+
+  // 1. 明确被要求认证（如请求返回 401/403 或用户主动点击登录门）
+  if (state.authRequired || state.forceAuth) return true
+
+  // 2. 本地完全没有课程/日程缓存数据（全新初次启动或已清空所有数据），直接呼出登录/注册页
+  const noLocalEvents = !state.events || state.events.length === 0
+  if (noLocalEvents) return true
+
+  return false
+}
 
 /** Show the login gate even though the timeline happens to be readable. */
 export function openAuthGate() {
@@ -674,18 +684,30 @@ export async function restoreEvent(id, title = '') {
   }
 }
 
+export function clearAllLocalData() {
+  try {
+    localStorage.clear()
+    sessionStorage.clear()
+  } catch (e) {}
+  state.events = []
+  state.total = 0
+  state.user = null
+  state.status = null
+  state.config = null
+  state.authRequired = true
+  state.forceAuth = true
+  state.error = ''
+}
+
 export async function logout() {
   try {
     await api.logout()
   } catch (error) {
     /* clearing a cookie we cannot reach is fine */
   }
-  // Drop this account's timeline from the offline cache before switching users.
+  // 彻底清除本地持久化缓存
+  clearAllLocalData()
   navigator.serviceWorker?.controller?.postMessage('clear-data-cache')
-  state.user = null
-  state.authRequired = false
-  state.forceAuth = false
-  state.error = ''
   notify('已退出登录', 'info')
   await bootstrap()
 }
