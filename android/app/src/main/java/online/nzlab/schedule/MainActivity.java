@@ -217,8 +217,8 @@ public class MainActivity extends AppCompatActivity {
             if (uri == null) return null;
             String path = uri.getPath();
 
-            // 如果是 API 请求，放行给网络
-            if (path != null && path.contains("/api/")) {
+            // 如果是 API 请求，绝对不拦截，放行给远程服务器网络！
+            if (path != null && (path.contains("/api/") || path.startsWith("api/"))) {
                 return null;
             }
 

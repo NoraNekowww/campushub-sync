@@ -311,6 +311,10 @@ async function submit() {
         })
       : await login(username.value, password.value)
 
+  if (!ok && !localError.value && !state.authError) {
+    localError.value = '登录请求未成功完成，请检查网络或稍后重试'
+  }
+
   // Keep the typed values when the attempt failed — retrying after a typo'd
   // invite code should not mean re-typing the password too. The captcha is the
   // exception: it is single-use, so swap in a new one.
