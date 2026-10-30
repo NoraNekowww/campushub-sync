@@ -11,6 +11,10 @@ const TOKEN_KEY = 'campushub.adminToken'
 function detectBase() {
   const explicit = import.meta.env.VITE_API_BASE
   if (explicit) return explicit.replace(/\/$/, '')
+  // 如果运行在本地 file:// 协议或者没有 origin 的原生容器中，API 地址回退到远程正式服务器
+  if (typeof window !== 'undefined' && (window.location.protocol === 'file:' || !window.location.host)) {
+    return 'https://nzlab.online/schedule/api'
+  }
   const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
   return `${base}/api`
 }

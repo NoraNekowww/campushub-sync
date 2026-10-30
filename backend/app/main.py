@@ -148,18 +148,18 @@ def create_app() -> FastAPI:
     @app.get("/api/version", summary="Version check for in-app update notification")
     async def app_version() -> dict:
         return {
-            "version": "2.1.9",
-            "tag": "v2.1.9",
-            "title": "CampusHub Android v2.1.9",
+            "version": "2.2.1",
+            "tag": "v2.2.1",
+            "title": "CampusHub Android v2.2.1",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
             "features": [
+                "解决离线无法进入问题：引入 Google 官方 WebViewAssetLoader 离线拦截器，100% 纯本地闪存直读，断网离线秒开",
+                "补全响应头 CORS 与 Cache-Control，杜绝本地离线静态代码校验失败",
                 "移除设置页无用的同步状态栏与微软残留，界面精简干练",
-                "新建日程彻底移除全天模式，默认 DDL 截止时间设为 21:00",
-                "课表顶栏精简化：去除非必要辅助文案与日期跨度，仅居中清晰展示「第几周」",
-                "彻底移除课程表时间网格背景横线，课表界面纯净清爽",
-                "首屏默认进入课程表视图，严格版本比较修复同版本提示"
+                "新建日程移除全天模式，默认 DDL 截止时间设为 21:00",
+                "课表顶栏精简展示第几周，移除课程表时间轴横线"
             ]
         }
 

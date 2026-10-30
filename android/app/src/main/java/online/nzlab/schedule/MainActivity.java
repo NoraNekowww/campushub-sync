@@ -23,19 +23,23 @@ import android.webkit.WebViewClient;
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import androidx.webkit.WebViewAssetLoader;
 
 import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "CampusHub";
-    private static final String APP_URL = "https://nzlab.online/schedule/";
+    private static final String APP_URL = "https://appassets.androidplatform.net/schedule/";
     private static final String PREF_NAME = "campushub_auth";
     private static final String KEY_ADMIN_TOKEN = "admin_token";
 
     private WebView webView;
     private SwipeRefreshLayout swipeRefresh;
     private SharedPreferences prefs;
+    private WebViewAssetLoader assetLoader;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -67,12 +71,53 @@ public class MainActivity extends AppCompatActivity {
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
+        settings.setAllowFileAccessFromFileURLs(true);
+        settings.setAllowUniversalAccessFromFileURLs(true);
         settings.setSupportZoom(false);
         settings.setDisplayZoomControls(false);
         settings.setUserAgentString(settings.getUserAgentString() + " CampusHubAndroid/1.0");
 
         // 注入原生桥接接口，用于本地凭据双重兜底
         webView.addJavascriptInterface(new AuthBridge(), "NativeAuthBridge");
+
+        // 1. 构建 Google 官方推荐的本地离线资源拦截器 WebViewAssetLoader
+        // 将真实物理路径 assets/web/ 映射到本地虚拟域名 https://appassets.androidplatform.net/schedule/
+        assetLoader = new WebViewAssetLoader.Builder()
+                .setDomain("appassets.androidplatform.net")
+                .addPathHandler("/schedule/", new WebViewAssetLoader.PathHandler() {
+                    @Override
+                    public WebResourceResponse handle(String path) {
+                        try {
+                            String assetPath = "web/" + (path.isEmpty() ? "index.html" : path);
+                            if (path.isEmpty() || path.equals("index.html")) {
+                                assetPath = "web/index.html";
+                            }
+                            String mime = assetPath.endsWith(".html") ? "text/html" :
+                                         assetPath.endsWith(".js") ? "application/javascript" :
+                                         assetPath.endsWith(".css") ? "text/css" :
+                                         assetPath.endsWith(".png") ? "image/png" :
+                                         assetPath.endsWith(".json") || assetPath.endsWith(".webmanifest") ? "application/json" :
+                                         "application/octet-stream";
+
+                            InputStream is = getAssets().open(assetPath);
+                            Map<String, String> headers = new HashMap<>();
+                            headers.put("Access-Control-Allow-Origin", "*");
+                            headers.put("Cache-Control", "no-cache");
+                            return new WebResourceResponse(mime, "UTF-8", 200, "OK", headers, is);
+                        } catch (Exception e) {
+                            // 针对前端 SPA 路由跳转直接兜底本地 index.html
+                            try {
+                                InputStream is = getAssets().open("web/index.html");
+                                Map<String, String> headers = new HashMap<>();
+                                headers.put("Access-Control-Allow-Origin", "*");
+                                return new WebResourceResponse("text/html", "UTF-8", 200, "OK", headers, is);
+                            } catch (Exception ex) {
+                                return null;
+                            }
+                        }
+                    }
+                })
+                .build();
 
         // 极速秒开架构：静态资源本地 0 延迟秒开拦截，API 走网络
         webView.setWebViewClient(new FastLocalWebViewClient());
@@ -140,7 +185,30 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-            Uri uri = request.getUrl();
+            // 优先交给 Google 官方标准 WebViewAssetLoader 处理（完美解决 ES Module、CORS 与离线加载）
+            if (assetLoader != null) {
+                WebResourceResponse response = assetLoader.shouldInterceptRequest(request.getUrl());
+                if (response != null) {
+                    return response;
+                }
+            }
+            return handleIntercept(request.getUrl());
+        }
+
+        @Override
+        public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
+            Uri uri = Uri.parse(url);
+            if (assetLoader != null) {
+                WebResourceResponse response = assetLoader.shouldInterceptRequest(uri);
+                if (response != null) {
+                    return response;
+                }
+            }
+            return handleIntercept(uri);
+        }
+
+        private WebResourceResponse handleIntercept(Uri uri) {
+            if (uri == null) return null;
             String path = uri.getPath();
 
             // 如果是 API 请求，放行给网络
@@ -181,6 +249,12 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
+            // 离线终极兜底：针对 html 页面导航请求，一律返回本地打包好的 index.html
+            String pathStr = path != null ? path : "";
+            if (pathStr.isEmpty() || pathStr.endsWith("/") || pathStr.endsWith(".html") || !pathStr.contains(".")) {
+                return getAssetResponse("web/index.html", "text/html");
+            }
+
             return null;
         }
 
@@ -188,9 +262,20 @@ public class MainActivity extends AppCompatActivity {
             try {
                 AssetManager am = getAssets();
                 InputStream is = am.open(assetPath);
-                return new WebResourceResponse(mimeType, "UTF-8", is);
+                Map<String, String> headers = new HashMap<>();
+                headers.put("Access-Control-Allow-Origin", "*");
+                headers.put("Cache-Control", "no-cache");
+                return new WebResourceResponse(mimeType, "UTF-8", 200, "OK", headers, is);
             } catch (Exception e) {
                 return null;
+            }
+        }
+
+        @Override
+        public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+            // 当处于断网/离线状态且主文档加载失败时，强制以本地 assets 闪存兜底渲染，杜绝白屏/恐龙页面
+            if (failingUrl != null && !failingUrl.contains("/api/")) {
+                view.loadUrl("file:///android_asset/web/index.html");
             }
         }
 
