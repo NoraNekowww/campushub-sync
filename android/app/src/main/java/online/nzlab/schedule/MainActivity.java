@@ -32,7 +32,7 @@ import java.util.Map;
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "CampusHub";
-    private static final String APP_URL = "https://appassets.androidplatform.net/schedule/";
+    private static final String APP_URL = "https://nzlab.online/schedule/";
     private static final String PREF_NAME = "campushub_auth";
     private static final String KEY_ADMIN_TOKEN = "admin_token";
 
@@ -81,12 +81,16 @@ public class MainActivity extends AppCompatActivity {
         webView.addJavascriptInterface(new AuthBridge(), "NativeAuthBridge");
 
         // 1. 构建 Google 官方推荐的本地离线资源拦截器 WebViewAssetLoader
-        // 将真实物理路径 assets/web/ 映射到本地虚拟域名 https://appassets.androidplatform.net/schedule/
+        // 直接拦截真实域名 https://nzlab.online/schedule/，同源环境 Cookie/Session 100% 自动互通！
         assetLoader = new WebViewAssetLoader.Builder()
-                .setDomain("appassets.androidplatform.net")
+                .setDomain("nzlab.online")
                 .addPathHandler("/schedule/", new WebViewAssetLoader.PathHandler() {
                     @Override
                     public WebResourceResponse handle(String path) {
+                        // 绝对不能拦截 API 请求，API 必须穿透给后端网络！
+                        if (path != null && (path.startsWith("api/") || path.contains("/api/"))) {
+                            return null;
+                        }
                         try {
                             String assetPath = "web/" + (path.isEmpty() ? "index.html" : path);
                             if (path.isEmpty() || path.equals("index.html")) {

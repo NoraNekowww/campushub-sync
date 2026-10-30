@@ -11,7 +11,7 @@ const TOKEN_KEY = 'campushub.adminToken'
 function detectBase() {
   const explicit = import.meta.env.VITE_API_BASE
   if (explicit) return explicit.replace(/\/$/, '')
-  // 如果运行在 Android 原生离线虚拟域 (appassets.androidplatform.net)、本地 file:// 协议或无 host 环境下，API 必须指向远程后端
+  // 如果运行在本地 file:// 协议或者没有 origin 的特殊容器中，API 地址回退到远程正式服务器
   if (
     typeof window !== 'undefined' &&
     (window.location.protocol === 'file:' ||
