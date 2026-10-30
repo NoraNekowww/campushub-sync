@@ -28,15 +28,16 @@ _STARTED_AT = time.time()
 @router.get("/version", summary="Version check for in-app update notification")
 async def app_version() -> dict:
     return {
-        "version": "2.2.4",
-        "tag": "v2.2.4",
-        "title": "CampusHub Android v2.2.4",
+        "version": "2.2.5",
+        "tag": "v2.2.5",
+        "title": "CampusHub Android v2.2.5",
         "download_url": "https://nzlab.online/schedule/CampusHub.apk",
         "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
         "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
         "features": [
             "解决移动端登录失败问题：引入 X-Session-Token 双通道鉴权，Cookie 拦截时仍可秒登成功",
             "修复网络失败捕获：当移动端无网或后端超时抛出可读中文提示，杜绝未捕获异常",
+            "修复未认证状态识别：默认启用账号模式与登录门兜底，清空数据后百分之百唤出登录界面",
             "开启 WebView 远程调试端口，优化同源 Session 写入流程",
             "保留本地离线 0ms 秒开架构，断网也能看课表"
         ]

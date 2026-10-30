@@ -53,7 +53,7 @@ export const state = reactive({
   /* accounts (see accounts.py): the session cookie is HttpOnly, so the app
      learns who it is by asking /api/auth/session, never by reading a cookie. */
   user: null,
-  accounts: null,
+  accounts: { enabled: true, registration_open: true, invite_required: false, captcha_required: false, password_min_length: 6 },
   accountsReady: false,
   viewerAdmin: false,
   authBusy: false,
@@ -386,13 +386,13 @@ export async function fetchSession() {
   try {
     const payload = await api.session()
     state.user = payload.user || null
-    state.accounts = payload.accounts || null
+    state.accounts = payload.accounts || state.accounts || { enabled: true }
     state.accountsReady = true
     saveUserCache(state.user)
     return state.user
   } catch (error) {
     state.accountsReady = true
-    state.accounts = state.accounts || { enabled: false }
+    state.accounts = state.accounts || { enabled: true }
     return null
   }
 }
