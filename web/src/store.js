@@ -398,15 +398,15 @@ export async function fetchSession() {
 }
 
 export const signInRequired = () => {
-  // 如果开启了账号系统，且既没有已登录用户、也没有 ADMIN_TOKEN
+  // 1. 如果用户主动点击了登录、或收到了明确的 401/403 认证拒绝
+  if (state.authRequired || state.forceAuth) return true
+
+  // 2. 如果开启了账号系统，且当前本地既没有登录用户、也没有 ADMIN_TOKEN
   const accountsEnabled = Boolean(state.accounts?.enabled)
   const notLoggedIn = !state.user && !hasToken()
   if (!accountsEnabled || !notLoggedIn) return false
 
-  // 1. 明确被要求认证（如请求返回 401/403 或用户主动点击登录门）
-  if (state.authRequired || state.forceAuth) return true
-
-  // 2. 本地完全没有课程/日程缓存数据（全新初次启动或已清空所有数据），直接呼出登录/注册页
+  // 3. 若处于未登录状态且本地没有任何课程/日程数据（初次安装或数据已清空），必须弹出登录界面
   const noLocalEvents = !state.events || state.events.length === 0
   if (noLocalEvents) return true
 

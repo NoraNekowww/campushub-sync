@@ -28,18 +28,18 @@ _STARTED_AT = time.time()
 @router.get("/version", summary="Version check for in-app update notification")
 async def app_version() -> dict:
     return {
-        "version": "2.2.6",
-        "tag": "v2.2.6",
-        "title": "CampusHub Android v2.2.6",
+        "version": "2.2.7",
+        "tag": "v2.2.7",
+        "title": "CampusHub Android v2.2.7",
         "download_url": "https://nzlab.online/schedule/CampusHub.apk",
         "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
         "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
         "features": [
-            "解决移动端登录失败问题：引入 X-Session-Token 双通道鉴权与错误兜底，Cookie 拦截时仍可秒登成功",
-            "修复网络失败捕获：当移动端无网或后端超时抛出可读中文提示，杜绝未捕获异常",
-            "修复未认证状态识别：默认启用账号模式与登录门兜底，清空数据后百分之百唤出登录界面",
-            "开启 WebView 远程调试端口，优化同源 Session 写入流程",
-            "保留本地离线 0ms 秒开架构，断网也能看课表"
+            "彻底解决移动端登录失败：X-Session-Token 与 Cookie 双通道无缝鉴权，登录即时生效并同步本地缓存",
+            "明确排除 /schedule/api/ 路径的本地静态拦截，确保移动端 API 请求 100% 穿透到达服务器",
+            "修复登录门展示逻辑：当用户未登录且本地无课表缓存时，立即自动唤起登录/注册门",
+            "设置页增强「清空所有本地数据与缓存」，一键重置并返回登录状态",
+            "Google WebViewAssetLoader 离线秒开套件加持，断网环境零延迟加载"
         ]
     }
 
