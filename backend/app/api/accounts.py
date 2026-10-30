@@ -212,7 +212,12 @@ def login(
     accounts.throttle.reset(payload.username, ip)
     max_age = _set_session_cookie(response, user)
     log.info("login ok: %s from %s", user.username, ip)
-    return {"ok": True, "user": accounts.user_payload(user), "max_age": max_age}
+    return {
+        "ok": True,
+        "token": token,
+        "user": accounts.user_payload(user),
+        "max_age": max_age,
+    }
 
 
 @router.post("/logout", summary="Sign out (clears the cookie)")

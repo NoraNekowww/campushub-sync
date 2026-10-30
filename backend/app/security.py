@@ -50,11 +50,13 @@ def _bearer(authorization: Optional[str]) -> Optional[str]:
 
 
 def session_user(request: Request, session: Optional[Session] = None) -> Optional[User]:
-    """Resolve the account cookie on *request* (``None`` when absent/invalid)."""
+    """Resolve the account cookie or X-Session-Token on *request* (``None`` when absent/invalid)."""
     settings = get_settings()
     if not settings.accounts_enabled:
         return None
     token = request.cookies.get(settings.session_cookie_name)
+    if not token:
+        token = request.headers.get("X-Session-Token") or request.headers.get("x-session-token")
     if not token:
         return None
     try:

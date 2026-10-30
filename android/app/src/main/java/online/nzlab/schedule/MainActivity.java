@@ -78,6 +78,8 @@ public class MainActivity extends AppCompatActivity {
         settings.setUserAgentString(settings.getUserAgentString() + " CampusHubAndroid/1.0");
 
         // 注入原生桥接接口，用于本地凭据双重兜底
+        // 允许 WebView 远程调试（Chrome inspect）
+        WebView.setWebContentsDebuggingEnabled(true);
         webView.addJavascriptInterface(new AuthBridge(), "NativeAuthBridge");
 
         // 1. 构建 Google 官方推荐的本地离线资源拦截器 WebViewAssetLoader

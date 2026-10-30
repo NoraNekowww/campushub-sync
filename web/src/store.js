@@ -3,7 +3,7 @@
  * app state is small: one event list, one status blob, a few UI flags.
  */
 import { reactive } from 'vue'
-import { api, ApiError, getToken, isAuthError, setToken } from './api'
+import { api, ApiError, getToken, isAuthError, setSessionToken, setToken } from './api'
 import { dayKey, isEventEnded, todayKey } from './utils/datetime'
 import { browserClasstable, browserLogin, TwtError } from './twt-sign'
 
@@ -431,7 +431,12 @@ async function authAction(run, successText) {
   try {
     const payload = await run()
     state.user = payload.user || null
+    if (payload.token) {
+      setSessionToken(payload.token)
+    }
     state.authRequired = false
+    state.forceAuth = false
+    saveUserCache(state.user)
     state.authNotice = successText || payload.message || ''
     notify(state.authNotice, 'ok')
     await bootstrap()
@@ -689,6 +694,7 @@ export function clearAllLocalData() {
     localStorage.clear()
     sessionStorage.clear()
   } catch (e) {}
+  setSessionToken('')
   state.events = []
   state.total = 0
   state.user = null

@@ -7,6 +7,24 @@
  * so no code path needs to know which one is in play.
  */
 const TOKEN_KEY = 'campushub.adminToken'
+const USER_SESSION_TOKEN_KEY = 'campushub.userSessionToken'
+
+export function getSessionToken() {
+  try {
+    return localStorage.getItem(USER_SESSION_TOKEN_KEY) || ''
+  } catch (error) {
+    return ''
+  }
+}
+
+export function setSessionToken(value) {
+  try {
+    if (value) localStorage.setItem(USER_SESSION_TOKEN_KEY, value)
+    else localStorage.removeItem(USER_SESSION_TOKEN_KEY)
+  } catch (error) {
+    /* private mode */
+  }
+}
 
 function detectBase() {
   const explicit = import.meta.env.VITE_API_BASE
@@ -63,20 +81,28 @@ export const isAuthError = (error) =>
 
 async function request(path, { method = 'GET', body, headers = {}, raw = false } = {}) {
   const token = getToken()
+  const sessionToken = getSessionToken()
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData
-  const response = await fetch(`${API_BASE}${path}`, {
-    method,
-    credentials: 'include',
-    headers: {
-      ...(body && !isForm ? { 'Content-Type': 'application/json' } : {}),
-      // One field, two roles: the admin token drives reads *and* writes, the
-      // subscribe token only unlocks reads (see backend require_read). Sending
-      // both headers means a read-only device just works.
-      ...(token ? { 'X-Admin-Token': token, 'X-Subscribe-Token': token } : {}),
-      ...headers,
-    },
-    body: body ? (isForm ? body : JSON.stringify(body)) : undefined,
-  })
+  let response
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method,
+      credentials: 'include',
+      headers: {
+        ...(body && !isForm ? { 'Content-Type': 'application/json' } : {}),
+        // 携带登录会话 Token，解决 Android 原生环境拦截导致的 Cookie 隔离问题
+        ...(sessionToken ? { 'X-Session-Token': sessionToken } : {}),
+        // One field, two roles: the admin token drives reads *and* writes, the
+        // subscribe token only unlocks reads (see backend require_read). Sending
+        // both headers means a read-only device just works.
+        ...(token ? { 'X-Admin-Token': token, 'X-Subscribe-Token': token } : {}),
+        ...headers,
+      },
+      body: body ? (isForm ? body : JSON.stringify(body)) : undefined,
+    })
+  } catch (err) {
+    throw new ApiError(`网络连接失败：${err.message || '请检查网络或后端状态'}`, 0)
+  }
 
   /**
    * FastAPI's `detail` is either a plain string or a richer object/dict — the

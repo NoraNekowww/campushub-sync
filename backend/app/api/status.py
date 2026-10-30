@@ -28,18 +28,17 @@ _STARTED_AT = time.time()
 @router.get("/version", summary="Version check for in-app update notification")
 async def app_version() -> dict:
     return {
-        "version": "2.2.3",
-        "tag": "v2.2.3",
-        "title": "CampusHub Android v2.2.3",
+        "version": "2.2.4",
+        "tag": "v2.2.4",
+        "title": "CampusHub Android v2.2.4",
         "download_url": "https://nzlab.online/schedule/CampusHub.apk",
         "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
         "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
         "features": [
-            "解决登录态与跨域问题：直接以 nzlab.online 同源域拦截静态 assets，Cookie 与 Session 原生互通，登录 100% 正常",
-            "明确排除 /schedule/api/ 路径的本地拦截，防止 API 请求被误当静态页面拦截返回 HTML",
-            "修复登录门展示：清空全部本地数据或未登录且无课表缓存时，立即自动唤起登录/注册界面",
-            "设置页新增「清空所有本地数据与缓存」，一键重置并返回登录状态",
-            "Google WebViewAssetLoader 离线秒开套件加持，断网环境零延迟加载"
+            "解决移动端登录失败问题：引入 X-Session-Token 双通道鉴权，Cookie 拦截时仍可秒登成功",
+            "修复网络失败捕获：当移动端无网或后端超时抛出可读中文提示，杜绝未捕获异常",
+            "开启 WebView 远程调试端口，优化同源 Session 写入流程",
+            "保留本地离线 0ms 秒开架构，断网也能看课表"
         ]
     }
 
