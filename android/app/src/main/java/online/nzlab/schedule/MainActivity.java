@@ -324,6 +324,15 @@ public class MainActivity extends AppCompatActivity {
                 prefs.edit().putString(KEY_ADMIN_TOKEN, token).apply();
             }
         }
+
+        @JavascriptInterface
+        public String getAppVersion() {
+            try {
+                return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            } catch (Exception e) {
+                return "2.1.8";
+            }
+        }
     }
 
     @Override

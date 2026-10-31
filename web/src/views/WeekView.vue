@@ -475,10 +475,10 @@ function lineStyle(item) {
   }
 }
 
-async function loadWeek() {
-  // 如果本地已经有持久化课表缓存，且属于移动端环境，绝不亮起加载态也不阻塞界面
+async function loadWeek(force = false) {
+  // 如果本地已经有持久化课表缓存，且属于移动端环境，且非主动强制刷新，优先保留已有数据
   const isMobile = isMobileNativeApp()
-  if (isMobile && events.value && events.value.length > 0) {
+  if (!force && isMobile && events.value && events.value.length > 0) {
     return
   }
 
@@ -503,7 +503,30 @@ async function loadWeek() {
   }
 }
 
-watch(() => state.lastUpdated, loadWeek)
+/**
+ * 核心联动同步：
+ * 1. 当用户在日程页创建、修改、删除或划掉日程时，立刻在本地同步响应式变更到课表；
+ * 2. 避免因为 loadWeek() 中 isMobile 缓存阻断导致周课表数据迟迟不刷新的问题。
+ */
+watch(
+  () => state.events,
+  (newGlobalEvents) => {
+    if (Array.isArray(newGlobalEvents) && newGlobalEvents.length > 0) {
+      const globalIds = new Set(newGlobalEvents.map((e) => e.id))
+      // 保留周视图原本包含的远期课程，并将全局变更的日程/待办实时替换合并
+      const currentList = Array.isArray(events.value) ? events.value : []
+      const merged = [
+        ...newGlobalEvents,
+        ...currentList.filter((item) => !globalIds.has(item.id)),
+      ]
+      events.value = merged
+      saveWeekCache(events.value)
+    }
+  },
+  { deep: true },
+)
+
+watch(() => state.lastUpdated, () => loadWeek(true))
 onMounted(() => {
   loadWeek()
   nowTimer = setInterval(() => {

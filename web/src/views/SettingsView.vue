@@ -342,7 +342,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.3.1 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.3.2 · 原生极速' }}
         </span>
       </header>
 
@@ -508,7 +508,7 @@
           <Trash2 :size="13" /> 清空所有本地数据与缓存
         </button>
         <span class="text-[11px] text-slate-400">
-          {{ cfg.app || 'CampusHub Sync' }} v{{ cfg.version || '—' }}
+          {{ isAndroidClient ? 'CampusHub Android' : (cfg.app || 'CampusHub Sync') }} v{{ clientAppVersion }}
           <span v-if="cfg.demo_mode"> · demo</span>
           <span v-if="lastUpdatedLabel"> · 数据更新于 {{ lastUpdatedLabel }}</span>
         </span>
@@ -599,6 +599,17 @@ import {
 } from '../store'
 
 const isAndroid = computed(() => typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || ''))
+/** 读取客户端实际运行版本号（优先从 Android 原生 NativeAuthBridge 获取，若未接入则显示静态配置版本） */
+const clientAppVersion = computed(() => {
+  if (typeof window !== 'undefined' && window.NativeAuthBridge?.getAppVersion) {
+    try {
+      const v = window.NativeAuthBridge.getAppVersion()
+      if (v) return String(v).trim().replace(/^v/i, '')
+    } catch (e) {}
+  }
+  return '2.3.2'
+})
+
 const isAndroidClient = computed(() => {
   if (typeof window === 'undefined') return false
   return Boolean(
@@ -972,7 +983,7 @@ async function checkAppUpdate(manual = false) {
       return
     }
 
-    const current = '2.3.1'
+    const current = '2.3.2'
     const parse = (v) => String(v).replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0)
     const l = parse(latestVer)
     const c = parse(current)

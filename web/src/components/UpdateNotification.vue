@@ -135,7 +135,7 @@ import { computed, onMounted, ref } from 'vue'
 import { BellOff, Download, Rocket, Sparkles, X } from 'lucide-vue-next'
 import { API_BASE, api } from '../api'
 
-const CURRENT_VERSION = '2.3.1'
+const CURRENT_VERSION = '2.3.2'
 const DISMISSED_KEY = 'campushub.dismissed_update'
 const POPUP_SEEN_KEY = 'campushub.popup_seen_version'
 
@@ -148,9 +148,22 @@ const downloadUrl = computed(() => {
   return 'https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk'
 })
 
+/** 获取当前实际客户端的真实版本号：优先读取 Android 原生 App 注入的版本，未获取时回退到静态声明 */
+function getActiveVersion() {
+  if (typeof window !== 'undefined' && window.NativeAuthBridge?.getAppVersion) {
+    try {
+      const v = window.NativeAuthBridge.getAppVersion()
+      if (v) return String(v).trim().replace(/^v/i, '')
+    } catch (e) {}
+  }
+  return CURRENT_VERSION
+}
+
+const currentDisplayVersion = computed(() => getActiveVersion())
+
 const isNew = computed(() => {
   if (!latestRelease.value?.version) return false
-  return isNewer(latestRelease.value.version, CURRENT_VERSION)
+  return isNewer(latestRelease.value.version, getActiveVersion())
 })
 
 /**
