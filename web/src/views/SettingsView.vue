@@ -306,7 +306,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.4.2 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.4.3 · 原生极速' }}
         </span>
       </header>
 
@@ -707,23 +707,23 @@
               <button
                 type="button"
                 class="chip border-slate-200 bg-white hover:border-brand-400 text-[10px] py-0.5 dark:border-slate-700 dark:bg-slate-800"
-                @click="applyBgPreset('anime')"
+                @click="applyBgPreset('mountain')"
               >
-                甘城二次元平涂
+                雪山与极光
               </button>
               <button
                 type="button"
                 class="chip border-slate-200 bg-white hover:border-brand-400 text-[10px] py-0.5 dark:border-slate-700 dark:bg-slate-800"
-                @click="applyBgPreset('nature')"
+                @click="applyBgPreset('sea')"
               >
-                自然晨曦与深空
+                山海晨曦
               </button>
               <button
                 type="button"
                 class="chip border-slate-200 bg-white hover:border-brand-400 text-[10px] py-0.5 dark:border-slate-700 dark:bg-slate-800"
-                @click="applyBgPreset('fluid')"
+                @click="applyBgPreset('minimal')"
               >
-                极简流体波纹
+                极简微光
               </button>
               <button
                 type="button"
@@ -853,7 +853,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.4.2'
+  return '2.4.3'
 })
 
 const isAndroidClient = computed(() => {
@@ -1098,21 +1098,21 @@ function toggleBgEnabled() {
 
 function applyBgPreset(kind) {
   bgForm.enabled = true
-  if (kind === 'anime') {
-    bgForm.lightUrl = 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=1600&q=80'
-    bgForm.darkUrl = 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1600&q=80'
-    bgForm.opacity = 40
-    bgForm.blur = 0
-  } else if (kind === 'nature') {
-    bgForm.lightUrl = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1600&q=80'
-    bgForm.darkUrl = 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=1600&q=80'
+  if (kind === 'mountain') {
+    bgForm.lightUrl = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1920&q=85'
+    bgForm.darkUrl = 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=1920&q=85'
     bgForm.opacity = 35
-    bgForm.blur = 2
-  } else if (kind === 'fluid') {
-    bgForm.lightUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1600&q=80'
-    bgForm.darkUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1600&q=80'
+    bgForm.blur = 0
+  } else if (kind === 'sea') {
+    bgForm.lightUrl = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=85'
+    bgForm.darkUrl = 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=1920&q=85'
     bgForm.opacity = 30
-    bgForm.blur = 4
+    bgForm.blur = 1
+  } else if (kind === 'minimal') {
+    bgForm.lightUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1920&q=85'
+    bgForm.darkUrl = 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=1920&q=85'
+    bgForm.opacity = 25
+    bgForm.blur = 2
   }
   updateBgConfig()
   notify('已应用预设图床壁纸', 'ok')

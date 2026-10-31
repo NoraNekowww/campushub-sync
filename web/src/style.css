@@ -187,7 +187,8 @@ html.dark.frosted-glass-active nav {
 }
 
 /* 物理亚克力悬浮晶体卡片 */
-html.frosted-glass-active .card {
+html.frosted-glass-active .card,
+html.frosted-glass-active article[data-testid="event-card"] {
   background-color: var(--phys-glass-bg-light) !important;
   backdrop-filter: var(--phys-glass-blur) !important;
   -webkit-backdrop-filter: var(--phys-glass-blur) !important;
@@ -195,10 +196,43 @@ html.frosted-glass-active .card {
   box-shadow: var(--phys-glass-shadow-light) !important;
   transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
-html.dark.frosted-glass-active .card {
+html.dark.frosted-glass-active .card,
+html.dark.frosted-glass-active article[data-testid="event-card"] {
   background-color: var(--phys-glass-bg-dark) !important;
   border: 1px solid var(--phys-glass-border-dark) !important;
   box-shadow: var(--phys-glass-shadow-dark) !important;
+}
+
+/* 确保日程滑动父级容器背景透明，不阻碍卡片磨砂透光 */
+html.frosted-glass-active .swipe-row,
+html.frosted-glass-active .swipe-pane {
+  background-color: transparent !important;
+}
+
+/* 周课表课程卡片 (class-block) 物理磨砂晶莹质感 */
+html.frosted-glass-active [data-testid="class-block"] {
+  backdrop-filter: blur(18px) saturate(190%) contrast(100%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(190%) contrast(100%) !important;
+  background-color: rgba(219, 234, 254, 0.62) !important;
+  border-color: rgba(147, 197, 253, 0.7) !important;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
+    0 4px 12px -2px rgba(0, 0, 0, 0.04) !important;
+}
+html.frosted-glass-active [data-testid="class-block"].border-amber-300\/80 {
+  background-color: rgba(254, 243, 199, 0.65) !important;
+  border-color: rgba(252, 211, 77, 0.7) !important;
+}
+html.dark.frosted-glass-active [data-testid="class-block"] {
+  background-color: rgba(30, 58, 138, 0.38) !important;
+  border-color: rgba(96, 165, 250, 0.3) !important;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.15),
+    0 4px 14px -2px rgba(0, 0, 0, 0.35) !important;
+}
+html.dark.frosted-glass-active [data-testid="class-block"].border-amber-300\/80 {
+  background-color: rgba(120, 53, 15, 0.35) !important;
+  border-color: rgba(251, 191, 36, 0.3) !important;
 }
 
 /* 粘滞表头与分组粘滞头清澈穿透 */

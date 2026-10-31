@@ -23,8 +23,9 @@ const LOOKAHEAD_DAYS = 60
 function readInitialBackgroundConfig() {
   const defaults = {
     enabled: false,
-    lightUrl: '',
-    darkUrl: '',
+    // 预置默认高清壁纸：浅色清爽雪山微霭，深色深邃静谧星空极光（正常高质感风景图床）
+    lightUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1920&q=85',
+    darkUrl: 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=1920&q=85',
     opacity: 35, // 0 - 100%
     blur: 0,    // 0 - 20px
   }
