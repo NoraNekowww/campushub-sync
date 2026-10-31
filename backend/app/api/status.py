@@ -28,18 +28,18 @@ _STARTED_AT = time.time()
 @router.get("/version", summary="Version check for in-app update notification")
 async def app_version() -> dict:
     return {
-        "version": "2.2.7",
-        "tag": "v2.2.7",
-        "title": "CampusHub Android v2.2.7",
+        "version": "2.2.8",
+        "tag": "v2.2.8",
+        "title": "CampusHub Android v2.2.8",
         "download_url": "https://nzlab.online/schedule/CampusHub.apk",
         "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
         "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
         "features": [
-            "彻底解决移动端登录失败：X-Session-Token 与 Cookie 双通道无缝鉴权，登录即时生效并同步本地缓存",
-            "明确排除 /schedule/api/ 路径的本地静态拦截，确保移动端 API 请求 100% 穿透到达服务器",
-            "修复登录门展示逻辑：当用户未登录且本地无课表缓存时，立即自动唤起登录/注册门",
-            "设置页增强「清空所有本地数据与缓存」，一键重置并返回登录状态",
-            "Google WebViewAssetLoader 离线秒开套件加持，断网环境零延迟加载"
+            "解决移动端登录失败：客户端环境 API 强制直连远程绝对 HTTPS 地址，杜绝相对路径拦截阻断",
+            "精准报错提示：区分用户名/密码错误、网络故障与非 JSON 返回，不再显示模糊的「操作失败」",
+            "明确图形验证码规则：系统仅在【注册】时需要图形验证码，【登录】只需输入用户名和密码",
+            "X-Session-Token 与 Cookie 双通道无缝鉴权，登录即时生效并写入闪存",
+            "离线秒开架构保持，断网零延迟加载课表"
         ]
     }
 

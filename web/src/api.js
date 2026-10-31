@@ -29,10 +29,13 @@ export function setSessionToken(value) {
 function detectBase() {
   const explicit = import.meta.env.VITE_API_BASE
   if (explicit) return explicit.replace(/\/$/, '')
-  // 如果运行在本地 file:// 协议或者没有 origin 的特殊容器中，API 地址回退到远程正式服务器
+  // 如果运行在 Android 原生客户端壳中（无论本地虚拟域还是同源拦截），API 必须严格走绝对 HTTPS 远程后端地址
   if (
     typeof window !== 'undefined' &&
-    (window.location.protocol === 'file:' ||
+    (window.NativeAuthBridge ||
+      window.__CAMPUSHUB_CLIENT__ ||
+      /CampusHubAndroid/i.test(navigator.userAgent || '') ||
+      window.location.protocol === 'file:' ||
       window.location.host === 'appassets.androidplatform.net' ||
       !window.location.host)
   ) {
@@ -113,25 +116,32 @@ async function request(path, { method = 'GET', body, headers = {}, raw = false }
     let message = fallback
     let structured = null
     try {
-      const payload = await response.json()
-      structured = payload?.detail ?? null
-      if (typeof structured === 'string') message = structured
-      else if (Array.isArray(structured)) {
-        message = structured.map((item) => item?.msg || JSON.stringify(item)).join('；')
-      } else if (structured && typeof structured === 'object') {
-        message = structured.message || structured.detail || JSON.stringify(structured)
-      } else if (structured != null) message = String(structured)
+      const contentType = response.headers.get('content-type') || ''
+      if (contentType.includes('application/json')) {
+        const payload = await response.json()
+        structured = payload?.detail ?? null
+        if (typeof structured === 'string') message = structured
+        else if (Array.isArray(structured)) {
+          message = structured.map((item) => item?.msg || JSON.stringify(item)).join('；')
+        } else if (structured && typeof structured === 'object') {
+          message = structured.message || structured.detail || JSON.stringify(structured)
+        } else if (structured != null) message = String(structured)
+      } else {
+        const text = await response.text()
+        if (text && text.length < 200) message = text
+      }
     } catch (error) {
       /* keep the fallback text */
     }
     return new ApiError(message, response.status, structured)
   }
 
-  if (response.status === 401 || response.status === 403) {
-    throw await readError('需要登录或访问令牌')
-  }
   if (!response.ok) {
-    throw await readError(response.statusText)
+    throw await readError(
+      response.status === 401 || response.status === 403
+        ? '账号或密码不正确'
+        : `请求失败 (${response.status})`
+    )
   }
   if (raw) return response
   if (response.status === 204) return null

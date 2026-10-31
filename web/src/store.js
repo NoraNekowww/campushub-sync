@@ -53,7 +53,7 @@ export const state = reactive({
   /* accounts (see accounts.py): the session cookie is HttpOnly, so the app
      learns who it is by asking /api/auth/session, never by reading a cookie. */
   user: null,
-  accounts: { enabled: true, registration_open: true, invite_required: false, captcha_required: false, password_min_length: 6 },
+  accounts: { enabled: true, registration_open: true, invite_required: false, captcha_required: true, password_min_length: 8 },
   accountsReady: false,
   viewerAdmin: false,
   authBusy: false,
