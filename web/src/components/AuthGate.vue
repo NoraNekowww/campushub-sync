@@ -160,31 +160,6 @@
         第一个注册的账号将成为管理员
       </p>
     </form>
-
-    <button
-      type="button"
-      data-testid="auth-token-link"
-      class="text-xs text-slate-500 underline dark:text-slate-400"
-      @click="showToken = !showToken"
-    >
-      我有访问令牌
-    </button>
-
-    <form v-if="showToken" class="w-full max-w-sm" @submit.prevent="useToken">
-      <input
-        v-model="tokenInput"
-        data-testid="auth-token"
-        class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-        placeholder="粘贴订阅链接里的 token"
-      />
-      <button
-        type="submit"
-        data-testid="auth-token-submit"
-        class="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm dark:border-slate-700"
-      >
-        以只读模式进入
-      </button>
-    </form>
   </div>
 </template>
 

@@ -4,7 +4,7 @@
 
     <template v-else>
       <UpdateNotification />
-      <TokenBanner v-if="state.authRequired" />
+      <!-- 已全面采用账号体系与会话管理，取消全局 TokenBanner 阻断横幅 -->
 
       <AppHeader />
 
@@ -54,7 +54,7 @@ import AppHeader from './components/AppHeader.vue'
 import AuthGate from './components/AuthGate.vue'
 import BottomNav from './components/BottomNav.vue'
 import FloatingAdd from './components/FloatingAdd.vue'
-import TokenBanner from './components/TokenBanner.vue'
+// TokenBanner 已停用，全局统一由 AuthGate 与 Session 处理
 import UpdateNotification from './components/UpdateNotification.vue'
 import AgendaView from './views/AgendaView.vue'
 import EventEditor from './components/EventEditor.vue'

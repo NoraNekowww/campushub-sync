@@ -8,6 +8,7 @@ import { dayKey, isEventEnded, todayKey } from './utils/datetime'
 import { browserClasstable, browserLogin, TwtError } from './twt-sign'
 
 const THEME_KEY = 'campushub.theme'
+const GRID_STYLE_KEY = 'campushub.week_grid_style'
 const EVENTS_CACHE_KEY = 'campushub.events_cache.v1'
 const WEEK_CACHE_KEY = 'campushub.week_cache.v1'
 const USER_CACHE_KEY = 'campushub.user_cache.v1'
@@ -75,6 +76,14 @@ export const state = reactive({
   config: null,
   toast: null,
   theme: 'auto',
+  /* 课表底色模式：'grid'（默认网格）或 'blank'（空白底） */
+  weekGridStyle: (function () {
+    try {
+      return localStorage.getItem('campushub.week_grid_style') || 'grid'
+    } catch (e) {
+      return 'grid'
+    }
+  })(),
   /* accounts (see accounts.py): the session cookie is HttpOnly, so the app
      learns who it is by asking /api/auth/session, never by reading a cookie. */
   user: readInitialUser(),
@@ -145,6 +154,16 @@ export function setTheme(mode) {
     /* ignore */
   }
   applyTheme(mode)
+}
+
+export function setWeekGridStyle(style) {
+  const s = style === 'blank' ? 'blank' : 'grid'
+  state.weekGridStyle = s
+  try {
+    localStorage.setItem(GRID_STYLE_KEY, s)
+  } catch (error) {
+    /* ignore */
+  }
 }
 
 function applyTheme(mode) {
@@ -826,7 +845,7 @@ export async function toggleCompleted(event) {
     event.status = previous
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
       state.authRequired = true
-      notify('需要访问令牌才能修改状态', 'warn')
+      notify('请先登录账号后再操作', 'warn')
     } else {
       notify(error.message || '更新失败', 'danger')
     }

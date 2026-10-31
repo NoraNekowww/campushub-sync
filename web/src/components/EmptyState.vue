@@ -21,6 +21,6 @@ const icon = computed(
 )
 const title = computed(
   () =>
-    ({ empty: '这周很干净', offline: '当前离线', auth: '需要访问令牌' })[props.kind] || '暂无内容',
+    ({ empty: '这周很干净', offline: '当前离线', auth: '请先登录账号' })[props.kind] || '暂无内容',
 )
 </script>

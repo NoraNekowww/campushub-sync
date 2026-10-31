@@ -299,50 +299,14 @@
       </div>
     </section>
 
-    <!-- ------------------------------------------------------------ access -->
-    <section class="card space-y-3 p-4">
-      <header class="flex items-center gap-2">
-        <KeyRound :size="15" class="text-brand-600 dark:text-brand-400" />
-        <h2 class="text-sm font-semibold">访问令牌</h2>
-        <span
-          v-if="state.statusLocked"
-          class="chip border-transparent bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
-        >
-          未授权
-        </span>
-        <span
-          v-else-if="tokenPresent"
-          class="chip border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
-        >
-          已连接
-        </span>
-      </header>
-      <p class="text-xs text-slate-500 dark:text-slate-400">
-        时间线是公开只读的；同步、勾选完成、上传课表等操作需要后端 <code>ADMIN_TOKEN</code>。
-      </p>
-      <div class="flex gap-2">
-        <input
-          v-model="tokenInput"
-          class="input font-mono text-xs"
-          type="password"
-          placeholder="ADMIN_TOKEN"
-          autocomplete="off"
-          @keyup.enter="applyToken"
-        />
-        <button class="btn-primary shrink-0" @click="applyToken">{{ tokenPresent ? '更新' : '保存' }}</button>
-      </div>
-      <div class="flex items-center gap-2">
-        <button class="btn-ghost !py-1.5 text-xs" @click="applyToken('')">清除</button>
-        <button class="btn-ghost !py-1.5 text-xs" @click="reloadAll">重新加载</button>
-      </div>
-    </section>
+    <!-- ------------------------------------------------------------ access removed -->
 
     <section class="card space-y-3 p-4">
       <header class="flex items-center gap-2">
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.3.2 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.3.3 · 原生极速' }}
         </span>
       </header>
 
@@ -435,7 +399,7 @@
           后端未配置 <code>SUBSCRIBE_TOKEN</code>，部署到公网前请务必设置。
         </p>
       </div>
-      <p v-else class="text-xs text-slate-400">需要访问令牌才能读取订阅地址。</p>
+      <p v-else class="text-xs text-slate-400">未获取到订阅地址，请检查网络或后端配置。</p>
     </section>
 
     <!-- --------------------------------------------------------------- tju -->
@@ -483,26 +447,62 @@
     </section>
 
     <!-- ----------------------------------------------------------- about -->
-    <section class="card space-y-3 p-4">
+    <section class="card space-y-4 p-4">
       <header class="flex items-center gap-2">
         <Info :size="15" class="text-brand-600 dark:text-brand-400" />
-        <h2 class="text-sm font-semibold">外观与离线</h2>
+        <h2 class="text-sm font-semibold">外观与偏好</h2>
       </header>
-      <div class="flex gap-2">
-        <button
-          v-for="mode in themes"
-          :key="mode.value"
-          class="chip"
-          :class="state.theme === mode.value ? 'chip-active' : 'chip-idle'"
-          @click="setTheme(mode.value)"
-        >
-          <component :is="mode.icon" :size="12" />
-          {{ mode.label }}
-        </button>
+
+      <!-- 主题切换 -->
+      <div class="space-y-1.5">
+        <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">主题模式</label>
+        <div class="flex gap-2">
+          <button
+            v-for="mode in themes"
+            :key="mode.value"
+            class="chip"
+            :class="state.theme === mode.value ? 'chip-active' : 'chip-idle'"
+            @click="setTheme(mode.value)"
+          >
+            <component :is="mode.icon" :size="12" />
+            {{ mode.label }}
+          </button>
+        </div>
       </div>
-      <p class="text-xs text-slate-500 dark:text-slate-400">
-        已缓存时间线可离线查看；在浏览器菜单选择「添加到主屏幕」即可作为 PWA 安装。
-      </p>
+
+      <!-- 课表底色切换：网格 / 空白底 -->
+      <div class="space-y-1.5 border-t border-slate-100 pt-3 dark:border-slate-800">
+        <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">课表底色</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            class="flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-medium transition"
+            :class="state.weekGridStyle !== 'blank' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
+            @click="setWeekGridStyle('grid')"
+          >
+            <Grid :size="14" />
+            <span>网格底 (默认)</span>
+          </button>
+          <button
+            type="button"
+            class="flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-medium transition"
+            :class="state.weekGridStyle === 'blank' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
+            @click="setWeekGridStyle('blank')"
+          >
+            <Square :size="14" />
+            <span>空白底</span>
+          </button>
+        </div>
+        <p class="text-[11px] text-slate-400">
+          网格底包含每小时水平参考标线；空白底提供更清爽通透的视觉体验。
+        </p>
+      </div>
+
+      <div class="border-t border-slate-100 pt-3 dark:border-slate-800">
+        <p class="text-xs text-slate-500 dark:text-slate-400">
+          已缓存时间线可离线查看；在浏览器菜单选择「添加到主屏幕」即可作为 PWA 安装。
+        </p>
+      </div>
       <div class="flex flex-wrap items-center gap-2">
         <button class="btn-ghost !py-1.5 text-xs text-rose-500 hover:text-rose-600" @click="clearCache">
           <Trash2 :size="13" /> 清空所有本地数据与缓存
@@ -561,15 +561,16 @@ import {
   ExternalLink,
   Eye,
   GraduationCap,
+  Grid,
   HardDrive,
   Info,
-  KeyRound,
   LogIn,
   Monitor,
   Moon,
   RefreshCw,
   Smartphone,
   ShieldCheck,
+  Square,
   Sun,
   Trash2,
   UserRound,
@@ -581,7 +582,6 @@ import TjuConnect from '../components/TjuConnect.vue'
 import {
   changePassword,
   clearAllLocalData,
-  getTokenSafe,
   listUsers,
   loadRegistrationSettings,
   loadStatus,
@@ -591,9 +591,9 @@ import {
   openAuthGate,
   refresh,
   runSync,
-  saveToken,
   saveRegistrationSettings,
   setTheme,
+  setWeekGridStyle,
   setUserActive,
   state,
 } from '../store'
@@ -607,7 +607,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.3.2'
+  return '2.3.3'
 })
 
 const isAndroidClient = computed(() => {
@@ -648,8 +648,6 @@ const themes = [
   { value: 'dark', label: '深色', icon: Moon },
 ]
 
-const tokenInput = ref('')
-const tokenPresent = ref(false)
 const busy = ref(false)
 const preview = ref(null)
 const fileInput = ref(null)
@@ -751,8 +749,6 @@ watch(
 const semesterForm = reactive({ name: '', start_date: '', total_weeks: 16 })
 
 onMounted(async () => {
-  tokenInput.value = getTokenSafe()
-  tokenPresent.value = Boolean(tokenInput.value)
   syncSemesterForm()
   if (isAdminUser.value) loadMembers()
 })
@@ -764,14 +760,6 @@ function syncSemesterForm() {
   semesterForm.name = summary.name || ''
   semesterForm.start_date = summary.start_date || ''
   semesterForm.total_weeks = summary.total_weeks || 16
-}
-
-function applyToken(value) {
-  const next = value === '' ? '' : tokenInput.value
-  saveToken(next)
-  tokenInput.value = next
-  tokenPresent.value = Boolean(next)
-  refresh({ silent: true })
 }
 
 async function reloadAll() {
@@ -983,7 +971,7 @@ async function checkAppUpdate(manual = false) {
       return
     }
 
-    const current = '2.3.2'
+    const current = '2.3.3'
     const parse = (v) => String(v).replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0)
     const l = parse(latestVer)
     const c = parse(current)

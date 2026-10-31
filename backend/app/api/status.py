@@ -28,17 +28,17 @@ _STARTED_AT = time.time()
 @router.get("/version", summary="Version check for in-app update notification")
 async def app_version() -> dict:
     return {
-        "version": "2.3.2",
-        "tag": "v2.3.2",
-        "title": "CampusHub Android v2.3.2",
+        "version": "2.3.3",
+        "tag": "v2.3.3",
+        "title": "CampusHub Android v2.3.3",
         "download_url": "https://nzlab.online/schedule/CampusHub.apk",
         "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
         "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
         "features": [
-            "解决设置页版本号显示为 1.0.0 的问题：动态读取真实客户端版本 v2.3.2",
-            "实现日程变动本地零延迟响应式同步：左侧新建/划掉日程，周课表即刻联动刷新",
-            "UpdateNotification 优化版本检查与主动弹窗推送",
-            "离线秒开架构保持，断网零延迟加载课表"
+            "取消所有旧版访问令牌（ADMIN_TOKEN）相关组件与输入框，全面统一为账号登录体系",
+            "设置页新增外观偏好：支持课表底色「标准网格（默认）」与「极简空白底」自由切换",
+            "日程变更本地零延迟毫秒级响应式联动课表",
+            "Android 端动态版本识别优化与离线极速运行"
         ]
     }
 

@@ -86,11 +86,22 @@
               :key="`col-${day.key}`"
               class="relative week-day-col"
               :class="[
-                day.isMonday ? 'border-l-2 border-slate-300 dark:border-slate-700' : 'border-l border-slate-100 dark:border-slate-800',
+                state.weekGridStyle === 'blank'
+                  ? (day.isMonday ? 'border-l-2 border-slate-200/80 dark:border-slate-800' : 'border-l border-slate-100/60 dark:border-slate-800/50')
+                  : (day.isMonday ? 'border-l-2 border-slate-300 dark:border-slate-700' : 'border-l border-slate-100 dark:border-slate-800'),
                 day.isToday ? 'bg-brand-50/40 dark:bg-brand-500/5' : ''
               ]"
               :style="{ height: `${GRID_HEIGHT}px` }"
             >
+              <!-- 水平整点网格参考线：默认开启，选择空白底时隐藏 -->
+              <template v-if="state.weekGridStyle !== 'blank'">
+                <div
+                  v-for="hour in hours"
+                  :key="`line-${day.key}-${hour}`"
+                  class="pointer-events-none absolute inset-x-0 border-t border-slate-100/90 dark:border-slate-800/60"
+                  :style="{ top: pct(hour * 60) + '%' }"
+                />
+              </template>
               <!-- 当前时间线（仅今天且在 08:00–22:00 内展示，呼吸闪烁） -->
               <div
                 v-if="day.isToday && isNowVisible"
