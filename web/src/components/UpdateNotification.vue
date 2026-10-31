@@ -133,8 +133,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { BellOff, Download, Rocket, Sparkles, X } from 'lucide-vue-next'
+import { API_BASE, api } from '../api'
 
-const CURRENT_VERSION = '2.3.0'
+const CURRENT_VERSION = '2.3.1'
 const DISMISSED_KEY = 'campushub.dismissed_update'
 const POPUP_SEEN_KEY = 'campushub.popup_seen_version'
 
@@ -169,8 +170,6 @@ function isMobileClient() {
 }
 
 const showUpdateBanner = computed(() => {
-  // 网页桌面端无需推送更新；仅在移动端展示
-  if (!isMobileClient()) return false
   if (bannerDismissed.value) return false
   return isNew.value
 })
@@ -230,11 +229,10 @@ async function checkLatestVersion() {
     let title = ''
     let apkUrl = ''
 
-    // 通道 1：优先请求本站 /api/version，国内环境免翻墙直连秒开
+    // 通道 1：优先请求官方 API_BASE /version，移动端走绝对域名直达，网页端正常穿透
     try {
-      const vResp = await fetch('./api/version')
-      if (vResp.ok) {
-        const vData = await vResp.json()
+      const vData = await api.appVersion()
+      if (vData?.version) {
         version = String(vData.version || '').replace(/^v/i, '')
         title = vData.title || ''
         apkUrl = vData.download_url || vData.github_download_url || ''
@@ -271,7 +269,7 @@ async function checkLatestVersion() {
     }
 
     // 网络检测到有新版本时，自动弹出居中弹窗推送（仅在移动端环境弹出，桌面网页端不弹；每个版本只主动弹一次，避免反复打扰）
-    if (isMobileClient() && isNewer(version, CURRENT_VERSION) && popupSeen !== version) {
+    if (isNewer(version, CURRENT_VERSION) && popupSeen !== version) {
       setTimeout(() => {
         showModal.value = true
         try {

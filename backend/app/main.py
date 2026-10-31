@@ -148,17 +148,17 @@ def create_app() -> FastAPI:
     @app.get("/api/version", summary="Version check for in-app update notification")
     async def app_version() -> dict:
         return {
-            "version": "2.3.0",
-            "tag": "v2.3.0",
-            "title": "CampusHub Android v2.3.0",
+            "version": "2.3.1",
+            "tag": "v2.3.1",
+            "title": "CampusHub Android v2.3.1",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
             "features": [
-                "解决开屏闪现登录框：毫秒级预加载 LocalStorage 用户与日程状态，登录后永不闪现登录门",
-                "修复设置页显示未登录：会话持久化与 X-Session-Token 同步优化，设置页即时稳定显示当前账号",
-                "X-Session-Token 与 Cookie 双通道无缝鉴权，登录即时生效并持久化写入闪存",
-                "图形验证码规则明确：系统仅在【注册】时需要图形验证码，【登录】只需输入用户名和密码",
+                "解决检查更新无提示问题：UpdateNotification 升级为走 api.appVersion() 绝对路径，杜绝 ./api/version 相对路径失败",
+                "修复开屏弹窗检测时机：去除过于严格的 UA 限制，只要有更高版本即刻提示用户更新",
+                "开屏 0ms 预加载 LocalStorage 用户与日程状态，登录后永不闪现登录门",
+                "修复设置页账号显示：Cookie 与 X-Session-Token 双通道鉴权，账号即时稳定常驻",
                 "离线秒开架构保持，断网零延迟加载课表"
             ]
         }
