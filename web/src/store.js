@@ -157,7 +157,7 @@ export function setTheme(mode) {
 }
 
 export function setWeekGridStyle(style) {
-  const s = style === 'blank' ? 'blank' : 'grid'
+  const s = style === 'blank' ? 'blank' : style === 'subgrid' ? 'subgrid' : 'grid'
   state.weekGridStyle = s
   try {
     localStorage.setItem(GRID_STYLE_KEY, s)

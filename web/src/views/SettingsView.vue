@@ -306,7 +306,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.3.3 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.3.4 · 原生极速' }}
         </span>
       </header>
 
@@ -470,31 +470,40 @@
         </div>
       </div>
 
-      <!-- 课表底色切换：网格 / 空白底 -->
+      <!-- 课表底色切换：标准网格 / 细分网格 / 空白底 -->
       <div class="space-y-1.5 border-t border-slate-100 pt-3 dark:border-slate-800">
         <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">课表底色</label>
-        <div class="grid grid-cols-2 gap-2">
+        <div class="grid grid-cols-3 gap-2">
           <button
             type="button"
-            class="flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-medium transition"
-            :class="state.weekGridStyle !== 'blank' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
+            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
+            :class="state.weekGridStyle === 'grid' || !state.weekGridStyle ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
             @click="setWeekGridStyle('grid')"
           >
-            <Grid :size="14" />
-            <span>网格底 (默认)</span>
+            <Grid :size="13" />
+            <span>标准网格</span>
           </button>
           <button
             type="button"
-            class="flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-medium transition"
+            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
+            :class="state.weekGridStyle === 'subgrid' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
+            @click="setWeekGridStyle('subgrid')"
+          >
+            <Grid :size="13" class="stroke-[2.5]" />
+            <span>细分网格</span>
+          </button>
+          <button
+            type="button"
+            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
             :class="state.weekGridStyle === 'blank' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
             @click="setWeekGridStyle('blank')"
           >
-            <Square :size="14" />
+            <Square :size="13" />
             <span>空白底</span>
           </button>
         </div>
         <p class="text-[11px] text-slate-400">
-          网格底包含每小时水平参考标线；空白底提供更清爽通透的视觉体验。
+          标准网格按小时划线；细分网格增加半小时参考虚线；空白底提供通透无干扰的视觉体验。
         </p>
       </div>
 
@@ -607,7 +616,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.3.3'
+  return '2.3.4'
 })
 
 const isAndroidClient = computed(() => {
@@ -971,7 +980,7 @@ async function checkAppUpdate(manual = false) {
       return
     }
 
-    const current = '2.3.3'
+    const current = '2.3.4'
     const parse = (v) => String(v).replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0)
     const l = parse(latestVer)
     const c = parse(current)

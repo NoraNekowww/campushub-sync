@@ -28,17 +28,17 @@ _STARTED_AT = time.time()
 @router.get("/version", summary="Version check for in-app update notification")
 async def app_version() -> dict:
     return {
-        "version": "2.3.3",
-        "tag": "v2.3.3",
-        "title": "CampusHub Android v2.3.3",
+        "version": "2.3.4",
+        "tag": "v2.3.4",
+        "title": "CampusHub Android v2.3.4",
         "download_url": "https://nzlab.online/schedule/CampusHub.apk",
         "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
         "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
         "features": [
-            "取消所有旧版访问令牌（ADMIN_TOKEN）相关组件与输入框，全面统一为账号登录体系",
-            "设置页新增外观偏好：支持课表底色「标准网格（默认）」与「极简空白底」自由切换",
-            "日程变更本地零延迟毫秒级响应式联动课表",
-            "Android 端动态版本识别优化与离线极速运行"
+            "历史归档支持渐进加载：优先呈现最近完成的日程，向下滚动平滑展开更早记录，秒级找回误勾选任务",
+            "课表底色升级三态切换：支持「标准网格」、「细分网格（增加半小时参考虚线）」与「极简空白底」",
+            "DDL 与课程冲突轮换呼吸：DDL 精准定位在时间轴上，与课程或其它 DDL 重叠时依次轮流呼吸亮灭呈现",
+            "性能调优与高刷渲染保持，无极滚动体验流畅"
         ]
     }
 

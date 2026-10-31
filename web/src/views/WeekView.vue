@@ -93,14 +93,20 @@
               ]"
               :style="{ height: `${GRID_HEIGHT}px` }"
             >
-              <!-- 水平整点网格参考线：默认开启，选择空白底时隐藏 -->
+              <!-- 水平整点与细分参考线：标准网格画整点，细分网格额外画半小时点虚线，空白底隐藏 -->
               <template v-if="state.weekGridStyle !== 'blank'">
-                <div
-                  v-for="hour in hours"
-                  :key="`line-${day.key}-${hour}`"
-                  class="pointer-events-none absolute inset-x-0 border-t border-slate-100/90 dark:border-slate-800/60"
-                  :style="{ top: pct(hour * 60) + '%' }"
-                />
+                <template v-for="hour in hours" :key="`line-${day.key}-${hour}`">
+                  <div
+                    class="pointer-events-none absolute inset-x-0 border-t border-slate-100/90 dark:border-slate-800/60"
+                    :style="{ top: pct(hour * 60) + '%' }"
+                  />
+                  <!-- 细分网格底：每半小时（XX:30）补充一条极轻量的点虚线 -->
+                  <div
+                    v-if="state.weekGridStyle === 'subgrid' && hour < 21"
+                    class="pointer-events-none absolute inset-x-0 border-t border-dashed border-slate-100/60 dark:border-slate-800/40"
+                    :style="{ top: pct(hour * 60 + 30) + '%' }"
+                  />
+                </template>
               </template>
               <!-- 当前时间线（仅今天且在 08:00–22:00 内展示，呼吸闪烁） -->
               <div
@@ -114,7 +120,7 @@
               </div>
 
               <template v-for="item in day.items" :key="item.event.id">
-                <!-- 有结束时间：一个块 -->
+                <!-- 有结束时间：一个块（若与 DDL 重叠，加入轮换呼吸动画） -->
                 <button
                   v-if="item.end !== null"
                   data-testid="class-block"
@@ -122,11 +128,12 @@
                   class="absolute inset-x-0 overflow-hidden rounded-lg border border-brand-200/70 bg-brand-100/80 px-px py-1
                          text-left text-[10px] leading-tight text-brand-900 transition-shadow hover:shadow-md
                          dark:border-brand-500/30 dark:bg-brand-500/20 dark:text-brand-100"
-                  :class="
+                  :class="[
                     item.event.is_deadline
                       ? 'border-amber-300/80 bg-amber-100/80 text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/20 dark:text-amber-100'
-                      : ''
-                  "
+                      : '',
+                    item.hasConflict ? 'animate-breathe-alternate' : ''
+                  ]"
                   :style="blockStyle(item)"
                   :aria-pressed="selected?.id === item.event.id"
                   @click="selected = selected?.id === item.event.id ? null : item.event"
@@ -146,13 +153,13 @@
                   </span>
                 </button>
 
-                <!-- 没有结束时间（DDL）：显示在真实时间轴位置上，如果有重叠，呼吸交替显示 -->
+                <!-- 没有结束时间（DDL）：精准定位在时间轴上，若与其它 DDL 或课程重叠，依次轮流呼吸亮灭 -->
                 <button
                   v-else
                   data-testid="line-event"
                   :data-day="day.key"
                   class="absolute inset-x-0 z-10 px-0 py-2 text-left"
-                  :class="item.overlapGroupSize > 1 ? 'animate-breathe-alternate' : ''"
+                  :class="item.hasConflict ? 'animate-breathe-alternate' : ''"
                   :style="lineStyle(item)"
                   :aria-pressed="selected?.id === item.event.id"
                   @click="selected = selected?.id === item.event.id ? null : item.event"
@@ -452,13 +459,46 @@ function layoutItems(items) {
   }
   flush()
 
-  // 针对 DDL（end === null 无结束时间线事件），计算真实时间轴位置上的重叠分组
-  // 若同一天内两个 DDL 发生时间在 ±15 分钟以内，视为在时间轴上重叠，交替呼吸显示
-  const lineItems = sorted.filter((it) => it.end === null)
-  lineItems.forEach((item) => {
-    const overlapping = lineItems.filter((other) => Math.abs(other.start - item.start) <= 15)
-    item.overlapGroupSize = overlapping.length
-    item.overlapIndex = overlapping.indexOf(item)
+  // 针对 DDL 与其它 DDL、以及 DDL 与课程之间的空间重叠关系进行分组计算：
+  // 1. DDL 之间：时间在 ±15 分钟内视为重叠；
+  // 2. DDL 与课程之间：若 DDL 的截止时间落在某节课的 [start - 5, end + 5] 分钟区间内，
+  //    则该 DDL 与该课程共享呼吸交替周期，依次轮流呼吸亮灭。
+  const ddlItems = sorted.filter((it) => it.end === null)
+  const classItems = sorted.filter((it) => it.end !== null)
+
+  ddlItems.forEach((ddl) => {
+    // 找出与当前 DDL 时间重叠的其它 DDL
+    const overlapDdls = ddlItems.filter((other) => Math.abs(other.start - ddl.start) <= 15)
+    // 找出与当前 DDL 在时间轴上穿插的课程
+    const overlapClasses = classItems.filter((c) => {
+      const cStart = Math.max(c.start, DAY_START)
+      const cEnd = c.end !== null ? Math.min(c.end, DAY_END) : cStart + LINE_MINUTES
+      return ddl.start >= cStart - 8 && ddl.start <= cEnd + 8
+    })
+
+    // 构建该冲突区域内的全部轮换实体列表（优先排课程，再排各个 DDL）
+    const allColliding = [...new Set([...overlapClasses, ...overlapDdls])]
+    if (allColliding.length > 1) {
+      const groupSize = allColliding.length
+      const myIndex = allColliding.indexOf(ddl)
+      ddl.hasConflict = true
+      ddl.overlapCycleSize = groupSize
+      ddl.overlapCycleIndex = myIndex >= 0 ? myIndex : 0
+
+      // 同时给冲突的课程打上标记与轮换索引
+      overlapClasses.forEach((c) => {
+        const cIndex = allColliding.indexOf(c)
+        c.hasConflict = true
+        c.overlapCycleSize = Math.max(c.overlapCycleSize || 0, groupSize)
+        if (c.overlapCycleIndex === undefined) {
+          c.overlapCycleIndex = cIndex >= 0 ? cIndex : 0
+        }
+      })
+    } else {
+      ddl.hasConflict = false
+      ddl.overlapCycleSize = 1
+      ddl.overlapCycleIndex = 0
+    }
   })
 
   return sorted
@@ -471,19 +511,41 @@ function blockStyle(item) {
   if (endMin <= startMin) endMin = Math.min(startMin + LINE_MINUTES, DAY_END)
   const height = Math.max(3.4, ((endMin - startMin) / (DAY_END - DAY_START)) * 100)
   const push = (item.stack || 0) * STACK_STEP_PX
-  return { top: `calc(${pct(item.start)}% + ${push}px)`, height: `${height}%` }
+
+  const style = {
+    top: `calc(${pct(item.start)}% + ${push}px)`,
+    height: `${height}%`,
+  }
+
+  // 若与 DDL 冲突，参与轮流呼吸交替，计算对应的错位延迟
+  if (item.hasConflict && item.overlapCycleSize > 1) {
+    const cycleDuration = 4.0
+    const delaySec = ((item.overlapCycleIndex || 0) * (cycleDuration / item.overlapCycleSize)).toFixed(2)
+    style.animationDelay = `${delaySec}s`
+    style.zIndex = 5 + (item.overlapCycleIndex || 0)
+  }
+
+  return style
 }
 
 function lineStyle(item) {
   // DDL 严格定位在真实时间轴位置上（根据其具体分钟数计算百分比）
   const topPct = pct(item.start)
-  const zIdx = 10 + (item.overlapIndex || 0)
-  const delaySec = ((item.overlapIndex || 0) * 1.5).toFixed(1)
-  return {
+  const style = {
     top: `${topPct}%`,
-    zIndex: zIdx,
-    animationDelay: `${delaySec}s`,
   }
+
+  // 若与其它 DDL 或课程重叠，计算均匀错位延迟，依次轮流呼吸亮灭
+  if (item.hasConflict && item.overlapCycleSize > 1) {
+    const cycleDuration = 4.0
+    const delaySec = ((item.overlapCycleIndex || 0) * (cycleDuration / item.overlapCycleSize)).toFixed(2)
+    style.animationDelay = `${delaySec}s`
+    style.zIndex = 10 + (item.overlapCycleIndex || 0)
+  } else {
+    style.zIndex = 10
+  }
+
+  return style
 }
 
 async function loadWeek(force = false) {

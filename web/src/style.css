@@ -70,20 +70,21 @@ body {
   scrollbar-width: none;
 }
 
-/* DDL 重叠呼吸交替动画 (3秒循环，两项交替呈现淡入淡出与高亮层级) */
+/* DDL 与课程/多重 DDL 重叠轮换呼吸动画：
+   总周期 4s，每个冲突项依次轮流亮起 (opacity 1, z-index 提升)，未轮到时轻柔半透 (opacity 0.28) 避免互相遮盖 */
 @keyframes breatheAlternate {
   0%, 100% {
-    opacity: 0.25;
-    transform: scale(0.98);
+    opacity: 0.28;
+    transform: scale(0.99);
   }
-  50% {
+  30%, 60% {
     opacity: 1;
-    transform: scale(1.02);
+    transform: scale(1.01);
   }
 }
 
 .animate-breathe-alternate {
-  animation: breatheAlternate 3s ease-in-out infinite;
+  animation: breatheAlternate 4s ease-in-out infinite;
   transition: opacity 0.3s ease, transform 0.3s ease;
   transform: translateZ(0);
   will-change: transform, opacity;
