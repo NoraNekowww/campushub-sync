@@ -1,5 +1,244 @@
 <template>
   <div class="space-y-4 px-4">
+    <!-- ----------------------------------------------------------- 自定义与个性化外观 (置顶) -->
+    <section class="card space-y-4 p-4" data-testid="appearance-section">
+      <header class="flex items-center gap-2">
+        <Palette :size="15" class="text-brand-600 dark:text-brand-400" />
+        <h2 class="text-sm font-semibold">外观与个性化</h2>
+      </header>
+
+      <!-- 磨砂玻璃高级质感 (默认开启) -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+            <Sparkles :size="13" class="text-indigo-500" />
+            <span>磨砂玻璃高级质感</span>
+          </label>
+          <span
+            class="chip border-transparent text-[10px] py-0.5"
+            :class="
+              state.isFrostedActive
+                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300'
+                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+            "
+          >
+            {{ state.isFrostedActive ? '已开启' : '已关闭' }}
+          </span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
+            :class="state.frostedGlassMode === 'on' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
+            @click="setFrostedGlassMode('on')"
+          >
+            <span>开启 (默认)</span>
+          </button>
+          <button
+            type="button"
+            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
+            :class="state.frostedGlassMode === 'auto' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
+            @click="setFrostedGlassMode('auto')"
+          >
+            <span>智能识别</span>
+          </button>
+          <button
+            type="button"
+            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
+            :class="state.frostedGlassMode === 'off' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
+            @click="setFrostedGlassMode('off')"
+          >
+            <span>关闭</span>
+          </button>
+        </div>
+        <p class="text-[11px] text-slate-400">
+          全量支持物理半透明亚克力磨砂玻璃质感。顶底栏、日程卡片与课表课程块均具备通透液体光斑与次表面折射。
+        </p>
+      </div>
+
+      <!-- 自定义背景图与主题图床 -->
+      <div class="space-y-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+        <div class="flex items-center justify-between">
+          <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+            <ImageIcon :size="13" class="text-indigo-500" />
+            <span>自定义背景图与主题图床</span>
+          </label>
+          <button
+            type="button"
+            class="chip border-transparent text-[10px] py-0.5 cursor-pointer"
+            :class="
+              bgForm.enabled
+                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 font-semibold'
+                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+            "
+            @click="toggleBgEnabled"
+          >
+            {{ bgForm.enabled ? '已开启' : '点击开启' }}
+          </button>
+        </div>
+
+        <div v-if="bgForm.enabled" class="space-y-3 rounded-xl border border-slate-200/70 bg-slate-50/60 p-3 text-xs dark:border-slate-800 dark:bg-slate-800/40">
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+            支持图床直链，并随浅色/深色模式智能平滑联动切换。配合磨砂玻璃材质呈现物理穿透效果。
+          </p>
+
+          <!-- 浅色模式背景图 URL -->
+          <div class="space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-medium text-slate-700 dark:text-slate-300 text-[11px]">浅色主题背景图 (Light Mode)</span>
+              <span v-if="!state.isDarkTheme" class="chip border-transparent bg-brand-50 text-brand-600 text-[9px] py-0">当前生效</span>
+            </div>
+            <input
+              v-model="bgForm.lightUrl"
+              type="url"
+              placeholder="输入浅色模式背景图直链 URL..."
+              class="input !py-1 text-xs"
+              @change="updateBgConfig"
+            />
+          </div>
+
+          <!-- 深色模式背景图 URL -->
+          <div class="space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-medium text-slate-700 dark:text-slate-300 text-[11px]">深色主题背景图 (Dark Mode)</span>
+              <span v-if="state.isDarkTheme" class="chip border-transparent bg-indigo-50 text-indigo-600 text-[9px] py-0">当前生效</span>
+            </div>
+            <input
+              v-model="bgForm.darkUrl"
+              type="url"
+              placeholder="输入深色模式背景图直链 URL..."
+              class="input !py-1 text-xs"
+              @change="updateBgConfig"
+            />
+          </div>
+
+          <!-- 调节滑块：透光遮罩不透明度 + 预模糊度 -->
+          <div class="grid grid-cols-2 gap-3 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+            <div class="space-y-1">
+              <div class="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400">
+                <span>背景不透明度</span>
+                <span class="font-mono text-[10px]">{{ bgForm.opacity }}%</span>
+              </div>
+              <input
+                v-model.number="bgForm.opacity"
+                type="range"
+                min="10"
+                max="90"
+                step="5"
+                class="w-full accent-brand-600"
+                @input="updateBgConfig"
+              />
+            </div>
+            <div class="space-y-1">
+              <div class="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400">
+                <span>背景模糊度</span>
+                <span class="font-mono text-[10px]">{{ bgForm.blur }}px</span>
+              </div>
+              <input
+                v-model.number="bgForm.blur"
+                type="range"
+                min="0"
+                max="16"
+                step="1"
+                class="w-full accent-brand-600"
+                @input="updateBgConfig"
+              />
+            </div>
+          </div>
+
+          <!-- 常用图床预设胶囊 -->
+          <div class="space-y-1.5 pt-1">
+            <span class="text-[10.5px] text-slate-400">精选壁纸预设（点击快速体验）：</span>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                class="chip border-slate-200 bg-white hover:border-brand-400 text-[10px] py-0.5 dark:border-slate-700 dark:bg-slate-800"
+                @click="applyBgPreset('mountain')"
+              >
+                雪山与极光
+              </button>
+              <button
+                type="button"
+                class="chip border-slate-200 bg-white hover:border-brand-400 text-[10px] py-0.5 dark:border-slate-700 dark:bg-slate-800"
+                @click="applyBgPreset('sea')"
+              >
+                山海晨曦
+              </button>
+              <button
+                type="button"
+                class="chip border-slate-200 bg-white hover:border-brand-400 text-[10px] py-0.5 dark:border-slate-700 dark:bg-slate-800"
+                @click="applyBgPreset('minimal')"
+              >
+                极简微光
+              </button>
+              <button
+                type="button"
+                class="chip border-transparent text-rose-500 hover:underline text-[10px] py-0.5 ml-auto"
+                @click="resetBgConfig"
+              >
+                重置清空
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 课表底色切换：标准网格 / 细分网格 / 空白底 -->
+      <div class="space-y-1.5 border-t border-slate-100 pt-3 dark:border-slate-800">
+        <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">课表底色</label>
+        <div class="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
+            :class="state.weekGridStyle === 'grid' || !state.weekGridStyle ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
+            @click="setWeekGridStyle('grid')"
+          >
+            <Grid :size="13" />
+            <span>标准网格</span>
+          </button>
+          <button
+            type="button"
+            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
+            :class="state.weekGridStyle === 'subgrid' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
+            @click="setWeekGridStyle('subgrid')"
+          >
+            <Grid :size="13" class="stroke-[2.5]" />
+            <span>细分网格</span>
+          </button>
+          <button
+            type="button"
+            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
+            :class="state.weekGridStyle === 'blank' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
+            @click="setWeekGridStyle('blank')"
+          >
+            <Square :size="13" />
+            <span>空白底</span>
+          </button>
+        </div>
+        <p class="text-[11px] text-slate-400">
+          标准网格按小时划线；细分网格增加半小时参考虚线；空白底提供通透无干扰的视觉体验。
+        </p>
+      </div>
+
+      <!-- 主题模式切换 -->
+      <div class="space-y-1.5 border-t border-slate-100 pt-3 dark:border-slate-800">
+        <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">主题模式</label>
+        <div class="flex gap-2">
+          <button
+            v-for="mode in themes"
+            :key="mode.value"
+            class="chip"
+            :class="state.theme === mode.value ? 'chip-active' : 'chip-idle'"
+            @click="setTheme(mode.value)"
+          >
+            <component :is="mode.icon" :size="12" />
+            {{ mode.label }}
+          </button>
+        </div>
+      </div>
+    </section>
+
     <!-- ------------------------------------------------------------ account -->
     <section v-if="accountsEnabled" class="card space-y-3 p-4" data-testid="account-section">
       <header class="flex items-center gap-2">
@@ -306,7 +545,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.4.3 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.4.4 · 原生极速' }}
         </span>
       </header>
 
@@ -499,250 +738,18 @@
       </div>
     </section>
 
-    <!-- ----------------------------------------------------------- about -->
-    <section class="card space-y-4 p-4">
+    <!-- ----------------------------------------------------------- maintenance -->
+    <section class="card space-y-3 p-4">
       <header class="flex items-center gap-2">
-        <Info :size="15" class="text-brand-600 dark:text-brand-400" />
-        <h2 class="text-sm font-semibold">外观与偏好</h2>
+        <HardDrive :size="15" class="text-brand-600 dark:text-brand-400" />
+        <h2 class="text-sm font-semibold">数据维护与杂项</h2>
       </header>
 
-      <!-- 主题切换 -->
-      <div class="space-y-1.5">
-        <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">主题模式</label>
-        <div class="flex gap-2">
-          <button
-            v-for="mode in themes"
-            :key="mode.value"
-            class="chip"
-            :class="state.theme === mode.value ? 'chip-active' : 'chip-idle'"
-            @click="setTheme(mode.value)"
-          >
-            <component :is="mode.icon" :size="12" />
-            {{ mode.label }}
-          </button>
-        </div>
-      </div>
+      <p class="text-xs text-slate-500 dark:text-slate-400">
+        已缓存时间线与课表数据均持久化在本地；如遇数据同步异常或切换账号，可一键清理重置。
+      </p>
 
-      <!-- 课表底色切换：标准网格 / 细分网格 / 空白底 -->
-      <div class="space-y-1.5 border-t border-slate-100 pt-3 dark:border-slate-800">
-        <label class="text-xs font-semibold text-slate-700 dark:text-slate-300">课表底色</label>
-        <div class="grid grid-cols-3 gap-2">
-          <button
-            type="button"
-            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
-            :class="state.weekGridStyle === 'grid' || !state.weekGridStyle ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
-            @click="setWeekGridStyle('grid')"
-          >
-            <Grid :size="13" />
-            <span>标准网格</span>
-          </button>
-          <button
-            type="button"
-            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
-            :class="state.weekGridStyle === 'subgrid' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
-            @click="setWeekGridStyle('subgrid')"
-          >
-            <Grid :size="13" class="stroke-[2.5]" />
-            <span>细分网格</span>
-          </button>
-          <button
-            type="button"
-            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
-            :class="state.weekGridStyle === 'blank' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
-            @click="setWeekGridStyle('blank')"
-          >
-            <Square :size="13" />
-            <span>空白底</span>
-          </button>
-        </div>
-        <p class="text-[11px] text-slate-400">
-          标准网格按小时划线；细分网格增加半小时参考虚线；空白底提供通透无干扰的视觉体验。
-        </p>
-      </div>
-
-      <!-- 磨砂玻璃高级质感 -->
-      <div class="space-y-2 border-t border-slate-100 pt-3 dark:border-slate-800">
-        <div class="flex items-center justify-between">
-          <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
-            <Sparkles :size="13" class="text-indigo-500" />
-            <span>磨砂玻璃高级质感</span>
-          </label>
-          <span
-            class="chip border-transparent text-[10px] py-0.5"
-            :class="
-              state.isFrostedActive
-                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300'
-                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-            "
-          >
-            {{ state.isFrostedActive ? '已开启' : '已关闭' }}
-          </span>
-        </div>
-
-        <div class="grid grid-cols-3 gap-2">
-          <button
-            type="button"
-            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
-            :class="state.frostedGlassMode === 'auto' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
-            @click="setFrostedGlassMode('auto')"
-          >
-            <span>智能识别</span>
-          </button>
-          <button
-            type="button"
-            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
-            :class="state.frostedGlassMode === 'on' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
-            @click="setFrostedGlassMode('on')"
-          >
-            <span>强制开启</span>
-          </button>
-          <button
-            type="button"
-            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
-            :class="state.frostedGlassMode === 'off' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
-            @click="setFrostedGlassMode('off')"
-          >
-            <span>关闭</span>
-          </button>
-        </div>
-        <p class="text-[11px] text-slate-400">
-          支持半透明亚克力磨砂玻璃质感。默认在 Android 15+ 或 iOS 环境下自动开启，亦可在任意支持的设备上手动启用。
-        </p>
-      </div>
-
-      <!-- 自定义背景图与主题图床 -->
-      <div class="space-y-3 border-t border-slate-100 pt-3 dark:border-slate-800">
-        <div class="flex items-center justify-between">
-          <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
-            <ImageIcon :size="13" class="text-indigo-500" />
-            <span>自定义背景图与主题图床</span>
-          </label>
-          <button
-            type="button"
-            class="chip border-transparent text-[10px] py-0.5 cursor-pointer"
-            :class="
-              bgForm.enabled
-                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 font-semibold'
-                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-            "
-            @click="toggleBgEnabled"
-          >
-            {{ bgForm.enabled ? '已开启' : '点击开启' }}
-          </button>
-        </div>
-
-        <div v-if="bgForm.enabled" class="space-y-3 rounded-xl border border-slate-200/70 bg-slate-50/60 p-3 text-xs dark:border-slate-800 dark:bg-slate-800/40">
-          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-            支持图床直链，并随浅色/深色模式智能平滑联动切换。配合磨砂玻璃材质呈现物理穿透效果。
-          </p>
-
-          <!-- 浅色模式背景图 URL -->
-          <div class="space-y-1">
-            <div class="flex items-center justify-between">
-              <span class="font-medium text-slate-700 dark:text-slate-300 text-[11px]">浅色主题背景图 (Light Mode)</span>
-              <span v-if="!state.isDarkTheme" class="chip border-transparent bg-brand-50 text-brand-600 text-[9px] py-0">当前生效</span>
-            </div>
-            <input
-              v-model="bgForm.lightUrl"
-              type="url"
-              placeholder="输入浅色模式背景图直链 URL..."
-              class="input !py-1 text-xs"
-              @change="updateBgConfig"
-            />
-          </div>
-
-          <!-- 深色模式背景图 URL -->
-          <div class="space-y-1">
-            <div class="flex items-center justify-between">
-              <span class="font-medium text-slate-700 dark:text-slate-300 text-[11px]">深色主题背景图 (Dark Mode)</span>
-              <span v-if="state.isDarkTheme" class="chip border-transparent bg-indigo-50 text-indigo-600 text-[9px] py-0">当前生效</span>
-            </div>
-            <input
-              v-model="bgForm.darkUrl"
-              type="url"
-              placeholder="输入深色模式背景图直链 URL..."
-              class="input !py-1 text-xs"
-              @change="updateBgConfig"
-            />
-          </div>
-
-          <!-- 调节滑块：透光遮罩不透明度 + 预模糊度 -->
-          <div class="grid grid-cols-2 gap-3 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
-            <div class="space-y-1">
-              <div class="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400">
-                <span>背景不透明度</span>
-                <span class="font-mono text-[10px]">{{ bgForm.opacity }}%</span>
-              </div>
-              <input
-                v-model.number="bgForm.opacity"
-                type="range"
-                min="10"
-                max="90"
-                step="5"
-                class="w-full accent-brand-600"
-                @input="updateBgConfig"
-              />
-            </div>
-            <div class="space-y-1">
-              <div class="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400">
-                <span>背景模糊度</span>
-                <span class="font-mono text-[10px]">{{ bgForm.blur }}px</span>
-              </div>
-              <input
-                v-model.number="bgForm.blur"
-                type="range"
-                min="0"
-                max="16"
-                step="1"
-                class="w-full accent-brand-600"
-                @input="updateBgConfig"
-              />
-            </div>
-          </div>
-
-          <!-- 常用图床预设胶囊 -->
-          <div class="space-y-1.5 pt-1">
-            <span class="text-[10.5px] text-slate-400">精选壁纸预设（点击快速体验）：</span>
-            <div class="flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                class="chip border-slate-200 bg-white hover:border-brand-400 text-[10px] py-0.5 dark:border-slate-700 dark:bg-slate-800"
-                @click="applyBgPreset('mountain')"
-              >
-                雪山与极光
-              </button>
-              <button
-                type="button"
-                class="chip border-slate-200 bg-white hover:border-brand-400 text-[10px] py-0.5 dark:border-slate-700 dark:bg-slate-800"
-                @click="applyBgPreset('sea')"
-              >
-                山海晨曦
-              </button>
-              <button
-                type="button"
-                class="chip border-slate-200 bg-white hover:border-brand-400 text-[10px] py-0.5 dark:border-slate-700 dark:bg-slate-800"
-                @click="applyBgPreset('minimal')"
-              >
-                极简微光
-              </button>
-              <button
-                type="button"
-                class="chip border-transparent text-rose-500 hover:underline text-[10px] py-0.5 ml-auto"
-                @click="resetBgConfig"
-              >
-                重置清空
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="border-t border-slate-100 pt-3 dark:border-slate-800">
-        <p class="text-xs text-slate-500 dark:text-slate-400">
-          已缓存时间线可离线查看；在浏览器菜单选择「添加到主屏幕」即可作为 PWA 安装。
-        </p>
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
         <button class="btn-ghost !py-1.5 text-xs text-rose-500 hover:text-rose-600" @click="clearCache">
           <Trash2 :size="13" /> 清空所有本地数据与缓存
         </button>
@@ -853,7 +860,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.4.3'
+  return '2.4.4'
 })
 
 const isAndroidClient = computed(() => {

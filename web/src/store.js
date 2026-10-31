@@ -105,12 +105,12 @@ export const state = reactive({
       return 'grid'
     }
   })(),
-  /* 磨砂玻璃质感：'auto'（跟随系统智能识别） | 'on'（强制开启） | 'off'（关闭） */
+  /* 磨砂玻璃质感：默认开启 'on'，亦可随时手动切换为 'auto' 或 'off' */
   frostedGlassMode: (function () {
     try {
-      return localStorage.getItem('campushub.frosted_glass_style') || 'auto'
+      return localStorage.getItem('campushub.frosted_glass_style') || 'on'
     } catch (e) {
-      return 'auto'
+      return 'on'
     }
   })(),
   isFrostedActive: false,
@@ -221,9 +221,9 @@ export function checkAutoFrostedSupport() {
 }
 
 export function initFrostedGlass() {
-  let stored = 'auto'
+  let stored = 'on'
   try {
-    stored = localStorage.getItem(FROSTED_GLASS_KEY) || 'auto'
+    stored = localStorage.getItem(FROSTED_GLASS_KEY) || 'on'
   } catch (e) {}
   state.frostedGlassMode = stored
   applyFrostedGlass(stored)
