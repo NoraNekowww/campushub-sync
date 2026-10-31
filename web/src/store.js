@@ -17,7 +17,25 @@ const STATUS_CACHE_KEY = 'campushub.status_cache.v1'
 const SYNC_QUEUE_KEY = 'campushub.offline_sync_queue.v1'
 const DELETED_IDS_KEY = 'campushub.deleted_event_ids.v1'
 const COMPLETED_OVERRIDES_KEY = 'campushub.completed_overrides.v1'
+const BACKGROUND_CONFIG_KEY = 'campushub.background_config.v1'
 const LOOKAHEAD_DAYS = 60
+
+function readInitialBackgroundConfig() {
+  const defaults = {
+    enabled: false,
+    lightUrl: '',
+    darkUrl: '',
+    opacity: 35, // 0 - 100%
+    blur: 0,    // 0 - 20px
+  }
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(BACKGROUND_CONFIG_KEY)
+      if (raw) return { ...defaults, ...JSON.parse(raw) }
+    }
+  } catch {}
+  return defaults
+}
 
 /** 判断当前是否在 Android 原生客户端壳环境中运行 */
 export function isMobileNativeApp() {
@@ -96,6 +114,9 @@ export const state = reactive({
   })(),
   isFrostedActive: false,
   systemInfo: { system: 'other', name: '通用系统', supportsBlur: false },
+  /* 背景图配置：支持图床根据主题加载与自定义 URL、遮罩不透明度、模糊度 */
+  backgroundConfig: readInitialBackgroundConfig(),
+  isDarkTheme: false,
   /* accounts (see accounts.py): the session cookie is HttpOnly, so the app
      learns who it is by asking /api/auth/session, never by reading a cookie. */
   user: readInitialUser(),
@@ -236,7 +257,15 @@ function applyTheme(mode) {
   const prefersDark =
     typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
   const dark = mode === 'dark' || (mode === 'auto' && prefersDark)
+  state.isDarkTheme = dark
   document.documentElement.classList.toggle('dark', dark)
+}
+
+export function saveBackgroundConfig(patch) {
+  state.backgroundConfig = { ...state.backgroundConfig, ...patch }
+  try {
+    localStorage.setItem(BACKGROUND_CONFIG_KEY, JSON.stringify(state.backgroundConfig))
+  } catch (e) {}
 }
 
 /* ------------------------------------------------------------- event feed */

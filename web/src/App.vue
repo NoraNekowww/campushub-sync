@@ -1,5 +1,22 @@
 <template>
-  <div class="min-h-full">
+  <div class="relative min-h-full">
+    <!-- 全局背景图渲染层（图床按主题动态联动 + 遮罩与模糊度控制，与磨砂玻璃深度融合） -->
+    <div
+      v-if="state.backgroundConfig?.enabled && activeBgUrl"
+      class="pointer-events-none fixed inset-0 z-0 overflow-hidden"
+      aria-hidden="true"
+    >
+      <div
+        class="absolute inset-0 bg-cover bg-center transition-all duration-700 ease-out"
+        :style="bgLayerStyle"
+      />
+      <!-- 物理微遮罩层：保证深浅色模式下课表文字与排版的高对比度清晰度 -->
+      <div
+        class="absolute inset-0 transition-colors duration-500"
+        :class="state.isDarkTheme ? 'bg-slate-950/35' : 'bg-white/20'"
+      />
+    </div>
+
     <AuthGate v-if="showGate" />
 
     <template v-else>
@@ -8,7 +25,7 @@
 
       <AppHeader />
 
-      <main class="mx-auto max-w-3xl pb-28 pt-3">
+      <main class="relative z-10 mx-auto max-w-3xl pb-28 pt-3">
         <AgendaView v-show="state.view === 'agenda'" />
         <WeekView v-show="state.view === 'week'" />
         <HistoryView v-show="state.view === 'history'" />
@@ -76,6 +93,27 @@ import {
    visitor has no session *and* no shared token, and an API call was refused —
    so an open deployment never sees it. */
 const showGate = computed(() => signInRequired())
+
+const activeBgUrl = computed(() => {
+  const cfg = state.backgroundConfig
+  if (!cfg?.enabled) return ''
+  if (state.isDarkTheme) {
+    return cfg.darkUrl || cfg.lightUrl || ''
+  }
+  return cfg.lightUrl || cfg.darkUrl || ''
+})
+
+const bgLayerStyle = computed(() => {
+  const cfg = state.backgroundConfig || {}
+  const opacity = (Number(cfg.opacity ?? 35) / 100).toFixed(2)
+  const blurPx = Number(cfg.blur ?? 0)
+  return {
+    backgroundImage: `url(${activeBgUrl.value})`,
+    opacity,
+    filter: blurPx > 0 ? `blur(${blurPx}px)` : undefined,
+    transform: blurPx > 0 ? 'scale(1.05)' : undefined,
+  }
+})
 
 const toastClass = computed(() => {
   const tone = state.toast?.tone

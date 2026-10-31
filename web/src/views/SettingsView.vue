@@ -306,7 +306,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.4.1 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.4.2 · 原生极速' }}
         </span>
       </header>
 
@@ -610,6 +610,133 @@
         </p>
       </div>
 
+      <!-- 自定义背景图与主题图床 -->
+      <div class="space-y-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+        <div class="flex items-center justify-between">
+          <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+            <ImageIcon :size="13" class="text-indigo-500" />
+            <span>自定义背景图与主题图床</span>
+          </label>
+          <button
+            type="button"
+            class="chip border-transparent text-[10px] py-0.5 cursor-pointer"
+            :class="
+              bgForm.enabled
+                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 font-semibold'
+                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+            "
+            @click="toggleBgEnabled"
+          >
+            {{ bgForm.enabled ? '已开启' : '点击开启' }}
+          </button>
+        </div>
+
+        <div v-if="bgForm.enabled" class="space-y-3 rounded-xl border border-slate-200/70 bg-slate-50/60 p-3 text-xs dark:border-slate-800 dark:bg-slate-800/40">
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+            支持图床直链，并随浅色/深色模式智能平滑联动切换。配合磨砂玻璃材质呈现物理穿透效果。
+          </p>
+
+          <!-- 浅色模式背景图 URL -->
+          <div class="space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-medium text-slate-700 dark:text-slate-300 text-[11px]">浅色主题背景图 (Light Mode)</span>
+              <span v-if="!state.isDarkTheme" class="chip border-transparent bg-brand-50 text-brand-600 text-[9px] py-0">当前生效</span>
+            </div>
+            <input
+              v-model="bgForm.lightUrl"
+              type="url"
+              placeholder="输入浅色模式背景图直链 URL..."
+              class="input !py-1 text-xs"
+              @change="updateBgConfig"
+            />
+          </div>
+
+          <!-- 深色模式背景图 URL -->
+          <div class="space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-medium text-slate-700 dark:text-slate-300 text-[11px]">深色主题背景图 (Dark Mode)</span>
+              <span v-if="state.isDarkTheme" class="chip border-transparent bg-indigo-50 text-indigo-600 text-[9px] py-0">当前生效</span>
+            </div>
+            <input
+              v-model="bgForm.darkUrl"
+              type="url"
+              placeholder="输入深色模式背景图直链 URL..."
+              class="input !py-1 text-xs"
+              @change="updateBgConfig"
+            />
+          </div>
+
+          <!-- 调节滑块：透光遮罩不透明度 + 预模糊度 -->
+          <div class="grid grid-cols-2 gap-3 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+            <div class="space-y-1">
+              <div class="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400">
+                <span>背景不透明度</span>
+                <span class="font-mono text-[10px]">{{ bgForm.opacity }}%</span>
+              </div>
+              <input
+                v-model.number="bgForm.opacity"
+                type="range"
+                min="10"
+                max="90"
+                step="5"
+                class="w-full accent-brand-600"
+                @input="updateBgConfig"
+              />
+            </div>
+            <div class="space-y-1">
+              <div class="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400">
+                <span>背景模糊度</span>
+                <span class="font-mono text-[10px]">{{ bgForm.blur }}px</span>
+              </div>
+              <input
+                v-model.number="bgForm.blur"
+                type="range"
+                min="0"
+                max="16"
+                step="1"
+                class="w-full accent-brand-600"
+                @input="updateBgConfig"
+              />
+            </div>
+          </div>
+
+          <!-- 常用图床预设胶囊 -->
+          <div class="space-y-1.5 pt-1">
+            <span class="text-[10.5px] text-slate-400">精选壁纸预设（点击快速体验）：</span>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                class="chip border-slate-200 bg-white hover:border-brand-400 text-[10px] py-0.5 dark:border-slate-700 dark:bg-slate-800"
+                @click="applyBgPreset('anime')"
+              >
+                甘城二次元平涂
+              </button>
+              <button
+                type="button"
+                class="chip border-slate-200 bg-white hover:border-brand-400 text-[10px] py-0.5 dark:border-slate-700 dark:bg-slate-800"
+                @click="applyBgPreset('nature')"
+              >
+                自然晨曦与深空
+              </button>
+              <button
+                type="button"
+                class="chip border-slate-200 bg-white hover:border-brand-400 text-[10px] py-0.5 dark:border-slate-700 dark:bg-slate-800"
+                @click="applyBgPreset('fluid')"
+              >
+                极简流体波纹
+              </button>
+              <button
+                type="button"
+                class="chip border-transparent text-rose-500 hover:underline text-[10px] py-0.5 ml-auto"
+                @click="resetBgConfig"
+              >
+                重置清空
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="border-t border-slate-100 pt-3 dark:border-slate-800">
         <p class="text-xs text-slate-500 dark:text-slate-400">
           已缓存时间线可离线查看；在浏览器菜单选择「添加到主屏幕」即可作为 PWA 安装。
@@ -683,12 +810,15 @@ import {
   RefreshCw,
   Smartphone,
   ShieldCheck,
+  Sliders,
   Sparkles,
   Square,
   Sun,
   Trash2,
   UserRound,
   Users,
+  Image as ImageIcon,
+  Palette,
 } from 'lucide-vue-next'
 import { api } from '../api'
 import DetailList from '../components/DetailList.vue'
@@ -705,6 +835,7 @@ import {
   openAuthGate,
   refresh,
   runSync,
+  saveBackgroundConfig,
   saveRegistrationSettings,
   setFrostedGlassMode,
   setTheme,
@@ -722,7 +853,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.4.1'
+  return '2.4.2'
 })
 
 const isAndroidClient = computed(() => {
@@ -925,6 +1056,76 @@ async function sendCalendarEmail() {
   } finally {
     sendingEmail.value = false
   }
+}
+
+/* ----------------------------------------------------------- background config */
+const bgForm = reactive({
+  enabled: Boolean(state.backgroundConfig?.enabled),
+  lightUrl: state.backgroundConfig?.lightUrl || '',
+  darkUrl: state.backgroundConfig?.darkUrl || '',
+  opacity: Number(state.backgroundConfig?.opacity ?? 35),
+  blur: Number(state.backgroundConfig?.blur ?? 0),
+})
+
+watch(
+  () => state.backgroundConfig,
+  (val) => {
+    if (!val) return
+    bgForm.enabled = Boolean(val.enabled)
+    bgForm.lightUrl = val.lightUrl || ''
+    bgForm.darkUrl = val.darkUrl || ''
+    bgForm.opacity = Number(val.opacity ?? 35)
+    bgForm.blur = Number(val.blur ?? 0)
+  },
+  { deep: true },
+)
+
+function updateBgConfig() {
+  saveBackgroundConfig({
+    enabled: bgForm.enabled,
+    lightUrl: bgForm.lightUrl.trim(),
+    darkUrl: bgForm.darkUrl.trim(),
+    opacity: Number(bgForm.opacity),
+    blur: Number(bgForm.blur),
+  })
+}
+
+function toggleBgEnabled() {
+  bgForm.enabled = !bgForm.enabled
+  updateBgConfig()
+  notify(bgForm.enabled ? '已启用自定义背景图' : '已关闭背景图，恢复纯净底色', 'ok')
+}
+
+function applyBgPreset(kind) {
+  bgForm.enabled = true
+  if (kind === 'anime') {
+    bgForm.lightUrl = 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=1600&q=80'
+    bgForm.darkUrl = 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1600&q=80'
+    bgForm.opacity = 40
+    bgForm.blur = 0
+  } else if (kind === 'nature') {
+    bgForm.lightUrl = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1600&q=80'
+    bgForm.darkUrl = 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=1600&q=80'
+    bgForm.opacity = 35
+    bgForm.blur = 2
+  } else if (kind === 'fluid') {
+    bgForm.lightUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1600&q=80'
+    bgForm.darkUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1600&q=80'
+    bgForm.opacity = 30
+    bgForm.blur = 4
+  }
+  updateBgConfig()
+  notify('已应用预设图床壁纸', 'ok')
+}
+
+function resetBgConfig() {
+  bgForm.enabled = false
+  bgForm.lightUrl = ''
+  bgForm.darkUrl = ''
+  bgForm.opacity = 35
+  bgForm.blur = 0
+  updateBgConfig()
+  notify('已重置并清空背景图', 'ok')
 }
 
 async function saveSemester() {
