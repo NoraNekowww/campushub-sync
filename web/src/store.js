@@ -3,7 +3,7 @@
  * app state is small: one event list, one status blob, a few UI flags.
  */
 import { reactive } from 'vue'
-import { api, ApiError, getToken, isAuthError, setSessionToken, setToken } from './api'
+import { api, ApiError, getSessionToken, getToken, isAuthError, setSessionToken, setToken } from './api'
 import { dayKey, isEventEnded, todayKey } from './utils/datetime'
 import { browserClasstable, browserLogin, TwtError } from './twt-sign'
 
@@ -28,6 +28,31 @@ export function isMobileNativeApp() {
   )
 }
 
+function readInitialEvents() {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem('campushub.events_cache.v1')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed?.items) && parsed.items.length > 0) {
+          return parsed.items
+        }
+      }
+    }
+  } catch (e) {}
+  return []
+}
+
+function readInitialUser() {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem('campushub.user_cache.v1')
+      return raw ? JSON.parse(raw) : null
+    }
+  } catch (e) {}
+  return null
+}
+
 export const state = reactive({
   // 进去之后默认显示课程表（WeekView）
   view: 'week',
@@ -39,8 +64,8 @@ export const state = reactive({
   lastUpdated: null,
   online: typeof navigator === 'undefined' ? true : navigator.onLine,
   offlineSince: null,
-  events: [],
-  total: 0,
+  events: readInitialEvents(),
+  total: readInitialEvents().length,
   filter: 'all', // all | class | deadline
   source: 'all',
   /* 搜索框：课程名 / 老师 / 地点 / 备注 / DDL 标题里命中哪个字都算 */
@@ -52,9 +77,9 @@ export const state = reactive({
   theme: 'auto',
   /* accounts (see accounts.py): the session cookie is HttpOnly, so the app
      learns who it is by asking /api/auth/session, never by reading a cookie. */
-  user: null,
+  user: readInitialUser(),
   accounts: { enabled: true, registration_open: true, invite_required: false, captcha_required: true, password_min_length: 8 },
-  accountsReady: false,
+  accountsReady: Boolean(readInitialUser()),
   viewerAdmin: false,
   authBusy: false,
   authError: '',
@@ -377,23 +402,29 @@ export async function bootstrap() {
 /** Ask the backend who we are; safe to call when signed out. */
 export async function fetchSession() {
   const isMobile = isMobileNativeApp()
-  // 移动端：若本地已有用户信息缓存，优先快速标记就绪，杜绝开屏白屏或被网络请求阻塞
-  if (isMobile && state.user) {
+  // 无论移动端还是网页端，如果启动前已从 LocalStorage 恢复了用户，保持 accountsReady 为 true，杜绝开屏闪现登录框
+  if (state.user) {
     state.accountsReady = true
-    return state.user
   }
 
   try {
     const payload = await api.session()
-    state.user = payload.user || null
+    // 只有当服务端明确返回了已认证用户时才覆盖本地；如果返回未登录，且本地有离线凭据，不要直接清空本地 user
+    if (payload.authenticated && payload.user) {
+      state.user = payload.user
+      saveUserCache(state.user)
+    } else if (!isMobile) {
+      // 桌面网页端无凭据时同步置空
+      state.user = null
+      saveUserCache(null)
+    }
     state.accounts = payload.accounts || state.accounts || { enabled: true }
     state.accountsReady = true
-    saveUserCache(state.user)
     return state.user
   } catch (error) {
     state.accountsReady = true
     state.accounts = state.accounts || { enabled: true }
-    return null
+    return state.user
   }
 }
 
@@ -401,12 +432,13 @@ export const signInRequired = () => {
   // 1. 如果用户主动点击了登录、或收到了明确的 401/403 认证拒绝
   if (state.authRequired || state.forceAuth) return true
 
-  // 2. 如果开启了账号系统，且当前本地既没有登录用户、也没有 ADMIN_TOKEN
+  // 2. 如果开启了账号系统，且当前本地既没有登录用户、也没有任何会话或管理令牌
   const accountsEnabled = Boolean(state.accounts?.enabled)
-  const notLoggedIn = !state.user && !hasToken()
+  const hasUserSession = Boolean(state.user) || Boolean(getSessionToken())
+  const notLoggedIn = !hasUserSession && !hasToken()
   if (!accountsEnabled || !notLoggedIn) return false
 
-  // 3. 若处于未登录状态且本地没有任何课程/日程数据（初次安装或数据已清空），必须弹出登录界面
+  // 3. 若处于完全未登录状态且本地没有任何课程/日程数据（初次安装或数据已清空），才唤起登录界面
   const noLocalEvents = !state.events || state.events.length === 0
   if (noLocalEvents) return true
 

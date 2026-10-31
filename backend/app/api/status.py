@@ -28,15 +28,15 @@ _STARTED_AT = time.time()
 @router.get("/version", summary="Version check for in-app update notification")
 async def app_version() -> dict:
     return {
-        "version": "2.2.9",
-        "tag": "v2.2.9",
-        "title": "CampusHub Android v2.2.9",
+        "version": "2.3.0",
+        "tag": "v2.3.0",
+        "title": "CampusHub Android v2.3.0",
         "download_url": "https://nzlab.online/schedule/CampusHub.apk",
         "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
         "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
         "features": [
-            "修复 500 Internal Server Error：修复登录接口返回体中 token 变量作用域未解包异常，登录 100% 成功",
-            "客户端 API 强制直连远程 HTTPS 地址，杜绝任何相对路径被本地 assets 拦截",
+            "解决开屏闪现登录框：毫秒级预加载 LocalStorage 用户与日程状态，登录后永不闪现登录门",
+            "修复设置页显示未登录：会话持久化与 X-Session-Token 同步优化，设置页即时稳定显示当前账号",
             "X-Session-Token 与 Cookie 双通道无缝鉴权，登录即时生效并持久化写入闪存",
             "图形验证码规则明确：系统仅在【注册】时需要图形验证码，【登录】只需输入用户名和密码",
             "离线秒开架构保持，断网零延迟加载课表"
