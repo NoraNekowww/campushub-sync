@@ -28,9 +28,9 @@ _STARTED_AT = time.time()
 @router.get("/version", summary="Version check for in-app update notification")
 async def app_version() -> dict:
     return {
-        "version": "2.4.0",
-        "tag": "v2.4.0",
-        "title": "CampusHub Android v2.4.0",
+        "version": "2.4.1",
+        "tag": "v2.4.1",
+        "title": "CampusHub Android v2.4.1",
         "download_url": "https://nzlab.online/schedule/CampusHub.apk",
         "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
         "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
