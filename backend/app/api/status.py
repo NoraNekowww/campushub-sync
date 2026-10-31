@@ -28,17 +28,18 @@ _STARTED_AT = time.time()
 @router.get("/version", summary="Version check for in-app update notification")
 async def app_version() -> dict:
     return {
-        "version": "2.3.5",
-        "tag": "v2.3.5",
-        "title": "CampusHub Android v2.3.5",
+        "version": "2.3.6",
+        "tag": "v2.3.6",
+        "title": "CampusHub Android v2.3.6",
         "download_url": "https://nzlab.online/schedule/CampusHub.apk",
         "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
         "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
         "features": [
-            "解决删除任务左右脑互搏与回写复活问题：建立本地删除墓碑，彻底防止周视图与服务端旧缓存冲刷已删日程",
-            "历史归档全量显示：彻底按从近到远（时间倒序上下排列），进入即看最新完成日程，向下滚动翻阅全部历史",
-            "课表底色三态支持：标准网格 / 细分网格 / 极简空白底",
-            "DDL 与课程冲突依次轮流呼吸亮灭呈现"
+            "彻底移除微北洋直连/手动粘贴/本地令牌等历史冗余兜底，天大课表导入全面收敛为主路径官方教务 CAS（sso.tju.edu.cn）",
+            "顶栏交互视觉对齐：同步按钮与搜索、设置图标统一为 36px (h-9) 绝对等高对齐",
+            "历史归档全量显示：按从近到远（时间严格倒序上下排列），即开即见最新完成日程",
+            "彻底解决删除任务左右脑互搏与回写复活问题（本地删除墓碑强校验机制）",
+            "课表底色三态支持（标准网格 / 细分网格 / 极简空白底）与 DDL 冲突轮换呼吸"
         ]
     }
 

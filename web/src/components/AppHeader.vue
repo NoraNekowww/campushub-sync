@@ -46,7 +46,7 @@
         </div>
 
         <button
-          class="btn-ghost !px-2.5"
+          class="btn-ghost !h-9 !px-2.5"
           title="搜索"
           data-testid="search-open"
           @click="openSearch"
@@ -54,13 +54,13 @@
           <Search :size="16" />
         </button>
 
-        <button class="btn-primary !py-1.5" :disabled="state.syncing" @click="runSync()">
+        <button class="btn-primary !h-9 !py-0 px-3 flex items-center justify-center gap-1.5" :disabled="state.syncing" @click="runSync()">
           <RefreshCw :size="15" :class="state.syncing ? 'animate-spin' : ''" />
           <span class="hidden sm:inline">{{ state.syncing ? '同步中' : '同步' }}</span>
         </button>
 
         <button
-          class="btn-ghost !px-2 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
+          class="btn-ghost !h-9 !px-2 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
           :class="state.view === 'settings' ? '!text-brand-600 dark:!text-brand-400' : ''"
           title="系统设置"
           data-testid="header-settings-btn"

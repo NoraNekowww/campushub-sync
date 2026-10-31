@@ -306,7 +306,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.3.5 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.3.6 · 原生极速' }}
         </span>
       </header>
 
@@ -418,22 +418,6 @@
       />
 
       <TjuConnect id="tju-section" :tju="tju" :semester="semester" />
-
-      <div class="space-y-2">
-        <p class="label">上传 ICS 课表（微北洋接口失效时的兜底）</p>
-        <input ref="fileInput" class="input !py-1.5 text-xs" type="file" accept=".ics,text/calendar" @change="uploadIcs" />
-        <div class="flex flex-wrap gap-2">
-          <button class="btn-ghost !py-1.5 text-xs" :disabled="busy" @click="previewIcs">
-            <Eye :size="13" /> 预览解析结果
-          </button>
-          <button class="btn-ghost !py-1.5 text-xs" :disabled="busy" @click="clearIcs">
-            <Trash2 :size="13" /> 删除已上传课表
-          </button>
-        </div>
-        <p v-if="preview" class="rounded-xl bg-slate-50 p-2 text-[11px] dark:bg-slate-800/50">
-          解析到 {{ preview.raw_events }} 条原始事件；示例：{{ sampleTitles }}
-        </p>
-      </div>
 
       <div class="space-y-2 border-t border-slate-100 pt-3 dark:border-slate-800">
         <p class="label">学期设置</p>
@@ -616,7 +600,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.3.5'
+  return '2.3.6'
 })
 
 const isAndroidClient = computed(() => {
@@ -787,53 +771,6 @@ async function copy(text, message) {
   }
 }
 
-const sampleTitles = computed(() => {
-  const sample = preview.value?.expanded_sample || []
-  return sample.map((item) => item.title).join(' / ') || '—'
-})
-
-async function uploadIcs(event) {
-  const file = event.target.files?.[0]
-  if (!file) return
-  busy.value = true
-  try {
-    const result = await api.uploadIcs(file)
-    notify(result.message || '课表已保存，正在同步', 'ok')
-    await runSync()
-  } catch (error) {
-    notify(error.message || '上传失败', 'danger')
-  } finally {
-    busy.value = false
-    if (fileInput.value) fileInput.value.value = ''
-  }
-}
-
-async function previewIcs() {
-  busy.value = true
-  try {
-    const result = await api.schedulePreview()
-    preview.value = result.detail || {}
-    notify(`解析到 ${preview.value.raw_events ?? 0} 条事件`, 'ok')
-  } catch (error) {
-    notify(error.message || '没有可预览的课表', 'warn')
-  } finally {
-    busy.value = false
-  }
-}
-
-async function clearIcs() {
-  busy.value = true
-  try {
-    await api.removeIcs()
-    preview.value = null
-    notify('已删除上传的课表', 'ok')
-  } catch (error) {
-    notify(error.message || '删除失败', 'danger')
-  } finally {
-    busy.value = false
-  }
-}
-
 async function saveSemester() {
   if (!semesterForm.start_date) {
     notify('请填写第一周周一的日期', 'warn')
@@ -980,7 +917,7 @@ async function checkAppUpdate(manual = false) {
       return
     }
 
-    const current = '2.3.5'
+    const current = '2.3.6'
     const parse = (v) => String(v).replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0)
     const l = parse(latestVer)
     const c = parse(current)
