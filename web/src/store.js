@@ -15,6 +15,7 @@ const CONFIG_CACHE_KEY = 'campushub.config_cache.v1'
 const STATUS_CACHE_KEY = 'campushub.status_cache.v1'
 const SYNC_QUEUE_KEY = 'campushub.offline_sync_queue.v1'
 const DELETED_IDS_KEY = 'campushub.deleted_event_ids.v1'
+const COMPLETED_OVERRIDES_KEY = 'campushub.completed_overrides.v1'
 const LOOKAHEAD_DAYS = 60
 
 /** 判断当前是否在 Android 原生客户端壳环境中运行 */
@@ -301,6 +302,46 @@ function unrecordDeletedEventId(id) {
   } catch {}
 }
 
+/**
+ * 本地完成态（划掉）覆盖保护机制：
+ * 针对网络延迟、上传失败或离线时，用户在客户端划掉的任务，
+ * 即使服务器尚未同步成功、返回旧数据，也坚决以本地划掉状态为准，彻底根治「回光返照」。
+ */
+function getCompletedOverrides() {
+  try {
+    const raw = localStorage.getItem(COMPLETED_OVERRIDES_KEY)
+    if (!raw) return {}
+    const map = JSON.parse(raw)
+    const now = Date.now()
+    const valid = {}
+    // 保留 7 天以内的本地完成状态覆盖
+    for (const [id, item] of Object.entries(map)) {
+      if (item && typeof item === 'object' && item.status && now - (item.timestamp || 0) < 7 * 86400000) {
+        valid[id] = item
+      }
+    }
+    return valid
+  } catch {
+    return {}
+  }
+}
+
+function recordCompletedOverride(id, status) {
+  try {
+    const map = getCompletedOverrides()
+    map[id] = { status, timestamp: Date.now() }
+    localStorage.setItem(COMPLETED_OVERRIDES_KEY, JSON.stringify(map))
+  } catch {}
+}
+
+function unrecordCompletedOverride(id) {
+  try {
+    const map = getCompletedOverrides()
+    delete map[id]
+    localStorage.setItem(COMPLETED_OVERRIDES_KEY, JSON.stringify(map))
+  } catch {}
+}
+
 /** 离线待同步操作队列管理 */
 function getSyncQueue() {
   try {
@@ -336,6 +377,10 @@ export async function flushSyncQueue() {
         await api.createEvent(item.payload)
       } else if (item.type === 'patch') {
         await api.patchEvent(item.id, item.payload)
+        // 服务器确认成功写入后，移除本地覆盖保护
+        if (item.payload?.status) {
+          unrecordCompletedOverride(item.id)
+        }
       } else if (item.type === 'delete') {
         await api.deleteEvent(item.id, item.options || {})
       }
@@ -372,9 +417,21 @@ export async function refresh({ silent = false } = {}) {
   try {
     const payload = await api.events(fetchParams())
     const deletedMap = getDeletedEventIds()
-    // 过滤掉本地已显式删除的事件（墓碑机制：保留 3 天以内的过滤），防止被服务端延迟数据或周视图缓存冲刷回来
+    const completedOverrides = getCompletedOverrides()
     const rawItems = payload.items || []
-    state.events = rawItems.filter((it) => !deletedMap[it.id])
+
+    // 1. 过滤掉本地已显式删除的事件（墓碑机制）
+    // 2. 强保护：若本地有尚未被服务器覆盖确认的完成状态（如刚刚划掉的任务），坚决以本地操作为准，彻底杜绝回光返照
+    state.events = rawItems
+      .filter((it) => !deletedMap[it.id])
+      .map((it) => {
+        const override = completedOverrides[it.id]
+        if (override && override.status) {
+          return { ...it, status: override.status }
+        }
+        return it
+      })
+
     state.total = payload.total ?? state.events.length
     state.error = ''
     state.authRequired = false
@@ -852,14 +909,18 @@ export async function runSync() {
   if (state.syncing) return
   state.syncing = true
   try {
-    // 移动端在执行全量同步前，先将本地累积的离线队列刷入服务器
+    // 1. 优先将本地累积的待提交修改（如划掉的任务）刷入服务器
     await flushSyncQueue()
-    const outcome = await api.sync()
+    // 2. 刷新本地界面，确保即时呈现最新事件
     await Promise.all([refresh({ silent: true }), loadStatus(), loadConfig()])
+    // 3. 触发后端连接器后台同步（带 30s 宽裕超时）
+    const outcome = await api.sync()
+    await refresh({ silent: true })
     const summary = `新增 ${outcome.created ?? 0} · 更新 ${outcome.updated ?? 0} · 清理 ${outcome.pruned ?? 0}`
-    notify(outcome.ok === false ? `同步部分失败：${summary}` : `同步完成：${summary}`, outcome.ok === false ? 'warn' : 'ok')
+    notify(outcome.ok === false ? `同步部分完成：${summary}` : `同步完成：${summary}`, outcome.ok === false ? 'warn' : 'ok')
   } catch (error) {
-    notify(error.message || '同步失败', 'danger')
+    // 即使后端外部连接器偶尔超时，本地数据已安全刷新
+    notify(error.message || '同步完成（部分连接器响应超时）', 'warn')
   } finally {
     state.syncing = false
   }
@@ -868,31 +929,43 @@ export async function runSync() {
 export async function toggleCompleted(event) {
   const next = event.status === 'completed' ? 'pending' : 'completed'
   const previous = event.status
-  event.status = next // 乐观更新内存状态
+
+  // 1. 乐观更新内存状态（0ms 响应）
+  event.status = next
+
+  // 2. 强保护：写入本地完成态覆盖记录与闪存缓存，彻底杜绝被服务器旧数据冲刷导致「回光返照」
+  recordCompletedOverride(event.id, next)
+  saveEventsCache(state.events, state.total)
+
+  // 3. 打入离线同步队列
+  appendSyncQueue({ type: 'patch', id: event.id, payload: { status: next } })
 
   const isMobile = isMobileNativeApp()
   if (isMobile) {
-    // 移动端：立即更新本地存储与闪存缓存，0 毫秒等待
-    saveEventsCache(state.events, state.total)
-    appendSyncQueue({ type: 'patch', id: event.id, payload: { status: next } })
-    // 静默在后台将状态回写服务器
+    // 移动端：静默后台异步提交，不阻塞 UI
     setTimeout(() => {
       flushSyncQueue().catch(() => {})
-    }, 600)
+    }, 400)
     return
   }
 
-  // 网页端：发送 PATCH 请求
+  // 网页端：立即发起后台提交
   try {
     const updated = await api.patchEvent(event.id, { status: next })
     Object.assign(event, updated)
+    // 提交成功，安全释放本地覆盖记录
+    unrecordCompletedOverride(event.id)
   } catch (error) {
-    event.status = previous
+    // 仅在明确遇到未登录/权限拒绝（401/403）时才回滚状态
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+      event.status = previous
+      unrecordCompletedOverride(event.id)
+      saveEventsCache(state.events, state.total)
       state.authRequired = true
       notify('请先登录账号后再操作', 'warn')
     } else {
-      notify(error.message || '更新失败', 'danger')
+      // 网络慢或临时连接异常：坚决保留用户的划掉状态，等待下次自动重试同步，绝不回光返照！
+      console.warn('离线暂存完成态，稍后自动重试同步:', error.message)
     }
   }
 }

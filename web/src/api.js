@@ -82,29 +82,53 @@ export class ApiError extends Error {
 export const isAuthError = (error) =>
   error instanceof ApiError && (error.status === 401 || error.status === 403)
 
-async function request(path, { method = 'GET', body, headers = {}, raw = false } = {}) {
+async function request(path, { method = 'GET', body, headers = {}, raw = false, timeoutMs, retries = 1 } = {}) {
   const token = getToken()
   const sessionToken = getSessionToken()
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData
+
+  // 常规请求 12s 超时，sync 等长任务 30s 超时
+  const timeout = timeoutMs || (path.startsWith('/sync') || path.startsWith('/schedule/import') ? 30000 : 12000)
+
   let response
-  try {
-    response = await fetch(`${API_BASE}${path}`, {
-      method,
-      credentials: 'include',
-      headers: {
-        ...(body && !isForm ? { 'Content-Type': 'application/json' } : {}),
-        // 携带登录会话 Token，解决 Android 原生环境拦截导致的 Cookie 隔离问题
-        ...(sessionToken ? { 'X-Session-Token': sessionToken } : {}),
-        // One field, two roles: the admin token drives reads *and* writes, the
-        // subscribe token only unlocks reads (see backend require_read). Sending
-        // both headers means a read-only device just works.
-        ...(token ? { 'X-Admin-Token': token, 'X-Subscribe-Token': token } : {}),
-        ...headers,
-      },
-      body: body ? (isForm ? body : JSON.stringify(body)) : undefined,
-    })
-  } catch (err) {
-    throw new ApiError(`网络连接失败：${err.message || '请检查网络或后端状态'}`, 0)
+  let lastErr = null
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
+    const timer = controller ? setTimeout(() => controller.abort(), timeout) : null
+
+    try {
+      response = await fetch(`${API_BASE}${path}`, {
+        method,
+        credentials: 'include',
+        signal: controller?.signal,
+        headers: {
+          ...(body && !isForm ? { 'Content-Type': 'application/json' } : {}),
+          // 携带登录会话 Token，解决 Android 原生环境拦截导致的 Cookie 隔离问题
+          ...(sessionToken ? { 'X-Session-Token': sessionToken } : {}),
+          // One field, two roles: the admin token drives reads *and* writes, the
+          // subscribe token only unlocks reads (see backend require_read). Sending
+          // both headers means a read-only device just works.
+          ...(token ? { 'X-Admin-Token': token, 'X-Subscribe-Token': token } : {}),
+          ...headers,
+        },
+        body: body ? (isForm ? body : JSON.stringify(body)) : undefined,
+      })
+      if (timer) clearTimeout(timer)
+      break
+    } catch (err) {
+      if (timer) clearTimeout(timer)
+      lastErr = err
+      const isAbort = err.name === 'AbortError'
+      // 仅在 GET 请求且还有重试机会时重试一次
+      if (method === 'GET' && attempt < retries) {
+        await new Promise((r) => setTimeout(r, 600))
+        continue
+      }
+      throw new ApiError(
+        isAbort ? '网络请求超时，请检查网络或稍后重试' : `网络连接失败：${err.message || '请检查网络或后端状态'}`,
+        0,
+      )
+    }
   }
 
   /**

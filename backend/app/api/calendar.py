@@ -170,7 +170,7 @@ class SendCalendarEmailRequest(BaseModel):
     include_completed: bool = False
 
 
-@router.post("/subscribe/email", summary="发送日历至指定邮箱（专为不支持链接订阅的备用机设计）")
+@router.post("/subscribe/email", summary="发送日历订阅至指定邮箱（支持系统邮箱一键导入）")
 def send_calendar_to_email(
     payload: SendCalendarEmailRequest,
     request: Request,
@@ -210,7 +210,7 @@ def send_calendar_to_email(
             "ok": False,
             "smtp_configured": False,
             "event_count": len(events),
-            "message": "服务器暂未配置 SMTP 邮件外发服务。备用机可直接点击「下载 .ics 文件」用手机自带日历打开一键导入！",
+            "message": "服务器暂未配置 SMTP 邮件外发服务。可直接点击「下载 .ics 文件」用系统日历直接打开导入！",
         }
 
     # 构造标准 iCalendar 邮件
@@ -223,9 +223,9 @@ def send_calendar_to_email(
     text_body = (
         f"您好！\n\n"
         f"这是由 CampusHub 导出的最新课表与待办日程文件（共计 {len(events)} 个日程/课程）。\n"
-        f"专为不支持网络链接订阅的备用机或系统邮箱打造。\n\n"
-        f"【备用机导入指南】：\n"
-        f"1. 在备用机自带的「电子邮件」App 中打开本邮件；\n"
+        f"支持导入各类手机、平板或电脑系统自带日历。\n\n"
+        f"【日历导入指南】：\n"
+        f"1. 在设备自带的「电子邮件」或邮件客户端中打开本邮件；\n"
         f"2. 点击附件中的「campushub.ics」或邮件顶部的「添加至日历」；\n"
         f"3. 系统日历将自动为您一键导入所有课程时间与地点！\n\n"
         f"导出时间：{now.strftime('%Y-%m-%d %H:%M:%S')} (UTC)\n"
@@ -254,13 +254,13 @@ def send_calendar_to_email(
             "ok": True,
             "smtp_configured": True,
             "event_count": len(events),
-            "message": f"日历邮件已成功发送至 {recipient}，请在备用机邮箱查收并点击导入！",
+            "message": f"日历邮件已成功发送至 {recipient}，请在邮箱查收并点击导入！",
         }
     except Exception as exc:
         log.exception("发送日历邮件失败: %s", exc)
         return {
             "ok": False,
             "smtp_configured": True,
-            "message": f"邮件发送失败: {exc}。请检查 SMTP 配置，或在备用机上直接点击「下载 .ics 文件」导入。",
+            "message": f"邮件发送失败: {exc}。请检查 SMTP 配置，或直接点击「下载 .ics 文件」导入。",
         }
 

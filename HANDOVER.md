@@ -1,6 +1,6 @@
 # CampusHub Sync (CampusHub Android) 工程架构与开发交接文档
 
-> **当前正式版本**：`v2.3.7` (VersionCode: 39)  
+> **当前正式版本**：`v2.3.8` (VersionCode: 40)  
 > **开源仓库**：`https://github.com/NoraNekowww/campushub-sync`  
 > **生产服务域名**：`https://nzlab.online/schedule/` (公网直连 IP: `108.186.202.38`，套 Cloudflare CDN)  
 > **APK 生产分发直链**：`https://nzlab.online/schedule/CampusHub.apk`  
