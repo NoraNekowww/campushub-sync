@@ -100,7 +100,7 @@ def write_registration_settings(
     return {"ok": True, "settings": result}
 
 
-def _set_session_cookie(response: Response, user: User) -> int:
+def _set_session_cookie(response: Response, user: User) -> tuple[str, int]:
     settings = get_settings()
     token, max_age = accounts.issue_session(user, settings)
     response.set_cookie(
@@ -112,7 +112,7 @@ def _set_session_cookie(response: Response, user: User) -> int:
         secure=bool(settings.session_cookie_secure),
         path=settings.session_cookie_path or "/",
     )
-    return max_age
+    return token, max_age
 
 
 @router.get("/session", summary="Who am I? (never 401 — drives the login UI)")
@@ -171,10 +171,11 @@ def register(
     except accounts.AccountError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    max_age = _set_session_cookie(response, user)
+    token, max_age = _set_session_cookie(response, user)
     log.info("registered %s from %s", user.username, _client_ip(request))
     return {
         "ok": True,
+        "token": token,
         "user": accounts.user_payload(user),
         "accounts": _accounts_meta(),
         "max_age": max_age,
@@ -210,7 +211,7 @@ def login(
         raise HTTPException(status_code=403, detail="账号已被停用")
 
     accounts.throttle.reset(payload.username, ip)
-    max_age = _set_session_cookie(response, user)
+    token, max_age = _set_session_cookie(response, user)
     log.info("login ok: %s from %s", user.username, ip)
     return {
         "ok": True,

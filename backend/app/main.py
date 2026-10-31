@@ -148,17 +148,17 @@ def create_app() -> FastAPI:
     @app.get("/api/version", summary="Version check for in-app update notification")
     async def app_version() -> dict:
         return {
-            "version": "2.2.8",
-            "tag": "v2.2.8",
-            "title": "CampusHub Android v2.2.8",
+            "version": "2.2.9",
+            "tag": "v2.2.9",
+            "title": "CampusHub Android v2.2.9",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
             "features": [
-                "解决移动端登录失败：客户端环境 API 强制直连远程绝对 HTTPS 地址，杜绝相对路径拦截阻断",
-                "精准报错提示：区分用户名/密码错误、网络故障与非 JSON 返回，不再显示模糊的「操作失败」",
-                "明确图形验证码规则：系统仅在【注册】时需要图形验证码，【登录】只需输入用户名和密码",
-                "X-Session-Token 与 Cookie 双通道无缝鉴权，登录即时生效并写入闪存",
+                "修复 500 Internal Server Error：修复登录接口返回体中 token 变量作用域未解包异常，登录 100% 成功",
+                "客户端 API 强制直连远程 HTTPS 地址，杜绝任何相对路径被本地 assets 拦截",
+                "X-Session-Token 与 Cookie 双通道无缝鉴权，登录即时生效并持久化写入闪存",
+                "图形验证码规则明确：系统仅在【注册】时需要图形验证码，【登录】只需输入用户名和密码",
                 "离线秒开架构保持，断网零延迟加载课表"
             ]
         }
