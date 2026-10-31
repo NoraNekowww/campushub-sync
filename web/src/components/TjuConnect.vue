@@ -255,7 +255,6 @@ async function oneClick() {
     if (result?.detail?.warning) say(`${result.message}｜${result.detail.warning}`, 'warn')
     form.password = ''
     await loadJwMeta()
-    localToken.value = readTjuToken()
   } catch (error) {
     await reportJwError(error)
   } finally {

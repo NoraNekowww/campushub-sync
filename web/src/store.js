@@ -5,7 +5,6 @@
 import { reactive } from 'vue'
 import { api, ApiError, getSessionToken, getToken, isAuthError, setSessionToken, setToken } from './api'
 import { dayKey, isEventEnded, todayKey } from './utils/datetime'
-import { browserClasstable, browserLogin, TwtError } from './twt-sign'
 
 const THEME_KEY = 'campushub.theme'
 const GRID_STYLE_KEY = 'campushub.week_grid_style'
@@ -930,75 +929,9 @@ export const getTokenSafe = () => getToken()
  * 服务器只拿到最终 JSON，密码从不经过服务器。本机只记住微北洋返回的令牌（可清除），
  * 于是「一键导入」与「打开 App 自动续一次」都不用重新输密码。
  */
-const TJU_TOKEN_KEY = 'campushub.twt.token'
-const TJU_IMPORT_KEY = 'campushub.twt.lastImport'
-const TJU_TRY_KEY = 'campushub.twt.lastTry'
-
-export function readTjuToken() {
-  try {
-    return localStorage.getItem(TJU_TOKEN_KEY) || ''
-  } catch (error) {
-    return ''
-  }
-}
-
-/** 传空串 = 忘掉本机登录（换账号、令牌失效时用）。 */
-export function rememberTjuToken(token) {
-  try {
-    if (token) localStorage.setItem(TJU_TOKEN_KEY, token)
-    else localStorage.removeItem(TJU_TOKEN_KEY)
-  } catch (error) {
-    /* 隐私模式写不了 localStorage —— 退化成每次都输密码，不影响功能 */
-  }
-}
-
-const readStamp = (key) => {
-  try {
-    return Number(localStorage.getItem(key) || 0) || 0
-  } catch (error) {
-    return 0
-  }
-}
-const writeStamp = (key) => {
-  try {
-    localStorage.setItem(key, String(Date.now()))
-  } catch (error) {
-    /* 同上 */
-  }
-}
-
 /**
- * 在用户浏览器里抓课表并导入：有令牌就直接用，否则用学号+密码换一个令牌。
- * 成功后刷新本地 config，调用方随后跑一次 runSync() 就能看到新日程。
- */
-export async function tjuBrowserImport({ token = '', username = '', password = '' } = {}) {
-  let live = token || readTjuToken()
-  if (!live) {
-    if (!username || !password) {
-      throw new TwtError('需要学号 + 微北洋密码（只在你本机用，不会上传）', 'credentials')
-    }
-    live = await browserLogin(username, password)
-  }
-  rememberTjuToken(live)
-  let payload
-  try {
-    payload = await browserClasstable(live)
-  } catch (error) {
-    writeStamp(TJU_TRY_KEY)
-    // 令牌过期/被踢：本机的记录立刻作废，下次用密码重来，避免一直撞墙。
-    if (error instanceof TwtError && error.kind === 'credentials') rememberTjuToken('')
-    throw error
-  }
-  const result = await api.tjuImport({ payload, source: 'browser' })
-  writeStamp(TJU_IMPORT_KEY)
-  writeStamp(TJU_TRY_KEY)
-  await Promise.all([loadConfig(), refresh({ silent: true })])
-  return { result, courses: payload?.data?.data?.length ?? 0 }
-}
-
-/**
- * 打开 App 时静默续一次课表：距上次成功超过 maxAgeHours、且距上次尝试超过 retryMinutes 才真发请求。
- * 优先走**服务器上的教务凭据**（不用校园网）；没有才退回本机微北洋令牌。失败静默放弃，不打扰用户。
+ * 天大课表主路径：教务系统 CAS 直连同步（sso.tju.edu.cn -> classes.tju.edu.cn/eams）
+ * 彻底移除微北洋浏览器直连/本地 Token/手动导入等陈旧兜底。
  */
 export async function autoRefreshTju({ maxAgeHours = 6, retryMinutes = 30 } = {}) {
   // 移动端强本地化：除非用户主动在界面上点击「同步」，否则开屏时不自主向教务发起静默请求，极速启动省电流畅
@@ -1006,11 +939,8 @@ export async function autoRefreshTju({ maxAgeHours = 6, retryMinutes = 30 } = {}
 
   if (typeof window === 'undefined') return null
   if (!state.config?.tju?.import_meta?.courses) return null
-  const now = Date.now()
-  if (now - readStamp(TJU_TRY_KEY) < retryMinutes * 60 * 1000) return null
-  if (now - readStamp(TJU_IMPORT_KEY) < maxAgeHours * 3600 * 1000) return null
 
-  // 教务系统（CAS）在服务器上跑，不依赖校园网 —— 有凭据就用它。
+  // 教务系统（CAS）在服务器上跑，公网可达，不依赖校园网 —— 有凭据就用它
   const jw = await loadJwStatus()
   if (jw?.credentials_saved) {
     try {
@@ -1019,20 +949,10 @@ export async function autoRefreshTju({ maxAgeHours = 6, retryMinutes = 30 } = {}
       if (courses) notify(`课表已自动更新（${courses} 门）`, 'ok')
       return courses
     } catch (error) {
-      writeStamp(TJU_TRY_KEY)
       return null
     }
   }
-
-  // 兜底：本机微北洋令牌（只有校园网里能成，失败就安静地算了）。
-  if (!readTjuToken()) return null
-  try {
-    const { courses } = await tjuBrowserImport({})
-    if (courses) notify(`课表已自动更新（${courses} 门）`, 'ok')
-    return courses
-  } catch (error) {
-    return null
-  }
+  return null
 }
 
 /* --------------------------------------- 教务系统（CAS 直连，主路径）*/
