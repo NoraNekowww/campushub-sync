@@ -26,9 +26,9 @@
       <p class="text-xs opacity-75 mt-1">在日程列表勾选完成的个人待办和日程会在此倒序归档</p>
     </div>
 
-    <!-- 按日期分组的历史日程（渐进加载，触底平滑展开） -->
+    <!-- 按日期分组的历史日程（全量显示，按日期与时间严格倒序排列） -->
     <section
-      v-for="group in visibleGroups"
+      v-for="group in groups"
       :key="group.key"
       class="space-y-2"
       data-testid="history-day-group"
@@ -53,25 +53,11 @@
         @toggle="toggleCompleted"
       />
     </section>
-
-    <!-- 底部触底侦测与加载更多提示 -->
-    <div
-      v-if="hasMoreGroups"
-      ref="loadSentinel"
-      class="flex items-center justify-center py-4 text-xs text-slate-400 dark:text-slate-500"
-    >
-      <button
-        class="btn-ghost !py-1 text-xs text-brand-600 dark:text-brand-400"
-        @click="loadMore"
-      >
-        加载更早的历史日程 (还有 {{ totalGroupsCount - displayCount }} 天)
-      </button>
-    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { CheckCircle2, History } from 'lucide-vue-next'
 import EventCard from '../components/EventCard.vue'
 import SkeletonList from '../components/SkeletonList.vue'
@@ -79,50 +65,10 @@ import { state, toggleCompleted } from '../store'
 import { dayLabel, isEventEnded } from '../utils/datetime'
 
 /**
- * 分页渐进展开：
- * 默认优先只展示最近 5 个日期分组，用户向下滚动时自动递增加载更多天，
- * 既保证进入历史归档时能第一眼快速找到刚刚不小心勾选划掉的任务，又保障长列表的极速渲染。
- */
-const PAGE_SIZE = 5
-const displayCount = ref(PAGE_SIZE)
-const loadSentinel = ref(null)
-let observer = null
-
-function setupObserver() {
-  if (typeof window === 'undefined' || !('IntersectionObserver' in window)) return
-  if (observer) observer.disconnect()
-  observer = new IntersectionObserver((entries) => {
-    if (entries[0]?.isIntersecting) {
-      loadMore()
-    }
-  }, { rootMargin: '120px' })
-
-  nextTick(() => {
-    if (loadSentinel.value) {
-      observer.observe(loadSentinel.value)
-    }
-  })
-}
-
-function loadMore() {
-  if (displayCount.value < totalGroupsCount.value) {
-    displayCount.value += PAGE_SIZE
-  }
-}
-
-onMounted(() => {
-  setupObserver()
-})
-
-onUnmounted(() => {
-  if (observer) observer.disconnect()
-})
-
-/**
  * 历史完成过的所有日程：
- * 1. 过滤掉天大课表自带课程（event.source === 'tju_schedule'），只归档个人待办与自定义日程；
+ * 1. 彻底排除天大课表自带课程（event.source === 'tju_schedule'），只归档个人待办与自定义日程；
  * 2. 状态为 completed 的日程 / 待办，或者已经自然结束的个人自定义活动；
- * 3. 排序逻辑：优先显示最近的（降序倒排）。
+ * 3. 全量展示全部历史，按从近到远严格时间倒序排列（今天/刚刚完成的在最上方）。
  */
 const completedEvents = computed(() => {
   const nowTs = Date.now()
@@ -168,15 +114,5 @@ const groups = computed(() => {
         return tB - tA
       }),
     }))
-})
-
-const totalGroupsCount = computed(() => groups.value.length)
-const visibleGroups = computed(() => groups.value.slice(0, displayCount.value))
-const hasMoreGroups = computed(() => displayCount.value < totalGroupsCount.value)
-
-watch(hasMoreGroups, (hasMore) => {
-  if (hasMore) {
-    nextTick(() => setupObserver())
-  }
 })
 </script>

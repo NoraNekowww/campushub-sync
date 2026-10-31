@@ -579,22 +579,23 @@ async function loadWeek(force = false) {
 /**
  * 核心联动同步：
  * 1. 当用户在日程页创建、修改、删除或划掉日程时，立刻在本地同步响应式变更到课表；
- * 2. 避免因为 loadWeek() 中 isMobile 缓存阻断导致周课表数据迟迟不刷新的问题。
+ * 2. 避免因为 loadWeek() 中 isMobile 缓存阻断导致周课表数据迟迟不刷新的问题；
+ * 3. 彻底防左右脑互搏：若 globalEvents 发生删除（元素减少），必须严格剔除，不能用 currentList 盲目逆向补充复活。
  */
 watch(
   () => state.events,
   (newGlobalEvents) => {
-    if (Array.isArray(newGlobalEvents) && newGlobalEvents.length > 0) {
-      const globalIds = new Set(newGlobalEvents.map((e) => e.id))
-      // 保留周视图原本包含的远期课程，并将全局变更的日程/待办实时替换合并
-      const currentList = Array.isArray(events.value) ? events.value : []
-      const merged = [
-        ...newGlobalEvents,
-        ...currentList.filter((item) => !globalIds.has(item.id)),
-      ]
-      events.value = merged
-      saveWeekCache(events.value)
-    }
+    if (!Array.isArray(newGlobalEvents)) return
+    const globalIds = new Set(newGlobalEvents.map((e) => e.id))
+    const currentList = Array.isArray(events.value) ? events.value : []
+    
+    // 只保留：当前全局列表中仍在的项目 + 属于非个人自定义课程（即天大教务自带课程，日程页可能未全量拉取）
+    const merged = [
+      ...newGlobalEvents,
+      ...currentList.filter((item) => !globalIds.has(item.id) && item.source === 'tju_schedule'),
+    ]
+    events.value = merged
+    saveWeekCache(events.value)
   },
   { deep: true },
 )

@@ -15,6 +15,7 @@ const USER_CACHE_KEY = 'campushub.user_cache.v1'
 const CONFIG_CACHE_KEY = 'campushub.config_cache.v1'
 const STATUS_CACHE_KEY = 'campushub.status_cache.v1'
 const SYNC_QUEUE_KEY = 'campushub.offline_sync_queue.v1'
+const DELETED_IDS_KEY = 'campushub.deleted_event_ids.v1'
 const LOOKAHEAD_DAYS = 60
 
 /** 判断当前是否在 Android 原生客户端壳环境中运行 */
@@ -275,6 +276,32 @@ function saveStatusCache(status) {
   } catch (e) {}
 }
 
+/** 已在本地明确删除的任务 ID 墓碑集合（防网络往返冲撞与左右脑互搏） */
+function getDeletedEventIds() {
+  try {
+    const raw = localStorage.getItem(DELETED_IDS_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+function recordDeletedEventId(id) {
+  try {
+    const map = getDeletedEventIds()
+    map[id] = Date.now()
+    localStorage.setItem(DELETED_IDS_KEY, JSON.stringify(map))
+  } catch {}
+}
+
+function unrecordDeletedEventId(id) {
+  try {
+    const map = getDeletedEventIds()
+    delete map[id]
+    localStorage.setItem(DELETED_IDS_KEY, JSON.stringify(map))
+  } catch {}
+}
+
 /** 离线待同步操作队列管理 */
 function getSyncQueue() {
   try {
@@ -345,7 +372,10 @@ export async function refresh({ silent = false } = {}) {
   }
   try {
     const payload = await api.events(fetchParams())
-    state.events = payload.items || []
+    const deletedMap = getDeletedEventIds()
+    // 过滤掉本地已显式删除的事件（墓碑机制：保留 3 天以内的过滤），防止被服务端延迟数据或周视图缓存冲刷回来
+    const rawItems = payload.items || []
+    state.events = rawItems.filter((it) => !deletedMap[it.id])
     state.total = payload.total ?? state.events.length
     state.error = ''
     state.authRequired = false
@@ -693,9 +723,24 @@ export async function removeEvent(event) {
     state.total = Math.max(0, state.total - 1)
   }
 
+  // 核心：无论移动端还是网页端，立即登记墓碑并持久化，杜绝多端或周视图异步回写导致数据冲刷复活
+  recordDeletedEventId(event.id)
+  saveEventsCache(state.events, state.total)
+
+  // 同时也更新周课表缓存
+  try {
+    const rawWeek = localStorage.getItem(WEEK_CACHE_KEY)
+    if (rawWeek) {
+      const parsed = JSON.parse(rawWeek)
+      if (Array.isArray(parsed?.items)) {
+        parsed.items = parsed.items.filter((it) => it.id !== event.id)
+        localStorage.setItem(WEEK_CACHE_KEY, JSON.stringify(parsed))
+      }
+    }
+  } catch (e) {}
+
   const isMobile = isMobileNativeApp()
   if (isMobile) {
-    saveEventsCache(state.events, state.total)
     appendSyncQueue({ type: 'delete', id: event.id, options: {} })
     notify(removedText(event), 'info', {
       action: { label: '撤销', run: () => restoreEvent(event.id, event.title) },
@@ -714,6 +759,7 @@ export async function removeEvent(event) {
     await refresh({ silent: true })
     return true
   } catch (error) {
+    unrecordDeletedEventId(event.id)
     if (snapshot) {
       state.events.splice(index, 0, snapshot)
       state.total += 1

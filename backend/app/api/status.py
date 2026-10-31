@@ -28,17 +28,17 @@ _STARTED_AT = time.time()
 @router.get("/version", summary="Version check for in-app update notification")
 async def app_version() -> dict:
     return {
-        "version": "2.3.4",
-        "tag": "v2.3.4",
-        "title": "CampusHub Android v2.3.4",
+        "version": "2.3.5",
+        "tag": "v2.3.5",
+        "title": "CampusHub Android v2.3.5",
         "download_url": "https://nzlab.online/schedule/CampusHub.apk",
         "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
         "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
         "features": [
-            "历史归档支持渐进加载：优先呈现最近完成的日程，向下滚动平滑展开更早记录，秒级找回误勾选任务",
-            "课表底色升级三态切换：支持「标准网格」、「细分网格（增加半小时参考虚线）」与「极简空白底」",
-            "DDL 与课程冲突轮换呼吸：DDL 精准定位在时间轴上，与课程或其它 DDL 重叠时依次轮流呼吸亮灭呈现",
-            "性能调优与高刷渲染保持，无极滚动体验流畅"
+            "解决删除任务左右脑互搏与回写复活问题：建立本地删除墓碑，彻底防止周视图与服务端旧缓存冲刷已删日程",
+            "历史归档全量显示：彻底按从近到远（时间倒序上下排列），进入即看最新完成日程，向下滚动翻阅全部历史",
+            "课表底色三态支持：标准网格 / 细分网格 / 极简空白底",
+            "DDL 与课程冲突依次轮流呼吸亮灭呈现"
         ]
     }
 
