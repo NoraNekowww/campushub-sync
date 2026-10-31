@@ -178,28 +178,27 @@ export function setWeekGridStyle(style) {
   }
 }
 
-/** 智能检测客户端系统与硬件模糊支持能力 */
-export function detectSystemPlatform() {
+/** 检测设备是否满足 Android 15+ 或 iOS 自动开启磨砂玻璃条件 */
+export function checkAutoFrostedSupport() {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') {
-    return { system: 'other', name: '通用设备', supportsBlur: false }
+    return false
   }
   const ua = navigator.userAgent || ''
-  const isApple = /iPad|iPhone|iPod|Macintosh/i.test(ua)
-  const isXiaomi = /MiuiBrowser|XiaoMi|MI\s|Redmi|HyperOS|miui/i.test(ua)
   const supportsBlur = Boolean(
     typeof CSS !== 'undefined' &&
       CSS.supports &&
       (CSS.supports('backdrop-filter', 'blur(10px)') || CSS.supports('-webkit-backdrop-filter', 'blur(10px)')),
   )
+  if (!supportsBlur) return false
 
-  if (isApple) return { system: 'apple', name: 'Apple iOS', supportsBlur }
-  if (isXiaomi) return { system: 'xiaomi', name: '小米 HyperOS', supportsBlur }
-  return { system: 'other', name: '通用系统', supportsBlur }
+  const isApple = /iPad|iPhone|iPod|Macintosh/i.test(ua)
+  const androidMatch = ua.match(/Android\s+([0-9]+)/i)
+  const isAndroid15Plus = Boolean(androidMatch && parseInt(androidMatch[1], 10) >= 15)
+
+  return isApple || isAndroid15Plus
 }
 
 export function initFrostedGlass() {
-  const sys = detectSystemPlatform()
-  state.systemInfo = sys
   let stored = 'auto'
   try {
     stored = localStorage.getItem(FROSTED_GLASS_KEY) || 'auto'
@@ -218,15 +217,14 @@ export function setFrostedGlassMode(mode) {
 }
 
 function applyFrostedGlass(mode) {
-  const sys = state.systemInfo || detectSystemPlatform()
   let active = false
   if (mode === 'on') {
     active = true
   } else if (mode === 'off') {
     active = false
   } else {
-    // 'auto' 模式：当支持模糊滤镜，且匹配 Apple iOS 或 小米 HyperOS（或 Android 原生客户端壳）时自动激活
-    active = sys.supportsBlur && (sys.system === 'apple' || sys.system === 'xiaomi' || isMobileNativeApp())
+    // 'auto' 模式：安卓 15 以上或 iOS 自动开启
+    active = checkAutoFrostedSupport()
   }
   state.isFrostedActive = active
   if (typeof document !== 'undefined') {

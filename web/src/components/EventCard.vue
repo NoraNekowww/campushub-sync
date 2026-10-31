@@ -16,11 +16,14 @@ function releaseSwipe(closer) {
     data-testid="event-card-row"
     @focusin="revealForFocus"
   >
-    <!-- 卡片底下那层：往左或往右拖开才看得到的「删除」（受 allowDelete 控制） -->
+    <!-- 卡片底下那层：往左或往右拖开才看得到的「删除」（未滑动时完全隐藏，避免透过半透明磨砂卡片泛出红色光晕） -->
     <div
       v-if="allowDelete"
-      class="absolute inset-y-0 flex items-center px-1.5"
-      :class="offset > 0 ? 'left-0' : 'right-0'"
+      class="absolute inset-y-0 flex items-center px-1.5 transition-opacity duration-150"
+      :class="[
+        offset > 0 ? 'left-0' : 'right-0',
+        Math.abs(offset) > 0 ? 'opacity-100' : 'opacity-0 pointer-events-none'
+      ]"
     >
       <button
         type="button"

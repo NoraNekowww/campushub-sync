@@ -306,7 +306,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.3.9 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.4.0 · 原生极速' }}
         </span>
       </header>
 
@@ -560,7 +560,7 @@
         </p>
       </div>
 
-      <!-- 磨砂玻璃高级质感（小米 & 苹果风格） -->
+      <!-- 磨砂玻璃高级质感 -->
       <div class="space-y-2 border-t border-slate-100 pt-3 dark:border-slate-800">
         <div class="flex items-center justify-between">
           <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -575,7 +575,7 @@
                 : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
             "
           >
-            {{ state.isFrostedActive ? (state.systemInfo?.name ? `已匹配 ${state.systemInfo.name}` : '已激活高级光学质感') : '已停用' }}
+            {{ state.isFrostedActive ? '已开启' : '已关闭' }}
           </span>
         </div>
 
@@ -606,7 +606,7 @@
           </button>
         </div>
         <p class="text-[11px] text-slate-400">
-          深度模拟苹果 iOS 与小米 HyperOS 的亚克力光学磨砂材质。默认跟随系统智能判定，在匹配系统或支持硬件模糊的设备上呈现通透灵动的滚动穿透与微拟物高光。
+          支持半透明亚克力磨砂玻璃质感。默认在 Android 15+ 或 iOS 环境下自动开启，亦可在任意支持的设备上手动启用。
         </p>
       </div>
 
@@ -722,7 +722,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.3.9'
+  return '2.4.0'
 })
 
 const isAndroidClient = computed(() => {
