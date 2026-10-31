@@ -125,3 +125,83 @@ body {
   will-change: transform;
   transform: translateZ(0);
 }
+
+/* ------------------------------------------------------------ 磨砂玻璃高级质感 (iOS & 小米 HyperOS 风格) */
+html.frosted-glass-active {
+  --glass-blur: blur(26px) saturate(190%) contrast(95%);
+  --glass-bg-light: rgba(255, 255, 255, 0.72);
+  --glass-bg-dark: rgba(15, 23, 42, 0.72);
+  --glass-border-light: rgba(255, 255, 255, 0.65);
+  --glass-border-dark: rgba(255, 255, 255, 0.12);
+  --glass-shadow-light: inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.95), 0 10px 30px -10px rgba(0, 0, 0, 0.08);
+  --glass-shadow-dark: inset 0 1px 1px 0 rgba(255, 255, 255, 0.18), 0 12px 35px -8px rgba(0, 0, 0, 0.55);
+}
+
+/* 顶栏磨砂通透悬浮 */
+html.frosted-glass-active header {
+  background-color: var(--glass-bg-light) !important;
+  backdrop-filter: var(--glass-blur) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  border-bottom-color: var(--glass-border-light) !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.03);
+}
+html.dark.frosted-glass-active header {
+  background-color: var(--glass-bg-dark) !important;
+  border-bottom-color: var(--glass-border-dark) !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.25);
+}
+
+/* 底栏磨砂悬浮岛质感 */
+html.frosted-glass-active nav {
+  background-color: var(--glass-bg-light) !important;
+  backdrop-filter: var(--glass-blur) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  border-top-color: var(--glass-border-light) !important;
+  box-shadow: var(--glass-shadow-light) !important;
+}
+html.dark.frosted-glass-active nav {
+  background-color: var(--glass-bg-dark) !important;
+  border-top-color: var(--glass-border-dark) !important;
+  box-shadow: var(--glass-shadow-dark) !important;
+}
+
+/* 卡片亚克力磨砂玻璃 */
+html.frosted-glass-active .card {
+  background-color: var(--glass-bg-light) !important;
+  backdrop-filter: var(--glass-blur) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  border-color: var(--glass-border-light) !important;
+  box-shadow: var(--glass-shadow-light) !important;
+}
+html.dark.frosted-glass-active .card {
+  background-color: var(--glass-bg-dark) !important;
+  border-color: var(--glass-border-dark) !important;
+  box-shadow: var(--glass-shadow-dark) !important;
+}
+
+/* 粘滞表头与分组粘滞头磨砂穿透 */
+html.frosted-glass-active [data-testid="day-group"] > header,
+html.frosted-glass-active [data-testid="history-day-group"] > header {
+  background-color: rgba(241, 245, 249, 0.75) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+}
+html.dark.frosted-glass-active [data-testid="day-group"] > header,
+html.dark.frosted-glass-active [data-testid="history-day-group"] > header {
+  background-color: rgba(15, 23, 42, 0.75) !important;
+}
+
+/* 右下角悬浮按钮水晶微光质感 */
+html.frosted-glass-active button[data-testid="fab-new-event"] {
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.5), 0 12px 28px -4px rgba(22, 101, 216, 0.45) !important;
+}
+
+/* 弹窗与抽屉毛玻璃背景遮罩 */
+html.frosted-glass-active .modal-backdrop,
+html.frosted-glass-active [data-testid="custom-event-editor"] > div:first-child,
+html.frosted-glass-active [data-testid="class-detail-backdrop"] {
+  backdrop-filter: blur(14px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
+}

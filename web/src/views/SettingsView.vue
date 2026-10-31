@@ -306,7 +306,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.3.8 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.3.9 · 原生极速' }}
         </span>
       </header>
 
@@ -560,6 +560,56 @@
         </p>
       </div>
 
+      <!-- 磨砂玻璃高级质感（小米 & 苹果风格） -->
+      <div class="space-y-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+        <div class="flex items-center justify-between">
+          <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+            <Sparkles :size="13" class="text-indigo-500" />
+            <span>磨砂玻璃高级质感</span>
+          </label>
+          <span
+            class="chip border-transparent text-[10px] py-0.5"
+            :class="
+              state.isFrostedActive
+                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300'
+                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+            "
+          >
+            {{ state.isFrostedActive ? (state.systemInfo?.name ? `已匹配 ${state.systemInfo.name}` : '已激活高级光学质感') : '已停用' }}
+          </span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
+            :class="state.frostedGlassMode === 'auto' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
+            @click="setFrostedGlassMode('auto')"
+          >
+            <span>智能识别</span>
+          </button>
+          <button
+            type="button"
+            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
+            :class="state.frostedGlassMode === 'on' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
+            @click="setFrostedGlassMode('on')"
+          >
+            <span>强制开启</span>
+          </button>
+          <button
+            type="button"
+            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
+            :class="state.frostedGlassMode === 'off' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
+            @click="setFrostedGlassMode('off')"
+          >
+            <span>关闭</span>
+          </button>
+        </div>
+        <p class="text-[11px] text-slate-400">
+          深度模拟苹果 iOS 与小米 HyperOS 的亚克力光学磨砂材质。默认跟随系统智能判定，在匹配系统或支持硬件模糊的设备上呈现通透灵动的滚动穿透与微拟物高光。
+        </p>
+      </div>
+
       <div class="border-t border-slate-100 pt-3 dark:border-slate-800">
         <p class="text-xs text-slate-500 dark:text-slate-400">
           已缓存时间线可离线查看；在浏览器菜单选择「添加到主屏幕」即可作为 PWA 安装。
@@ -633,6 +683,7 @@ import {
   RefreshCw,
   Smartphone,
   ShieldCheck,
+  Sparkles,
   Square,
   Sun,
   Trash2,
@@ -655,6 +706,7 @@ import {
   refresh,
   runSync,
   saveRegistrationSettings,
+  setFrostedGlassMode,
   setTheme,
   setWeekGridStyle,
   setUserActive,
@@ -670,7 +722,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.3.8'
+  return '2.3.9'
 })
 
 const isAndroidClient = computed(() => {

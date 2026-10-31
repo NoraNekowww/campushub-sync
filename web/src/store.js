@@ -8,6 +8,7 @@ import { dayKey, isEventEnded, todayKey } from './utils/datetime'
 
 const THEME_KEY = 'campushub.theme'
 const GRID_STYLE_KEY = 'campushub.week_grid_style'
+const FROSTED_GLASS_KEY = 'campushub.frosted_glass_style'
 const EVENTS_CACHE_KEY = 'campushub.events_cache.v1'
 const WEEK_CACHE_KEY = 'campushub.week_cache.v1'
 const USER_CACHE_KEY = 'campushub.user_cache.v1'
@@ -85,6 +86,16 @@ export const state = reactive({
       return 'grid'
     }
   })(),
+  /* 磨砂玻璃质感：'auto'（跟随系统智能识别） | 'on'（强制开启） | 'off'（关闭） */
+  frostedGlassMode: (function () {
+    try {
+      return localStorage.getItem('campushub.frosted_glass_style') || 'auto'
+    } catch (e) {
+      return 'auto'
+    }
+  })(),
+  isFrostedActive: false,
+  systemInfo: { system: 'other', name: '通用系统', supportsBlur: false },
   /* accounts (see accounts.py): the session cookie is HttpOnly, so the app
      learns who it is by asking /api/auth/session, never by reading a cookie. */
   user: readInitialUser(),
@@ -164,6 +175,62 @@ export function setWeekGridStyle(style) {
     localStorage.setItem(GRID_STYLE_KEY, s)
   } catch (error) {
     /* ignore */
+  }
+}
+
+/** 智能检测客户端系统与硬件模糊支持能力 */
+export function detectSystemPlatform() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return { system: 'other', name: '通用设备', supportsBlur: false }
+  }
+  const ua = navigator.userAgent || ''
+  const isApple = /iPad|iPhone|iPod|Macintosh/i.test(ua)
+  const isXiaomi = /MiuiBrowser|XiaoMi|MI\s|Redmi|HyperOS|miui/i.test(ua)
+  const supportsBlur = Boolean(
+    typeof CSS !== 'undefined' &&
+      CSS.supports &&
+      (CSS.supports('backdrop-filter', 'blur(10px)') || CSS.supports('-webkit-backdrop-filter', 'blur(10px)')),
+  )
+
+  if (isApple) return { system: 'apple', name: 'Apple iOS', supportsBlur }
+  if (isXiaomi) return { system: 'xiaomi', name: '小米 HyperOS', supportsBlur }
+  return { system: 'other', name: '通用系统', supportsBlur }
+}
+
+export function initFrostedGlass() {
+  const sys = detectSystemPlatform()
+  state.systemInfo = sys
+  let stored = 'auto'
+  try {
+    stored = localStorage.getItem(FROSTED_GLASS_KEY) || 'auto'
+  } catch (e) {}
+  state.frostedGlassMode = stored
+  applyFrostedGlass(stored)
+}
+
+export function setFrostedGlassMode(mode) {
+  const m = mode === 'on' ? 'on' : mode === 'off' ? 'off' : 'auto'
+  state.frostedGlassMode = m
+  try {
+    localStorage.setItem(FROSTED_GLASS_KEY, m)
+  } catch (e) {}
+  applyFrostedGlass(m)
+}
+
+function applyFrostedGlass(mode) {
+  const sys = state.systemInfo || detectSystemPlatform()
+  let active = false
+  if (mode === 'on') {
+    active = true
+  } else if (mode === 'off') {
+    active = false
+  } else {
+    // 'auto' 模式：当支持模糊滤镜，且匹配 Apple iOS 或 小米 HyperOS（或 Android 原生客户端壳）时自动激活
+    active = sys.supportsBlur && (sys.system === 'apple' || sys.system === 'xiaomi' || isMobileNativeApp())
+  }
+  state.isFrostedActive = active
+  if (typeof document !== 'undefined') {
+    document.documentElement.classList.toggle('frosted-glass-active', active)
   }
 }
 

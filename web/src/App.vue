@@ -66,6 +66,7 @@ import {
   bootstrap,
   fetchSession,
   initConnectivity,
+  initFrostedGlass,
   initTheme,
   signInRequired,
   state,
@@ -96,6 +97,7 @@ async function runToastAction() {
 
 onMounted(async () => {
   initTheme()
+  initFrostedGlass()
   initConnectivity()
   await fetchSession()
   bootstrap()
