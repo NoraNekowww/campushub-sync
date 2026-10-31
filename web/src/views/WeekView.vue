@@ -153,19 +153,19 @@
                   </span>
                 </button>
 
-                <!-- 没有结束时间（DDL）：精准定位在时间轴上，若与其它 DDL 或课程重叠，依次轮流呼吸亮灭 -->
+                <!-- 没有结束时间（DDL）：精准定位在时间轴上，优先对齐线，字绝不挤占线的高低 -->
                 <button
                   v-else
                   data-testid="line-event"
                   :data-day="day.key"
-                  class="absolute inset-x-0 z-10 px-0 py-2 text-left"
+                  class="group absolute inset-x-0 z-10 -translate-y-1/2 px-0 py-1.5 text-left"
                   :class="item.hasConflict ? 'animate-breathe-alternate' : ''"
                   :style="lineStyle(item)"
                   :aria-pressed="selected?.id === item.event.id"
                   @click="selected = selected?.id === item.event.id ? null : item.event"
                 >
                   <span
-                    class="absolute inset-x-0 top-2 block h-0 border-t-2 border-dashed"
+                    class="absolute inset-x-0 top-1/2 -translate-y-1/2 block h-0 border-t-2 border-dashed pointer-events-none"
                     :class="
                       item.event.is_deadline
                         ? 'border-amber-400 dark:border-amber-400/80'
@@ -173,13 +173,14 @@
                     "
                   />
                   <span
-                    class="pointer-events-none absolute top-0 left-0 max-w-full truncate rounded-sm bg-white/90 px-0.5
-                           text-[9px] leading-[11px] font-medium"
-                    :class="
+                    class="pointer-events-none absolute left-0 max-w-full truncate rounded-sm bg-white/95 px-0.5
+                           text-[9px] leading-[11px] font-medium shadow-2xs backdrop-blur-xs"
+                    :class="[
+                      item.start <= 8 * 60 + 15 ? 'top-1.5' : 'bottom-1.5',
                       item.event.is_deadline
-                        ? 'text-amber-700 dark:bg-slate-900/85 dark:text-amber-300'
-                        : 'text-sky-700 dark:bg-slate-900/85 dark:text-sky-300'
-                    "
+                        ? 'text-amber-700 dark:bg-slate-900/90 dark:text-amber-300'
+                        : 'text-sky-700 dark:bg-slate-900/90 dark:text-sky-300'
+                    ]"
                   >
                     {{ item.event.title }}
                   </span>

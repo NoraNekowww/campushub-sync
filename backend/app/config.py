@@ -117,6 +117,15 @@ class Settings(BaseSettings):
     semester_holidays: str = ""
     period_times_json: Optional[str] = None  # override the default period slots
 
+    # ------------------------------------------------------------- SMTP / Email
+    smtp_host: Optional[str] = None
+    smtp_port: int = 465
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_from: Optional[str] = None
+    smtp_ssl: bool = True
+    smtp_tls: bool = False
+
     # ------------------------------------------------------------- properties
     @property
     def scope_list(self) -> list[str]:

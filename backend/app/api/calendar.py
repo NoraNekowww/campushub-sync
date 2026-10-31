@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+import email.utils
 import logging
+import smtplib
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from pydantic import BaseModel
+from fastapi import HTTPException
 from datetime import date, timedelta
 from typing import Optional
 
@@ -12,8 +19,8 @@ from sqlmodel import Session, col, select
 from .. import accounts
 from ..config import get_settings
 from ..db import get_session
-from ..models import Event, EventStatus
-from ..security import verify_subscribe_token
+from ..models import Event, EventStatus, User
+from ..security import timeline_owner, verify_subscribe_token
 from ..services import events as event_service
 from ..services.ics_export import calendar_bytes, feed_etag
 from ..timeutil import utcnow
@@ -153,3 +160,107 @@ def preview(
             for row in rows
         ],
     }
+
+
+class SendCalendarEmailRequest(BaseModel):
+    email: str
+    token: Optional[str] = None
+    days_past: int = 7
+    days_future: int = 120
+    include_completed: bool = False
+
+
+@router.post("/subscribe/email", summary="发送日历至指定邮箱（专为不支持链接订阅的备用机设计）")
+def send_calendar_to_email(
+    payload: SendCalendarEmailRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: User = Depends(timeline_owner),
+) -> dict:
+    settings = get_settings()
+    recipient = payload.email.strip()
+    if not recipient or "@" not in recipient:
+        raise HTTPException(status_code=400, detail="请输入有效的邮箱地址")
+
+    now = utcnow()
+    start = now - timedelta(days=payload.days_past)
+    end = now + timedelta(days=payload.days_future)
+    owner_id = user.id if user else None
+
+    rows, _ = event_service.query_events(
+        session,
+        start=start,
+        end=end,
+        sources=None,
+        status=None if payload.include_completed else "pending",
+        is_deadline=None,
+        limit=2000,
+        user_id=owner_id,
+    )
+    events = [row for row in rows]
+
+    ics_content = calendar_bytes(
+        events,
+        calendar_name=f"{settings.app_name} 日程",
+        tz_name=settings.timezone,
+    )
+
+    if not settings.smtp_host:
+        return {
+            "ok": False,
+            "smtp_configured": False,
+            "event_count": len(events),
+            "message": "服务器暂未配置 SMTP 邮件外发服务。备用机可直接点击「下载 .ics 文件」用手机自带日历打开一键导入！",
+        }
+
+    # 构造标准 iCalendar 邮件
+    msg = MIMEMultipart("mixed")
+    msg["Subject"] = f"【CampusHub】您的学期课表与日程已生成（共 {len(events)} 项）"
+    msg["From"] = settings.smtp_from or settings.smtp_user or "noreply@campushub.local"
+    msg["To"] = recipient
+    msg["Date"] = email.utils.formatdate(localtime=True)
+
+    text_body = (
+        f"您好！\n\n"
+        f"这是由 CampusHub 导出的最新课表与待办日程文件（共计 {len(events)} 个日程/课程）。\n"
+        f"专为不支持网络链接订阅的备用机或系统邮箱打造。\n\n"
+        f"【备用机导入指南】：\n"
+        f"1. 在备用机自带的「电子邮件」App 中打开本邮件；\n"
+        f"2. 点击附件中的「campushub.ics」或邮件顶部的「添加至日历」；\n"
+        f"3. 系统日历将自动为您一键导入所有课程时间与地点！\n\n"
+        f"导出时间：{now.strftime('%Y-%m-%d %H:%M:%S')} (UTC)\n"
+    )
+    msg.attach(MIMEText(text_body, "plain", "utf-8"))
+
+    part = MIMEApplication(ics_content, Name="campushub.ics")
+    part["Content-Disposition"] = 'attachment; filename="campushub.ics"'
+    part["Content-Type"] = 'text/calendar; charset=utf-8; method=PUBLISH; name="campushub.ics"'
+    msg.attach(part)
+
+    try:
+        if settings.smtp_ssl:
+            with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=15) as server:
+                if settings.smtp_user and settings.smtp_password:
+                    server.login(settings.smtp_user, settings.smtp_password)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
+                if settings.smtp_tls:
+                    server.starttls()
+                if settings.smtp_user and settings.smtp_password:
+                    server.login(settings.smtp_user, settings.smtp_password)
+                server.send_message(msg)
+        return {
+            "ok": True,
+            "smtp_configured": True,
+            "event_count": len(events),
+            "message": f"日历邮件已成功发送至 {recipient}，请在备用机邮箱查收并点击导入！",
+        }
+    except Exception as exc:
+        log.exception("发送日历邮件失败: %s", exc)
+        return {
+            "ok": False,
+            "smtp_configured": True,
+            "message": f"邮件发送失败: {exc}。请检查 SMTP 配置，或在备用机上直接点击「下载 .ics 文件」导入。",
+        }
+

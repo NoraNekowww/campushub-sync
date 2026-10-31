@@ -306,7 +306,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.3.6 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.3.7 · 原生极速' }}
         </span>
       </header>
 
@@ -378,7 +378,7 @@
       <p class="text-xs text-slate-500 dark:text-slate-400">
         在 iOS 日历 / Android 的「通过 URL 添加日历」里粘贴下面的地址，截止时间与课程会自动同步（含 15 分钟提醒）。
       </p>
-      <div v-if="subscribeUrl" class="space-y-2">
+      <div v-if="subscribeUrl" class="space-y-3">
         <textarea
           class="input h-20 resize-none break-all font-mono text-[11px]"
           readonly
@@ -394,10 +394,79 @@
           <button class="btn-ghost !py-1.5 text-xs" @click="copy(prettyUrl, 'HTTPS 地址已复制')">
             复制 https 版本
           </button>
+          <a
+            class="btn-ghost !py-1.5 text-xs inline-flex items-center gap-1 text-brand-600 dark:text-brand-400 font-medium"
+            :href="prettyUrl"
+            download="campushub.ics"
+          >
+            <Download :size="13" /> 下载 .ics 文件
+          </a>
         </div>
         <p v-if="!subscribeConfigured" class="text-[11px] text-amber-600 dark:text-amber-400">
           后端未配置 <code>SUBSCRIBE_TOKEN</code>，部署到公网前请务必设置。
         </p>
+
+        <!-- 备用机 / 邮箱日历导入解决方案专区 -->
+        <div class="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 text-xs space-y-2.5 dark:border-slate-800 dark:bg-slate-800/40">
+          <div class="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
+            <Smartphone :size="14" class="text-brand-600 dark:text-brand-400" />
+            <span>备用机导入（不支持链接添加、仅看到邮箱/文件）</span>
+          </div>
+          <p class="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+            若备用机系统日历无「URL 订阅」选项，推荐以下两种方式无缝导入：
+          </p>
+
+          <!-- 方式一：下载 .ics 文件直接用系统日历打开 -->
+          <div class="rounded-lg border border-slate-200/60 bg-white/70 p-2.5 space-y-1.5 dark:border-slate-700/60 dark:bg-slate-900/40">
+            <div class="flex items-center justify-between">
+              <span class="font-medium text-slate-700 dark:text-slate-300">方式 A：本地文件直接导入</span>
+              <a
+                class="btn-primary !py-1 text-xs"
+                :href="prettyUrl"
+                download="campushub.ics"
+              >
+                <Download :size="12" /> 下载日历文件
+              </a>
+            </div>
+            <p class="text-[10.5px] text-slate-400 dark:text-slate-500">
+              在备用机浏览器中点击下载，在下载管理或通知栏中直接点击打开 <code>campushub.ics</code>，手机自带日历将自动识别并一键导入全学期课程与日程。
+            </p>
+          </div>
+
+          <!-- 方式二：一键发到备用机邮箱 -->
+          <div class="rounded-lg border border-slate-200/60 bg-white/70 p-2.5 space-y-2 dark:border-slate-700/60 dark:bg-slate-900/40">
+            <span class="block font-medium text-slate-700 dark:text-slate-300">方式 B：通过邮箱日历导入</span>
+            <p class="text-[10.5px] text-slate-400 dark:text-slate-500">
+              填入备用机上登录的邮箱（如 QQ / 163 / Outlook / 自带邮箱），将全套课表作为日历邀请直接发到邮箱，收到后点邮件顶部的「添加到日历」即可秒级导入：
+            </p>
+            <div class="flex gap-2">
+              <input
+                v-model="backupEmail"
+                type="email"
+                placeholder="输入备用机邮箱地址..."
+                class="input !py-1 text-xs flex-1"
+                :disabled="sendingEmail"
+              />
+              <button
+                class="btn-primary !py-1 text-xs shrink-0"
+                :disabled="!backupEmail || sendingEmail"
+                @click="sendCalendarEmail"
+              >
+                <Mail v-if="!sendingEmail" :size="12" />
+                <RefreshCw v-else :size="12" class="animate-spin" />
+                <span>{{ sendingEmail ? '发送中...' : '发送至邮箱' }}</span>
+              </button>
+            </div>
+            <p v-if="emailStatus" class="text-[10.5px]" :class="emailStatusOk ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'">
+              {{ emailStatus }}
+            </p>
+          </div>
+
+          <!-- 方式三：Exchange / 微软邮箱账号同步提示 -->
+          <div class="text-[10.5px] text-slate-400 dark:text-slate-500 leading-relaxed pt-0.5">
+            💡 <strong>备用机系统账户</strong>：若备用机日历中提供「Exchange / 微软 Outlook 邮箱」选项，亦可直接在备用机添加绑定的微软账号，日程将自动全量云端拉取。
+          </div>
+        </div>
       </div>
       <p v-else class="text-xs text-slate-400">未获取到订阅地址，请检查网络或后端配置。</p>
     </section>
@@ -558,6 +627,7 @@ import {
   HardDrive,
   Info,
   LogIn,
+  Mail,
   Monitor,
   Moon,
   RefreshCw,
@@ -600,7 +670,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.3.6'
+  return '2.3.7'
 })
 
 const isAndroidClient = computed(() => {
@@ -768,6 +838,40 @@ async function copy(text, message) {
     notify(message, 'ok')
   } catch (error) {
     notify('复制失败，请手动选择文本', 'warn')
+  }
+}
+
+const backupEmail = ref('')
+const sendingEmail = ref(false)
+const emailStatus = ref('')
+const emailStatusOk = ref(false)
+
+async function sendCalendarEmail() {
+  const email = backupEmail.value.trim()
+  if (!email || !email.includes('@')) {
+    notify('请输入有效的邮箱地址', 'warn')
+    return
+  }
+  sendingEmail.value = true
+  emailStatus.value = ''
+  try {
+    const res = await api('/subscribe/email', {
+      method: 'POST',
+      body: { email },
+    })
+    emailStatusOk.value = Boolean(res.ok)
+    emailStatus.value = res.message || (res.ok ? '发送成功！请在备用机邮箱查收' : '发送未完成')
+    if (res.ok) {
+      notify('日历已发送至备用机邮箱', 'ok')
+    } else {
+      notify(res.message || '发送未完成', 'warn')
+    }
+  } catch (err) {
+    emailStatusOk.value = false
+    emailStatus.value = err?.message || '发送失败，请检查网络或配置'
+    notify('发送失败: ' + (err?.message || '网络错误'), 'danger')
+  } finally {
+    sendingEmail.value = false
   }
 }
 

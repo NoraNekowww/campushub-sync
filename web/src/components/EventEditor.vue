@@ -77,7 +77,7 @@
           </label>
         </div>
 
-        <div class="grid grid-cols-2 gap-2">
+        <div :class="(form.kind === 'class' || isEdit) ? 'grid grid-cols-2 gap-2' : ''">
           <label class="block space-y-1 text-xs">
             <span class="text-slate-500 dark:text-slate-400">{{ form.kind === 'deadline' ? '截止时间' : '开始时间' }}</span>
             <input v-model="form.start" type="time" class="input" required />
@@ -100,11 +100,6 @@
               <option :value="8">8 小时（整天活动）</option>
             </select>
           </label>
-          <div v-else class="flex flex-col justify-end">
-            <div class="flex items-center h-[38px] px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 text-[11px]">
-              <span>默认 21:00 到期提醒</span>
-            </div>
-          </div>
         </div>
 
         <div v-if="form.kind === 'class'" class="rounded-lg bg-slate-50 dark:bg-slate-800/50 px-2.5 py-1.5 text-[11px] text-slate-500 dark:text-slate-400">

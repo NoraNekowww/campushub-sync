@@ -62,13 +62,13 @@ import { CheckCircle2, History } from 'lucide-vue-next'
 import EventCard from '../components/EventCard.vue'
 import SkeletonList from '../components/SkeletonList.vue'
 import { state, toggleCompleted } from '../store'
-import { dayLabel, isEventEnded } from '../utils/datetime'
+import { dayDiff, dayLabel, isEventEnded, todayKey } from '../utils/datetime'
 
 /**
  * 历史完成过的所有日程：
  * 1. 彻底排除天大课表自带课程（event.source === 'tju_schedule'），只归档个人待办与自定义日程；
  * 2. 状态为 completed 的日程 / 待办，或者已经自然结束的个人自定义活动；
- * 3. 全量展示全部历史，按从近到远严格时间倒序排列（今天/刚刚完成的在最上方）。
+ * 3. 严格按从近到久排序（今天、明天、后天、更远）。
  */
 const completedEvents = computed(() => {
   const nowTs = Date.now()
@@ -82,32 +82,60 @@ const completedEvents = computed(() => {
       return isTicked || isEnded
     })
     .sort((a, b) => {
-      // 优先按结束时间（或开始时间）倒序，最近完成/结束的排最前
       const tA = new Date(a.end_time || a.start_time).getTime() || 0
       const tB = new Date(b.end_time || b.start_time).getTime() || 0
       return tB - tA
     })
 })
 
+function getHistoryGroupLabel(when, refTime, diff) {
+  if (diff === 0) return '今天'
+  if (diff === 1) return '明天'
+  if (diff === 2) return '后天'
+  if (diff > 2) return `更远 · ${dayLabel(refTime)}`
+  if (diff === -1) return '昨天'
+  if (diff === -2) return '前天'
+  return `更早 · ${dayLabel(refTime)}`
+}
+
+function getGroupSortRank(diff) {
+  // 严格按今天 (0) -> 明天 (1) -> 后天 (2) -> 更远 (10+diff) 从近到久排序
+  if (diff === 0) return 0
+  if (diff === 1) return 1
+  if (diff === 2) return 2
+  if (diff > 2) return 10 + diff
+  // 过去完成的按离今天最近排序（昨天 -> 前天 -> 更早）
+  if (diff < 0) return 1000 + Math.abs(diff)
+  return 9999
+}
+
 const groups = computed(() => {
-  // groupByDay 保持降序倒排（最近的日期在最上方）
+  const today = todayKey()
   const buckets = new Map()
+
   completedEvents.value.forEach((event) => {
-    // 优先采用 end_time 反映「完成/下课」日期，若无则使用 start_time
     const refTime = event.end_time || event.start_time
     const when = refTime ? String(refTime).slice(0, 10) : ''
     if (!when) return
     if (!buckets.has(when)) {
-      buckets.set(when, { key: when, label: dayLabel(refTime), events: [] })
+      const diff = dayDiff(when, today)
+      buckets.set(when, {
+        key: when,
+        diff,
+        rank: getGroupSortRank(diff),
+        label: getHistoryGroupLabel(when, refTime, diff),
+        events: []
+      })
     }
     buckets.get(when).events.push(event)
   })
-  // 日期从近到远排序（降序：今天/昨天在最前）
+
+  // 严格按：今天，明天，后天，更远 从近到久排序
   return [...buckets.values()]
-    .sort((a, b) => b.key.localeCompare(a.key))
+    .sort((a, b) => a.rank - b.rank)
     .map((bucket) => ({
       ...bucket,
-      // 组内同样按完成/结束时间倒序排列（晚完成的在最前）
+      // 组内同样按完成/结束时间倒序排列（最新完成的在最前）
       events: bucket.events.sort((a, b) => {
         const tA = new Date(a.end_time || a.start_time).getTime() || 0
         const tB = new Date(b.end_time || b.start_time).getTime() || 0
