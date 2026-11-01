@@ -130,6 +130,23 @@ html.has-custom-bg #app {
 .swipe-pane {
   will-change: transform;
   transform: translateZ(0);
+  border-radius: 1rem;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* 动态按需渲染与现代浏览器渲染剪裁 (杜绝长列表离屏全量重绘性能开销) */
+[data-testid="day-group"],
+[data-testid="history-day-group"] {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 120px;
+}
+.swipe-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 78px;
+  border-radius: 1rem;
+  overflow: hidden;
+  isolation: isolate;
 }
 
 /* ------------------------------------------------------------ 物理光学磨砂透明高级材质 (Physically-Based Frosted Glass) */
@@ -137,13 +154,13 @@ html.frosted-glass-active {
   /* 光学漫折射透射层：多频次表面散射 + 饱和度与微对比度提升，保持底色清澈透亮 */
   --phys-glass-blur: blur(28px) saturate(205%) contrast(102%);
 
-  /* 介质透光基底：告别死白塑料感，采用真实物理通透的超轻薄漫透射 */
-  --phys-glass-bg-light: rgba(255, 255, 255, 0.52);
-  --phys-glass-bg-dark: rgba(15, 23, 42, 0.56);
+  /* 介质透光基底：更通透、空气感十足的物理亚克力超轻漫透射 */
+  --phys-glass-bg-light: rgba(255, 255, 255, 0.40);
+  --phys-glass-bg-dark: rgba(15, 23, 42, 0.36);
 
   /* 菲涅尔切线边界（Fresnel Rim）：微米级晶体高光边界 */
-  --phys-glass-border-light: rgba(255, 255, 255, 0.55);
-  --phys-glass-border-dark: rgba(255, 255, 255, 0.12);
+  --phys-glass-border-light: rgba(255, 255, 255, 0.65);
+  --phys-glass-border-dark: rgba(255, 255, 255, 0.16);
 
   /* 物理光照模型：
      1. 顶部迎光面镜面高光 (Specular Rim): inset 0 1px 0 0 rgba(...)
@@ -152,14 +169,14 @@ html.frosted-glass-active {
      4. 环境光遮蔽与悬浮漫散射阴影 (Ambient Occlusion): 0 12px 32px -8px rgba(...)
   */
   --phys-glass-shadow-light:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.9),
-    inset 0 0 20px 0 rgba(255, 255, 255, 0.12),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
+    inset 0 0 20px 0 rgba(255, 255, 255, 0.15),
     0 1px 2px 0 rgba(0, 0, 0, 0.03),
     0 12px 32px -8px rgba(0, 0, 0, 0.06);
 
   --phys-glass-shadow-dark:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
-    inset 0 0 20px 0 rgba(255, 255, 255, 0.02),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.25),
+    inset 0 0 20px 0 rgba(255, 255, 255, 0.03),
     0 1px 2px 0 rgba(0, 0, 0, 0.35),
     0 14px 38px -6px rgba(0, 0, 0, 0.55);
 }
@@ -219,25 +236,25 @@ html.frosted-glass-active .swipe-pane {
 html.frosted-glass-active [data-testid="class-block"] {
   backdrop-filter: blur(18px) saturate(190%) contrast(100%) !important;
   -webkit-backdrop-filter: blur(18px) saturate(190%) contrast(100%) !important;
-  background-color: rgba(219, 234, 254, 0.62) !important;
+  background-color: rgba(219, 234, 254, 0.50) !important;
   border-color: rgba(147, 197, 253, 0.7) !important;
   box-shadow:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
     0 4px 12px -2px rgba(0, 0, 0, 0.04) !important;
 }
 html.frosted-glass-active [data-testid="class-block"].border-amber-300\/80 {
-  background-color: rgba(254, 243, 199, 0.65) !important;
+  background-color: rgba(254, 243, 199, 0.55) !important;
   border-color: rgba(252, 211, 77, 0.7) !important;
 }
 html.dark.frosted-glass-active [data-testid="class-block"] {
-  background-color: rgba(30, 58, 138, 0.38) !important;
+  background-color: rgba(30, 58, 138, 0.28) !important;
   border-color: rgba(96, 165, 250, 0.3) !important;
   box-shadow:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.15),
     0 4px 14px -2px rgba(0, 0, 0, 0.35) !important;
 }
 html.dark.frosted-glass-active [data-testid="class-block"].border-amber-300\/80 {
-  background-color: rgba(120, 53, 15, 0.35) !important;
+  background-color: rgba(120, 53, 15, 0.28) !important;
   border-color: rgba(251, 191, 36, 0.3) !important;
 }
 

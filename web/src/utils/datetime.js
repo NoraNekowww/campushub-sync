@@ -61,10 +61,10 @@ export function dayLabel(value) {
   const key = dayKey(value)
   const today = todayKey()
   const tomorrow = dayKey(new Date(Date.now() + DAY_MS))
-  if (key === today) return '今天'
-  if (key === tomorrow) return '明天'
   const date = toDate(value)
   const month = dateFmt({ month: 'numeric', day: 'numeric' }).format(date)
+  if (key === today) return `今天 · ${weekdayLabel(date)} ${month}`
+  if (key === tomorrow) return `明天 · ${weekdayLabel(date)} ${month}`
   // Calendar weeks (Monday-based), not "the next 6 days": the week grid uses the
   // same boundaries, so both views must agree on what 本周 means.
   const offset = weekOffsetOf(key, today)

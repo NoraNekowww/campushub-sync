@@ -300,8 +300,8 @@ const days = computed(() => {
         (event) =>
           dayKey(event.start_time) === d.key &&
           matchesQuery(event) &&
-          // 划掉的 DDL 不占课表
-          !(event.is_deadline && event.status === 'completed'),
+          // 划掉的（不管是待办DDL还是自定义时段活动）都不在课表网格中显示
+          event.status !== 'completed',
       )
       .map((event) => ({
         event,
@@ -386,7 +386,7 @@ function focusToday(behavior = 'smooth') {
 
 const classes = computed(() => {
   return events.value.filter(
-    (event) => !event.is_deadline && matchesQuery(event),
+    (event) => !event.is_deadline && event.status !== 'completed' && matchesQuery(event),
   )
 })
 

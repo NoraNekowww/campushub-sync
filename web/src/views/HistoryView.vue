@@ -26,9 +26,9 @@
       <p class="text-xs opacity-75 mt-1">在日程列表勾选完成的个人待办和日程会在此倒序归档</p>
     </div>
 
-    <!-- 按日期分组的历史日程（全量显示，按日期与时间严格倒序排列） -->
+    <!-- 按日期分组的历史日程（动态分批按需渲染，从近到久倒序排列） -->
     <section
-      v-for="group in groups"
+      v-for="group in displayedGroups"
       :key="group.key"
       class="space-y-2"
       data-testid="history-day-group"
@@ -53,11 +53,22 @@
         @toggle="toggleCompleted"
       />
     </section>
+
+    <!-- 动态按需加载触底探针与加载更多 -->
+    <div
+      v-if="hasMoreGroups"
+      ref="sentinelEl"
+      class="flex justify-center py-4 text-xs text-slate-500 dark:text-slate-400"
+    >
+      <button class="btn-ghost !py-1 text-xs" @click="loadMoreGroups">
+        加载更多历史归档 (已显示 {{ displayedGroups.length }} / {{ groups.length }} 组)
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { CheckCircle2, History } from 'lucide-vue-next'
 import EventCard from '../components/EventCard.vue'
 import SkeletonList from '../components/SkeletonList.vue'
@@ -142,5 +153,42 @@ const groups = computed(() => {
         return tB - tA
       }),
     }))
+})
+
+/* ----------------------------------------------------------- 动态按需渲染逻辑 */
+const renderedGroupLimit = ref(8)
+const displayedGroups = computed(() => groups.value.slice(0, renderedGroupLimit.value))
+const hasMoreGroups = computed(() => displayedGroups.value.length < groups.value.length)
+
+function loadMoreGroups() {
+  renderedGroupLimit.value += 8
+}
+
+const sentinelEl = ref(null)
+let observer = null
+
+function setupObserver() {
+  if (observer) {
+    observer.disconnect()
+    observer = null
+  }
+  if (!sentinelEl.value || !hasMoreGroups.value) return
+  observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0]?.isIntersecting) {
+        loadMoreGroups()
+      }
+    },
+    { rootMargin: '240px' },
+  )
+  observer.observe(sentinelEl.value)
+}
+
+watch([sentinelEl, hasMoreGroups], () => {
+  setupObserver()
+})
+
+onBeforeUnmount(() => {
+  if (observer) observer.disconnect()
 })
 </script>

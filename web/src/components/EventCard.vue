@@ -40,11 +40,11 @@ function releaseSwipe(closer) {
       </button>
     </div>
 
-    <div class="swipe-pane" :style="allowDelete ? cardStyle : null" data-testid="event-swipe-pane">
+    <div class="swipe-pane rounded-2xl overflow-hidden" :style="allowDelete ? cardStyle : null" data-testid="event-swipe-pane">
       <article
         ref="cardEl"
-        class="card"
-        :class="[accentBar, event.status === 'completed' ? 'opacity-60' : '']"
+        class="card relative overflow-hidden rounded-2xl"
+        :class="[event.status === 'completed' ? 'opacity-60' : '']"
         data-testid="event-card"
         :data-kind="event.is_deadline ? 'deadline' : 'class'"
         :data-source="event.source"
@@ -55,7 +55,12 @@ function releaseSwipe(closer) {
         @pointercancel="allowDelete ? onPointerUp($event) : null"
         @click.capture="allowDelete ? onClickCapture($event) : null"
       >
-      <div class="flex gap-3 p-3.5">
+      <!-- 左侧强调指示条（内嵌绝对定位，消除单边不对称 border-l-4 破坏卡片圆角导致的方角问题） -->
+      <span
+        class="pointer-events-none absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl transition-colors"
+        :class="accentColor"
+      />
+      <div class="flex gap-3 p-3.5 pl-4">
         <!-- real checkbox for tickable events (deadlines & custom events) -->
         <label v-if="tickable" class="mt-0.5 shrink-0 cursor-pointer" :title="event.status === 'completed' ? '标记为未完成' : '标记为已完成'">
           <input
@@ -124,18 +129,18 @@ function releaseSwipe(closer) {
           <!-- 折叠态就「时间区间 + 地点」：课表卡片一排排扫过去要能一眼看完 -->
           <div
             v-if="collapsible"
-            class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400"
+            class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-700 font-medium dark:text-slate-300"
             data-testid="event-basics"
           >
             <span class="inline-flex items-center gap-1">
-              <Clock :size="12" />{{ timeLabel(event.start_time) }}–{{ endLabel }}
+              <Clock :size="12" class="text-slate-500 dark:text-slate-400" />{{ timeLabel(event.start_time) }}–{{ endLabel }}
             </span>
             <span v-if="noteLocation" class="inline-flex items-center gap-1">
-              <MapPin :size="12" />{{ noteLocation }}
+              <MapPin :size="12" class="text-slate-500 dark:text-slate-400" />{{ noteLocation }}
             </span>
             <!-- 折叠态也要能改：调课、换教室、加备注都从这里进 -->
             <button
-              class="inline-flex items-center gap-1 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400"
+              class="inline-flex items-center gap-1 text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400"
               :aria-label="`编辑：${event.title}`"
               data-testid="edit-custom-event"
               @click.stop="openCustomEditor(event)"
@@ -146,17 +151,17 @@ function releaseSwipe(closer) {
 
           <div
             v-else
-            class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400"
+            class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-700 font-medium dark:text-slate-300"
           >
             <span v-if="event.is_deadline" class="inline-flex items-center gap-1">
-              <Clock :size="12" />{{ deadlineLabel }}
+              <Clock :size="12" class="text-slate-500 dark:text-slate-400" />{{ deadlineLabel }}
             </span>
             <span v-else class="inline-flex items-center gap-1">
-              <Clock :size="12" />{{ timeLabel(event.start_time) }}–{{ endLabel }}
-              <span v-if="durationText" class="text-slate-400">· {{ durationText }}</span>
+              <Clock :size="12" class="text-slate-500 dark:text-slate-400" />{{ timeLabel(event.start_time) }}–{{ endLabel }}
+              <span v-if="durationText" class="text-slate-600 dark:text-slate-400">· {{ durationText }}</span>
             </span>
             <span v-if="noteLocation" class="inline-flex items-center gap-1">
-              <MapPin :size="12" />{{ noteLocation }}
+              <MapPin :size="12" class="text-slate-500 dark:text-slate-400" />{{ noteLocation }}
             </span>
             <!-- 仅单点非时间段任务显示剩几天/倒计时，且颜色与中高低标签保持严格一致（历史归档页关闭紧迫徽章） -->
             <span v-if="showPriority && isPointDeadline && countdownInfo" class="chip border-transparent" :class="urgencyColorClass">
@@ -164,7 +169,7 @@ function releaseSwipe(closer) {
               {{ countdownInfo.text }}
             </span>
             <button
-              class="inline-flex items-center gap-1 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400"
+              class="inline-flex items-center gap-1 text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400"
               :aria-label="`编辑：${event.title}`"
               data-testid="edit-custom-event"
               @click.stop="openCustomEditor(event)"
@@ -176,32 +181,32 @@ function releaseSwipe(closer) {
           <!-- 点开才给的详情 -->
           <dl
             v-if="collapsible && expanded"
-            class="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-1.5 border-t border-slate-100 pt-2.5 text-xs text-slate-500 dark:border-slate-700/60 dark:text-slate-400"
+            class="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-1.5 border-t border-slate-200/80 pt-2.5 text-xs text-slate-700 dark:border-slate-700/60 dark:text-slate-300"
             data-testid="event-detail"
           >
             <div v-if="periodLabel(event.periods)" class="flex gap-1.5">
-              <dt class="shrink-0 text-slate-400">节次</dt>
-              <dd>{{ periodLabel(event.periods) }}</dd>
+              <dt class="shrink-0 font-medium text-slate-600 dark:text-slate-400">节次</dt>
+              <dd class="text-slate-800 dark:text-slate-200">{{ periodLabel(event.periods) }}</dd>
             </div>
             <div v-if="durationPlain" class="flex gap-1.5">
-              <dt class="shrink-0 text-slate-400">时长</dt>
-              <dd>{{ durationPlain }}</dd>
+              <dt class="shrink-0 font-medium text-slate-600 dark:text-slate-400">时长</dt>
+              <dd class="text-slate-800 dark:text-slate-200">{{ durationPlain }}</dd>
             </div>
             <div v-if="event.teacher" class="flex gap-1.5">
-              <dt class="shrink-0 text-slate-400">教师</dt>
-              <dd class="min-w-0 truncate">{{ event.teacher }}</dd>
+              <dt class="shrink-0 font-medium text-slate-600 dark:text-slate-400">教师</dt>
+              <dd class="min-w-0 truncate text-slate-800 dark:text-slate-200">{{ event.teacher }}</dd>
             </div>
             <div v-if="event.week" class="flex gap-1.5">
-              <dt class="shrink-0 text-slate-400">周次</dt>
-              <dd>第 {{ event.week }} 周</dd>
+              <dt class="shrink-0 font-medium text-slate-600 dark:text-slate-400">周次</dt>
+              <dd class="text-slate-800 dark:text-slate-200">第 {{ event.week }} 周</dd>
             </div>
             <div v-if="sourceLabel" class="flex gap-1.5">
-              <dt class="shrink-0 text-slate-400">来源</dt>
-              <dd>{{ sourceLabel }}</dd>
+              <dt class="shrink-0 font-medium text-slate-600 dark:text-slate-400">来源</dt>
+              <dd class="text-slate-800 dark:text-slate-200">{{ sourceLabel }}</dd>
             </div>
             <div v-if="noteText && !event.teacher" class="col-span-2 flex gap-1.5">
-              <dt class="shrink-0 text-slate-400">备注</dt>
-              <dd class="min-w-0">{{ noteText }}</dd>
+              <dt class="shrink-0 font-medium text-slate-600 dark:text-slate-400">备注</dt>
+              <dd class="min-w-0 text-slate-800 dark:text-slate-200">{{ noteText }}</dd>
             </div>
           </dl>
         </div>
@@ -433,10 +438,10 @@ const noteParts = computed(() => splitNoteLocation(props.event.description))
 const noteLocation = computed(() => props.event.location || noteParts.value.location)
 const noteText = computed(() => noteParts.value.note)
 const sourceIcon = computed(() => (props.event.source === 'tju_schedule' ? GraduationCap : props.event.source === 'custom' ? Pencil : CalendarDays))
-const accentBar = computed(() =>
+const accentColor = computed(() =>
   props.event.is_deadline
-    ? 'border-l-4 border-l-rose-400 dark:border-l-rose-500'
-    : 'border-l-4 border-l-brand-400 dark:border-l-brand-500',
+    ? 'bg-rose-400 dark:bg-rose-500'
+    : 'bg-brand-400 dark:bg-brand-500',
 )
 
 const timeLabelSafe = timeLabel

@@ -20,7 +20,7 @@
     <SkeletonList v-if="state.loading && !groups.length" :rows="5" />
 
     <section
-      v-for="group in groups"
+      v-for="group in displayedGroups"
       :key="group.key"
       class="space-y-2"
       data-testid="day-group"
@@ -29,11 +29,8 @@
       <header class="sticky top-[49px] z-10 -mx-4 flex items-center gap-2 bg-slate-100/95 px-4 py-1.5
                      text-xs font-semibold uppercase tracking-wide text-slate-500
                      dark:bg-slate-900/95 dark:text-slate-400">
-        <span :class="group.key === today ? 'text-brand-600 dark:text-brand-400' : ''">
+        <span :class="group.key === today ? 'text-brand-600 dark:text-brand-400 font-bold' : ''">
           {{ group.label }}
-        </span>
-        <span v-if="group.key === today" class="chip border-transparent bg-brand-50 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">
-          今天
         </span>
         <span class="ml-auto font-normal normal-case tracking-normal text-slate-400">
           {{ group.events.length }} 条
@@ -47,6 +44,17 @@
         @remove="removeEvent"
       />
     </section>
+
+    <!-- 动态按需加载：滚动触底自动追加后续日程批次，避免数百张卡片同时进入 DOM 造成卡顿 -->
+    <div
+      v-if="hasMoreGroups"
+      ref="sentinelEl"
+      class="flex justify-center py-3 text-xs text-slate-500 dark:text-slate-400"
+    >
+      <button class="btn-ghost !py-1 text-xs" @click="loadMoreGroups">
+        加载更多日程 (已显示 {{ displayedGroups.length }} / {{ groups.length }} 天)
+      </button>
+    </div>
 
     <!-- 无日程且未接入时：显示接入卡片 -->
     <section
@@ -108,7 +116,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { AlertTriangle, GraduationCap, KeyRound, Plus, RefreshCw, Sparkles } from 'lucide-vue-next'
 import EmptyState from '../components/EmptyState.vue'
 import EventCard from '../components/EventCard.vue'
@@ -131,6 +139,43 @@ const overdue = computed(() =>
 const groups = computed(() => {
   const overdueIds = new Set(overdue.value.map((event) => event.id))
   return groupByDay(visible.value.filter((event) => !overdueIds.has(event.id)))
+})
+
+/* ----------------------------------------------------------- 动态按需渲染逻辑 */
+const renderedGroupLimit = ref(10)
+const displayedGroups = computed(() => groups.value.slice(0, renderedGroupLimit.value))
+const hasMoreGroups = computed(() => displayedGroups.value.length < groups.value.length)
+
+function loadMoreGroups() {
+  renderedGroupLimit.value += 10
+}
+
+const sentinelEl = ref(null)
+let observer = null
+
+function setupObserver() {
+  if (observer) {
+    observer.disconnect()
+    observer = null
+  }
+  if (!sentinelEl.value || !hasMoreGroups.value) return
+  observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0]?.isIntersecting) {
+        loadMoreGroups()
+      }
+    },
+    { rootMargin: '240px' },
+  )
+  observer.observe(sentinelEl.value)
+}
+
+watch([sentinelEl, hasMoreGroups], () => {
+  setupObserver()
+})
+
+onBeforeUnmount(() => {
+  if (observer) observer.disconnect()
 })
 
 const hasConnected = computed(() => {
