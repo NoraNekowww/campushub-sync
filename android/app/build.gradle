@@ -10,8 +10,8 @@ android {
         applicationId "online.nzlab.schedule"
         minSdk 26
         targetSdk 34
-        versionCode 54
-        versionName "2.5.2"
+        versionCode 55
+        versionName "2.5.3"
 
         resConfigs "zh"
     }

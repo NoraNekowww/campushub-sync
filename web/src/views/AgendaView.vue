@@ -126,8 +126,17 @@ import { filterEvents, notify, openCustomEditor, refresh, removeEvent, state, to
 import { groupByDay, todayKey, dayKey } from '../utils/datetime'
 
 const today = todayKey()
-// 左侧线性列表专注展示待办与 DDL（所有排课统一在周课表网格中呈现）
-const visible = computed(() => filterEvents().filter((event) => event.is_deadline))
+function isRangeTask(event) {
+  if (!event) return false
+  if (Array.isArray(event.periods) && event.periods.length > 0) return true
+  if (event.end_time && event.start_time && event.end_time !== event.start_time) return true
+  return false
+}
+
+// 左侧线性列表只显示纯粹的单点 DDL（排除带时段、有起止范围的课程与活动日程）
+const visible = computed(() =>
+  filterEvents().filter((event) => event.is_deadline && !isRangeTask(event)),
+)
 
 const overdue = computed(() =>
   visible.value.filter(
