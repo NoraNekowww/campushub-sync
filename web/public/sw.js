@@ -9,7 +9,7 @@
  * Every path is derived from the registration scope, so one bundle works both
  * at `/` (local, Docker) and at `/schedule/` (nzlab.online).
  */
-const VERSION = 'campushub-v42'
+const VERSION = 'campushub-v43'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 

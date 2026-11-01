@@ -202,24 +202,17 @@ export function setWeekGridStyle(style) {
   }
 }
 
-/** 检测设备是否满足 Android 15+ 或 iOS 自动开启磨砂玻璃条件 */
+/** 检测设备是否满足自动开启磨砂玻璃条件 (只要浏览器/WebView 支持 CSS backdrop-filter 即全量开启) */
 export function checkAutoFrostedSupport() {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') {
     return false
   }
-  const ua = navigator.userAgent || ''
   const supportsBlur = Boolean(
     typeof CSS !== 'undefined' &&
       CSS.supports &&
       (CSS.supports('backdrop-filter', 'blur(10px)') || CSS.supports('-webkit-backdrop-filter', 'blur(10px)')),
   )
-  if (!supportsBlur) return false
-
-  const isApple = /iPad|iPhone|iPod|Macintosh/i.test(ua)
-  const androidMatch = ua.match(/Android\s+([0-9]+)/i)
-  const isAndroid15Plus = Boolean(androidMatch && parseInt(androidMatch[1], 10) >= 15)
-
-  return isApple || isAndroid15Plus
+  return supportsBlur
 }
 
 export function initFrostedGlass() {

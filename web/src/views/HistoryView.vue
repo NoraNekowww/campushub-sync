@@ -34,12 +34,13 @@
       data-testid="history-day-group"
     >
       <header
-        class="sticky top-[49px] z-10 -mx-4 flex items-center gap-2 bg-slate-100/95 px-4 py-1.5
-               text-xs font-semibold uppercase tracking-wide text-slate-500
-               dark:bg-slate-900/95 dark:text-slate-400"
+        class="sticky top-[49px] z-10 mx-0 my-1 flex items-center gap-2 rounded-xl
+               border border-white/60 bg-white/50 px-3.5 py-1.5 text-xs font-semibold
+               uppercase tracking-wide text-slate-700 shadow-xs backdrop-blur-md
+               dark:border-white/10 dark:bg-slate-900/50 dark:text-slate-300"
       >
         <span>{{ group.label }}</span>
-        <span class="ml-auto font-normal normal-case tracking-normal text-slate-400">
+        <span class="ml-auto font-normal normal-case tracking-normal text-slate-500 dark:text-slate-400">
           {{ group.events.length }} 条
         </span>
       </header>
