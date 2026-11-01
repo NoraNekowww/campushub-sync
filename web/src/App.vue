@@ -6,9 +6,15 @@
       class="pointer-events-none fixed inset-0 z-0 overflow-hidden"
       aria-hidden="true"
     >
-      <div
-        class="absolute inset-0 bg-cover bg-center transition-all duration-700 ease-out"
+      <!-- 双通道加载：img 保证移动端/原生环境对跨域图床直链发起真实网络请求与解码 -->
+      <img
+        :src="activeBgUrl"
+        alt=""
+        class="absolute inset-0 h-full w-full object-cover transition-all duration-700 ease-out"
         :style="bgLayerStyle"
+        referrerpolicy="no-referrer"
+        crossorigin="anonymous"
+        loading="eager"
       />
       <!-- 物理微遮罩层：保证深浅色模式下课表文字与排版的高对比度清晰度 -->
       <div
@@ -108,7 +114,6 @@ const bgLayerStyle = computed(() => {
   const opacity = (Number(cfg.opacity ?? 35) / 100).toFixed(2)
   const blurPx = Number(cfg.blur ?? 0)
   return {
-    backgroundImage: `url(${activeBgUrl.value})`,
     opacity,
     filter: blurPx > 0 ? `blur(${blurPx}px)` : undefined,
     transform: blurPx > 0 ? 'scale(1.05)' : undefined,

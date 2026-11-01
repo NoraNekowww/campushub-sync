@@ -69,6 +69,9 @@ public class MainActivity extends AppCompatActivity {
         // 本地化与秒开体验：优先加载本地离线缓存（LOAD_CACHE_ELSE_NETWORK）
         settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        // 允许加载跨域网络图片和各种图床
+        settings.setBlockNetworkImage(false);
+        settings.setLoadsImagesAutomatically(true);
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
         settings.setAllowFileAccessFromFileURLs(true);
@@ -198,6 +201,11 @@ public class MainActivity extends AppCompatActivity {
                     return response;
                 }
             }
+            // 关键：非本应用域名的外部网络资源（如外部图床图片、CDN、Unsplash），绝对不拦截，放行让浏览器网络层直接加载！
+            String host = request.getUrl().getHost();
+            if (host != null && !host.equals("nzlab.online")) {
+                return null;
+            }
             return handleIntercept(request.getUrl());
         }
 
@@ -209,6 +217,11 @@ public class MainActivity extends AppCompatActivity {
                 if (response != null) {
                     return response;
                 }
+            }
+            // 关键：非本应用域名的外部网络资源（如外部图床图片、CDN、Unsplash），绝对不拦截，放行让浏览器网络层直接加载！
+            String host = uri.getHost();
+            if (host != null && !host.equals("nzlab.online")) {
+                return null;
             }
             return handleIntercept(uri);
         }

@@ -154,6 +154,13 @@
               <button
                 type="button"
                 class="chip border-slate-200 bg-white hover:border-brand-400 text-[10px] py-0.5 dark:border-slate-700 dark:bg-slate-800"
+                @click="applyBgPreset('astronomy')"
+              >
+                深空天文与星云
+              </button>
+              <button
+                type="button"
+                class="chip border-slate-200 bg-white hover:border-brand-400 text-[10px] py-0.5 dark:border-slate-700 dark:bg-slate-800"
                 @click="applyBgPreset('mountain')"
               >
                 雪山与极光
@@ -545,7 +552,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.4.4 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.4.5 · 原生极速' }}
         </span>
       </header>
 
@@ -860,7 +867,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.4.4'
+  return '2.4.5'
 })
 
 const isAndroidClient = computed(() => {
@@ -1105,7 +1112,13 @@ function toggleBgEnabled() {
 
 function applyBgPreset(kind) {
   bgForm.enabled = true
-  if (kind === 'mountain') {
+  if (kind === 'astronomy') {
+    // 天文与深空极光精选图床（浅色为壮丽玫瑰星云微白深空，深色为韦伯望远镜深空星系）
+    bgForm.lightUrl = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=85'
+    bgForm.darkUrl = 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1920&q=85'
+    bgForm.opacity = 40
+    bgForm.blur = 0
+  } else if (kind === 'mountain') {
     bgForm.lightUrl = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1920&q=85'
     bgForm.darkUrl = 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=1920&q=85'
     bgForm.opacity = 35
