@@ -3,11 +3,11 @@
     <!-- 顶部统计栏（纯粹归档，去除非必要下拉） -->
     <header class="flex flex-wrap items-center justify-between gap-3 pt-1">
       <div>
-        <h2 class="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+        <h2 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <History :size="18" class="text-brand-600 dark:text-brand-400" />
           <span>历史完成归档</span>
         </h2>
-        <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+        <p class="text-xs text-slate-700 dark:text-slate-300 font-medium mt-0.5">
           共记录 {{ completedEvents.length }} 条已完结的个人日程与待办
         </p>
       </div>
@@ -34,13 +34,13 @@
       data-testid="history-day-group"
     >
       <header
-        class="sticky top-[49px] z-10 mx-0 my-1 flex items-center gap-2 rounded-xl
-               border border-white/60 bg-white/50 px-3.5 py-1.5 text-xs font-semibold
-               uppercase tracking-wide text-slate-700 shadow-xs backdrop-blur-md
-               dark:border-white/10 dark:bg-slate-900/50 dark:text-slate-300"
+        class="sticky top-[41px] z-10 mx-0 my-1 flex items-center gap-2 rounded-xl
+               border border-white/60 bg-white/50 px-3.5 py-1.5 text-xs font-bold
+               uppercase tracking-wide text-slate-900 shadow-xs backdrop-blur-md
+               dark:border-white/10 dark:bg-slate-900/50 dark:text-slate-100"
       >
         <span>{{ group.label }}</span>
-        <span class="ml-auto font-normal normal-case tracking-normal text-slate-500 dark:text-slate-400">
+        <span class="ml-auto font-semibold normal-case tracking-normal text-slate-600 dark:text-slate-300">
           {{ group.events.length }} 条
         </span>
       </header>

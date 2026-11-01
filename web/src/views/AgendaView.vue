@@ -26,7 +26,7 @@
       data-testid="day-group"
       :data-day="group.key"
     >
-      <header class="sticky top-[49px] z-10 mx-0 my-1 flex items-center gap-2 rounded-xl
+      <header class="sticky top-[41px] z-10 mx-0 my-1 flex items-center gap-2 rounded-xl
                      border border-white/60 bg-white/50 px-3.5 py-1.5 text-xs font-semibold
                      uppercase tracking-wide text-slate-700 shadow-xs backdrop-blur-md
                      dark:border-white/10 dark:bg-slate-900/50 dark:text-slate-300">

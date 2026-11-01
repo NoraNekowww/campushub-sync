@@ -139,8 +139,8 @@
                   @click="selected = selected?.id === item.event.id ? null : item.event"
                 >
                   <span class="font-semibold text-[9px] leading-[10px] line-clamp-2">{{ item.event.title }}</span>
-                  <span class="block whitespace-nowrap text-[9px] leading-[11px] tracking-tighter opacity-80">
-                    {{ timeLabel(item.event.start_time) }}–{{ timeLabel(item.event.end_time) }}
+                  <span class="block whitespace-nowrap text-[9px] leading-[11px] font-mono tracking-tighter opacity-80">
+                    {{ timeLabel(item.event.start_time) }}-{{ timeLabel(item.event.end_time) }}
                   </span>
                   <!-- 卡片上加上简短地点（用户要求：不加红色针头，省空间） -->
                   <span

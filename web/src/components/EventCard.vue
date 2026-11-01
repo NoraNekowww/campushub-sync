@@ -132,8 +132,8 @@ function releaseSwipe(closer) {
             class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-700 font-medium dark:text-slate-300"
             data-testid="event-basics"
           >
-            <span class="inline-flex items-center gap-1">
-              <Clock :size="12" class="text-slate-500 dark:text-slate-400" />{{ timeLabel(event.start_time) }}–{{ endLabel }}
+            <span class="inline-flex items-center gap-1 font-mono tracking-tight">
+              <Clock :size="12" class="text-slate-500 dark:text-slate-400 font-sans" />{{ timeLabel(event.start_time) }}-{{ endLabel }}
             </span>
             <span v-if="noteLocation" class="inline-flex items-center gap-1">
               <MapPin :size="12" class="text-slate-500 dark:text-slate-400" />{{ noteLocation }}
@@ -156,9 +156,9 @@ function releaseSwipe(closer) {
             <span v-if="event.is_deadline" class="inline-flex items-center gap-1">
               <Clock :size="12" class="text-slate-500 dark:text-slate-400" />{{ deadlineLabel }}
             </span>
-            <span v-else class="inline-flex items-center gap-1">
-              <Clock :size="12" class="text-slate-500 dark:text-slate-400" />{{ timeLabel(event.start_time) }}–{{ endLabel }}
-              <span v-if="durationText" class="text-slate-600 dark:text-slate-400">· {{ durationText }}</span>
+            <span v-else class="inline-flex items-center gap-1 font-mono tracking-tight">
+              <Clock :size="12" class="text-slate-500 dark:text-slate-400 font-sans" />{{ timeLabel(event.start_time) }}-{{ endLabel }}
+              <span v-if="durationText" class="text-slate-600 dark:text-slate-400 font-sans">· {{ durationText }}</span>
             </span>
             <span v-if="noteLocation" class="inline-flex items-center gap-1">
               <MapPin :size="12" class="text-slate-500 dark:text-slate-400" />{{ noteLocation }}

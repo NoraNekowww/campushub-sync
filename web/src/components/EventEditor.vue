@@ -50,7 +50,7 @@
               <GraduationCap :size="13" />
               <span>课程 / 活动日程</span>
             </div>
-            <span class="text-[10px] font-normal opacity-75">上完自动隐退，可划掉</span>
+            <span class="text-[10px] font-normal opacity-75">定时段任务，可划掉</span>
           </button>
         </div>
 
@@ -77,7 +77,27 @@
           </label>
         </div>
 
-        <div :class="(form.kind === 'class' || isEdit) ? 'grid grid-cols-2 gap-2' : ''">
+        <!-- DDL 模式下：截止时间与开启重复任务并排于同一横行 -->
+        <div v-if="form.kind === 'deadline' && !isEdit" class="grid grid-cols-2 gap-2">
+          <label class="block space-y-1 text-xs">
+            <span class="text-slate-500 dark:text-slate-400">截止时间</span>
+            <input v-model="form.start" type="time" class="input" required />
+          </label>
+          <div class="flex flex-col justify-end">
+            <label class="flex h-[38px] cursor-pointer items-center gap-2 rounded-lg border border-slate-200/80 bg-slate-50/70 px-2.5 text-xs font-medium dark:border-slate-800 dark:bg-slate-800/40">
+              <input
+                v-model="form.recurring"
+                type="checkbox"
+                data-testid="custom-recurring-toggle"
+                class="accent-brand-600"
+              />
+              <span class="truncate">开启重复任务</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 课程/活动模式下（或编辑模式下）：开始时间与活动时长并排 -->
+        <div v-else class="grid grid-cols-2 gap-2">
           <label class="block space-y-1 text-xs">
             <span class="text-slate-500 dark:text-slate-400">{{ form.kind === 'deadline' ? '截止时间' : '开始时间' }}</span>
             <input v-model="form.start" type="time" class="input" required />
@@ -102,16 +122,13 @@
           </label>
         </div>
 
-        <div v-if="form.kind === 'class'" class="rounded-lg bg-slate-50 dark:bg-slate-800/50 px-2.5 py-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-          💡 <strong>自动隐退说明</strong>：课程型日程上完（到达结束时间）后会自动从今日视图隐退；亦可在日程卡片上随时手动点击勾选划掉。
-        </div>
-
-        <!-- 重复任务设置（支持按天/周/月重复，重复几次） -->
+        <!-- 重复任务详细参数：仅当开启重复时展开 -->
         <div
-          v-if="!isEdit"
-          class="space-y-2 rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5 text-xs dark:border-slate-800 dark:bg-slate-800/40"
+          v-if="!isEdit && form.recurring"
+          class="space-y-2 rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5 text-xs dark:border-slate-800 dark:bg-slate-800/40 animate-fade-in"
         >
-          <label class="flex cursor-pointer items-center gap-2 font-medium">
+          <!-- 如果是 class 模式，保留重复标题；如果是 deadline 模式已在上方勾选 -->
+          <label v-if="form.kind === 'class'" class="flex cursor-pointer items-center gap-2 font-medium">
             <input
               v-model="form.recurring"
               type="checkbox"
@@ -120,7 +137,7 @@
             />
             <span>开启重复任务（按周期自动生成）</span>
           </label>
-          <div v-if="form.recurring" class="space-y-2 pt-1.5">
+          <div class="space-y-2 pt-0.5">
             <div class="flex flex-wrap items-center gap-2">
               <span class="text-slate-500 dark:text-slate-400">每</span>
               <input
@@ -134,23 +151,39 @@
               <select v-model="form.repeatUnit" class="input w-20 !py-1" data-testid="custom-repeat-unit">
                 <option value="day">天</option>
                 <option value="week">周</option>
-                <option value="month">个月</option>
+                <option value="month">月</option>
               </select>
-              <span class="text-slate-500 dark:text-slate-400">重复一次，共</span>
+              <span class="text-slate-500 dark:text-slate-400">重复一次</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 text-slate-500 dark:text-slate-400">
+              <span>共重复</span>
               <input
                 v-model.number="form.repeatCount"
                 type="number"
                 min="2"
-                max="60"
-                class="input w-16 !py-1 text-center"
+                max="30"
+                class="input w-16 !py-1 text-center text-slate-900 dark:text-slate-100"
                 data-testid="custom-repeat-count"
               />
-              <span class="text-slate-500 dark:text-slate-400">次</span>
+              <span>次（包含本次共 {{ form.repeatCount }} 个任务）</span>
             </div>
-            <p class="text-[11px] text-brand-600 dark:text-brand-400">
-              从 {{ form.date || '今天' }} 起，每 {{ form.repeatInterval || 1 }} {{ form.repeatUnit === 'day' ? '天' : form.repeatUnit === 'week' ? '周' : '个月' }} 生成一条，共 {{ form.repeatCount || 2 }} 次
-            </p>
           </div>
+        </div>
+
+        <!-- 课程/活动模式下未勾选重复时展示开启开关 -->
+        <div
+          v-else-if="!isEdit && form.kind === 'class' && !form.recurring"
+          class="rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5 text-xs dark:border-slate-800 dark:bg-slate-800/40"
+        >
+          <label class="flex cursor-pointer items-center gap-2 font-medium">
+            <input
+              v-model="form.recurring"
+              type="checkbox"
+              data-testid="custom-recurring-toggle"
+              class="accent-brand-600"
+            />
+            <span>开启重复任务（按周期自动生成）</span>
+          </label>
         </div>
 
         <label class="block space-y-1 text-xs">
