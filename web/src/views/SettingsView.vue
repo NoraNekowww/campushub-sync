@@ -517,6 +517,7 @@
               <th class="pb-1.5 font-normal text-right">总日程</th>
               <th class="pb-1.5 font-normal text-right">估算占用</th>
               <th class="pb-1.5 font-normal pl-3">空间占比</th>
+              <th class="pb-1.5 font-normal text-right pr-1">操作</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100/60 dark:divide-slate-800/40">
@@ -541,9 +542,21 @@
                   <span class="text-[10px] font-mono text-slate-400">{{ user.storage_percent }}%</span>
                 </div>
               </td>
+              <td class="py-2 text-right pr-1">
+                <button
+                  v-if="user.id !== state.user?.id"
+                  type="button"
+                  class="btn-ghost !py-0.5 !px-2 text-[11px] text-rose-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
+                  title="移除该账号及其全部日程数据"
+                  @click="confirmDeleteUser(user)"
+                >
+                  移除账号
+                </button>
+                <span v-else class="text-[10px] text-slate-400">当前账号</span>
+              </td>
             </tr>
             <tr v-if="!(storageStats?.users || []).length">
-              <td colspan="6" class="py-3 text-center text-slate-400">暂无用户数据</td>
+              <td colspan="7" class="py-3 text-center text-slate-400">暂无用户数据</td>
             </tr>
           </tbody>
         </table>
@@ -557,7 +570,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.5.1 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.5.2 · 原生极速' }}
         </span>
       </header>
 
@@ -874,7 +887,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.5.1'
+  return '2.5.2'
 })
 
 const isAndroidClient = computed(() => {
@@ -1269,6 +1282,22 @@ async function runOptimizeStorage() {
     await loadStorageStats()
   } catch (error) {
     notify(error.message || '优化失败', 'danger')
+  } finally {
+    storageBusy.value = false
+  }
+}
+
+async function confirmDeleteUser(user) {
+  if (!confirm(`确定要彻底移除账号「${user.username}」吗？\n该操作将同时清理该账号的所有课程与待办数据，不可撤销。`)) {
+    return
+  }
+  storageBusy.value = true
+  try {
+    const res = await api.deleteUser(user.id)
+    notify(res?.message || `账号「${user.username}」已移除`, 'ok')
+    await loadStorageStats()
+  } catch (error) {
+    notify(error.message || '移除账号失败', 'danger')
   } finally {
     storageBusy.value = false
   }

@@ -44,7 +44,6 @@ function releaseSwipe(closer) {
       <article
         ref="cardEl"
         class="card relative overflow-hidden rounded-2xl"
-        :class="[event.status === 'completed' ? 'opacity-60' : '']"
         data-testid="event-card"
         :data-kind="event.is_deadline ? 'deadline' : 'class'"
         :data-source="event.source"
@@ -60,7 +59,8 @@ function releaseSwipe(closer) {
         class="pointer-events-none absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl transition-colors"
         :class="accentColor"
       />
-      <div class="flex gap-3 p-3.5 pl-4">
+      <!-- 内容层：将 opacity-60 加在内容层而非卡片外壳，彻底杜绝 Chromium/WebKit 将带 backdrop-filter 的半透明图层降级为直角方框的渲染 Bug -->
+      <div class="flex gap-3 p-3.5 pl-4 transition-opacity duration-200" :class="event.status === 'completed' ? 'opacity-55' : ''">
         <!-- real checkbox for tickable events (deadlines & custom events) -->
         <label v-if="tickable" class="mt-0.5 shrink-0 cursor-pointer" :title="event.status === 'completed' ? '标记为未完成' : '标记为已完成'">
           <input
@@ -209,6 +209,27 @@ function releaseSwipe(closer) {
               <dd class="min-w-0 text-slate-800 dark:text-slate-200">{{ noteText }}</dd>
             </div>
           </dl>
+
+          <!-- 云端附件列表（每个 <= 100MB，支持直接点击下载/在线预览） -->
+          <div
+            v-if="event.attachments && event.attachments.length"
+            class="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-slate-100/80 pt-2 dark:border-slate-800/60"
+            data-testid="event-attachments"
+          >
+            <a
+              v-for="att in event.attachments"
+              :key="att.id"
+              :href="api.attachmentUrl(att.id)"
+              target="_blank"
+              class="inline-flex items-center gap-1 rounded-md border border-slate-200/90 bg-slate-50/80 px-2 py-0.5 text-[11px] font-medium text-slate-700 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-700/80 dark:bg-slate-800/60 dark:text-slate-200 dark:hover:border-brand-500/50 dark:hover:bg-brand-500/10 dark:hover:text-brand-300"
+              :title="`下载附件：${att.name} (${formatAttachmentSize(att.size)})`"
+              @click.stop
+            >
+              <Paperclip :size="11" class="text-brand-600 dark:text-brand-400" />
+              <span class="max-w-[130px] truncate">{{ att.name }}</span>
+              <span class="font-mono text-[9.5px] opacity-70">({{ formatAttachmentSize(att.size) }})</span>
+            </a>
+          </div>
         </div>
       </div>
       </article>
@@ -227,12 +248,21 @@ import {
   Clock,
   GraduationCap,
   MapPin,
+  Paperclip,
   Pencil,
   Trash2,
 } from 'lucide-vue-next'
+import { api } from '../api'
 import { countdown, durationLabel, periodLabel, periodsShort, timeLabel } from '../utils/datetime'
 import { splitNoteLocation } from '../utils/note'
 import { openCustomEditor } from '../store'
+
+function formatAttachmentSize(size) {
+  if (!size) return '0 B'
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
 
 const props = defineProps({
   event: { type: Object, required: true },

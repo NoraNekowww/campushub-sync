@@ -15,7 +15,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import text
-from sqlmodel import Session, select
+from sqlmodel import Session, select, delete
 
 from .. import accounts, app_settings, captcha
 from ..config import get_settings
@@ -288,6 +288,27 @@ def patch_user(
     session.commit()
     session.refresh(target)
     return {"ok": True, "user": accounts.user_payload(target)}
+
+
+@router.delete("/users/{user_id}", summary="Delete an account and cascade clean its events (admin)")
+def delete_user(
+    user_id: int,
+    admin: User = Depends(current_admin),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """管理员专用：安全移除指定用户账号，并级联清理该用户的所有事件日程。"""
+    target = session.get(User, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="账号不存在")
+    if target.id == admin.id:
+        raise HTTPException(status_code=400, detail="不能移除当前登录的管理员账号")
+
+    # 1. 级联清理该用户的所有日程与待办
+    session.exec(delete(Event).where(Event.user_id == target.id))
+    # 2. 移除用户自身
+    session.delete(target)
+    session.commit()
+    return {"ok": True, "message": f"用户「{target.username}」及其所有数据已成功移除"}
 
 
 def _format_bytes(size: int) -> str:

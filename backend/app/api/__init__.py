@@ -2,10 +2,11 @@
 
 from fastapi import APIRouter
 
-from . import accounts, auth_ms, calendar, events, schedule, status, sync, tju, widgets
+from . import accounts, attachments, auth_ms, calendar, events, schedule, status, sync, tju, widgets
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(accounts.router)
+api_router.include_router(attachments.router)
 api_router.include_router(events.router)
 api_router.include_router(widgets.router)
 api_router.include_router(sync.router)

@@ -112,6 +112,7 @@ def patch_event(
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
     clear_end_time: bool = False,
+    attachments: Optional[str] = None,
 ) -> Optional[Event]:
     """User edits are sticky: ``local_override`` stops the next sync clobbering them.
 
@@ -152,6 +153,9 @@ def patch_event(
             changed = True
     if hidden is not None and bool(hidden) != bool(event.hidden):
         event.hidden = bool(hidden)
+        changed = True
+    if attachments is not None:
+        event.attachments = attachments
         changed = True
     if changed:
         event.local_override = True

@@ -126,7 +126,8 @@ import { filterEvents, notify, openCustomEditor, refresh, removeEvent, state, to
 import { groupByDay, todayKey, dayKey } from '../utils/datetime'
 
 const today = todayKey()
-const visible = computed(() => filterEvents())
+// 左侧线性列表专注展示待办与 DDL（所有排课统一在周课表网格中呈现）
+const visible = computed(() => filterEvents().filter((event) => event.is_deadline))
 
 const overdue = computed(() =>
   visible.value.filter(

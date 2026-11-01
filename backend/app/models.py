@@ -64,6 +64,7 @@ class Event(SQLModel, table=True):
 
     updated_at: datetime
     completed_at: Optional[datetime] = None
+    attachments: Optional[str] = None  # compact JSON list of attachment metadata
     raw: Optional[str] = None  # compact JSON of the source payload
 
     @property

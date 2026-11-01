@@ -191,6 +191,53 @@
           <textarea v-model="form.description" class="input h-16 resize-none" maxlength="500" />
         </label>
 
+        <!-- 云端附加文件（每个不大于 100MB） -->
+        <div class="space-y-2 rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5 text-xs dark:border-slate-800 dark:bg-slate-800/40">
+          <div class="flex items-center justify-between">
+            <span class="flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-200">
+              <Paperclip :size="13" class="text-brand-600 dark:text-brand-400" />
+              <span>附加文件（云端存储，每个不超过 100MB）</span>
+            </span>
+            <label class="btn-ghost !py-0.5 !px-2 cursor-pointer text-[11px] text-brand-600 hover:text-brand-700 dark:text-brand-400">
+              <Upload :size="12" />
+              <span>{{ uploadingFile ? '上传中…' : '上传附件' }}</span>
+              <input
+                type="file"
+                class="sr-only"
+                :disabled="uploadingFile"
+                multiple
+                @change="handleAttachmentUpload"
+              />
+            </label>
+          </div>
+
+          <!-- 已上传附件列表 -->
+          <div v-if="form.attachments && form.attachments.length" class="space-y-1.5 pt-1">
+            <div
+              v-for="(att, idx) in form.attachments"
+              :key="att.id || idx"
+              class="flex items-center justify-between gap-2 rounded-lg border border-slate-200/90 bg-white px-2.5 py-1.5 dark:border-slate-700 dark:bg-slate-900"
+            >
+              <div class="flex min-w-0 items-center gap-1.5">
+                <FileText :size="13" class="shrink-0 text-slate-400" />
+                <span class="truncate font-medium text-slate-700 dark:text-slate-200" :title="att.name">{{ att.name }}</span>
+                <span class="shrink-0 font-mono text-[10px] text-slate-400">({{ formatFileSize(att.size) }})</span>
+              </div>
+              <button
+                type="button"
+                class="shrink-0 text-slate-400 hover:text-rose-500"
+                title="移除附件"
+                @click="removeAttachment(idx)"
+              >
+                <X :size="13" />
+              </button>
+            </div>
+          </div>
+          <p v-else class="text-[11px] text-slate-400">
+            暂无附件。可点击右侧上传课件、报告、复习资料或图片。
+          </p>
+        </div>
+
         <!-- 批量修改应用范围切换（当编辑对象为批量生成的重复任务时展示） -->
         <div
           v-if="isEdit && editingRecurrence"
@@ -273,10 +320,12 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { Clock, GraduationCap, Pencil, RotateCcw, X } from 'lucide-vue-next'
+import { Clock, FileText, GraduationCap, Paperclip, Pencil, RotateCcw, Upload, X } from 'lucide-vue-next'
+import { api } from '../api'
 import { closeCustomEditor, removeCustomEvent, saveCustomEvent, state } from '../store'
 
 const busy = ref(false)
+const uploadingFile = ref(false)
 const error = ref('')
 const form = reactive({
   title: '',
@@ -290,6 +339,8 @@ const form = reactive({
   allDay: false,
   location: '',
   description: '',
+  /* 云端附件列表：[{ id, name, size, mime, url, created_at }]，每个 <= 100MB */
+  attachments: [],
   /* 重复任务支持：每几天/周/月重复一次，共生成几次 */
   recurring: false,
   repeatInterval: 1,
@@ -367,6 +418,41 @@ function addHours(date, hhmm, hours) {
   )}:${pad(later.getMinutes())}:00`
 }
 
+function formatFileSize(size) {
+  if (!size) return '0 B'
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
+
+async function handleAttachmentUpload(e) {
+  const files = Array.from(e.target?.files || [])
+  if (!files.length) return
+  uploadingFile.value = true
+  error.value = ''
+  try {
+    for (const file of files) {
+      if (file.size > 100 * 1024 * 1024) {
+        error.value = `文件「${file.name}」超出限制，单个文件最大支持 100MB`
+        continue
+      }
+      const att = await api.uploadAttachment(file)
+      if (att && att.id) {
+        form.attachments.push(att)
+      }
+    }
+  } catch (err) {
+    error.value = err.message || '上传附件失败，请重试'
+  } finally {
+    uploadingFile.value = false
+    if (e.target) e.target.value = ''
+  }
+}
+
+function removeAttachment(idx) {
+  form.attachments.splice(idx, 1)
+}
+
 watch(
   () => [state.customEditor.open, state.customEditor.event],
   async () => {
@@ -386,6 +472,7 @@ watch(
     form.allDay = false
     form.location = event?.location || ''
     form.description = event?.description || ''
+    form.attachments = Array.isArray(event?.attachments) ? [...event.attachments] : []
     form.recurring = false
     form.repeatInterval = 1
     form.repeatUnit = 'week'
@@ -417,6 +504,7 @@ async function submit() {
     // 空串 = 清空（null 会被后端当成「这一项不动」，地点和备注就删不掉了）
     location: form.location.trim(),
     description: form.description.trim(),
+    attachments: form.attachments,
   }
   if (!isEdit.value && form.recurring) {
     payload.repeat_frequency = form.repeatUnit

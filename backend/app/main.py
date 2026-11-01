@@ -148,9 +148,9 @@ def create_app() -> FastAPI:
     @app.get("/api/version", summary="Version check for in-app update notification")
     async def app_version() -> dict:
         return {
-            "version": "2.5.1",
-            "tag": "v2.5.1",
-            "title": "CampusHub Android v2.5.1",
+            "version": "2.5.2",
+            "tag": "v2.5.2",
+            "title": "CampusHub Android v2.5.2",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",

@@ -210,9 +210,21 @@ export const api = {
   changePassword: (payload) => request('/auth/password', { method: 'POST', body: payload }),
   users: () => request('/auth/users'),
   patchUser: (id, payload) => request(`/auth/users/${id}`, { method: 'PATCH', body: payload }),
+  deleteUser: (id) => request(`/auth/users/${id}`, { method: 'DELETE' }),
   authStorage: () => request('/auth/storage'),
   optimizeStorage: () => request('/auth/storage/optimize', { method: 'POST' }),
   appVersion: () => request('/version'),
+  /* ------------------------------------------------ attachments (cloud, max 100MB) */
+  uploadAttachment: async (file) => {
+    if (file.size > 100 * 1024 * 1024) {
+      throw new Error('文件体积超出限制（单个文件最大支持 100MB）')
+    }
+    const form = new FormData()
+    form.append('file', file)
+    return request('/attachments', { method: 'POST', body: form })
+  },
+  deleteAttachment: (fileId) => request(`/attachments/${fileId}`, { method: 'DELETE' }),
+  attachmentUrl: (fileId) => `${API_BASE}/attachments/${fileId}`,
   /* ------------------------------------------------ microsoft / schedule */
   msStatus: () => request('/auth/ms/status'),
   msLists: () => request('/events/ms/lists'),

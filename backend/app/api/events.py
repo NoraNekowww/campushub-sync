@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -43,6 +43,7 @@ class EventCreateIn(BaseModel):
     repeat_frequency: Optional[str] = None  # None | "day" | "week" | "month"
     repeat_interval: int = 1
     repeat_count: int = 1
+    attachments: Optional[list[dict[str, Any]]] = None
 
 
 def _add_months(dt: datetime, months: int) -> datetime:
@@ -183,6 +184,7 @@ def create_event(
                 priority=max(1, min(9, payload.priority)),
                 reminder_minutes=payload.reminder_minutes,
                 local_override=True,  # locally authored — sync must never touch it
+                attachments=json.dumps(payload.attachments, ensure_ascii=False) if payload.attachments else None,
                 updated_at=utcnow(),
                 raw=json.dumps(
                     {
@@ -218,6 +220,7 @@ def create_event(
             priority=max(1, min(9, payload.priority)),
             reminder_minutes=payload.reminder_minutes,
             local_override=True,  # locally authored — sync must never touch it
+            attachments=json.dumps(payload.attachments, ensure_ascii=False) if payload.attachments else None,
             updated_at=utcnow(),
             raw=json.dumps({"origin": "api"}, ensure_ascii=False),
         )
@@ -483,6 +486,7 @@ async def update_event(
         start_time=start,
         end_time=end,
         clear_end_time=payload.clear_end_time,
+        attachments=json.dumps(payload.attachments, ensure_ascii=False) if payload.attachments is not None else None,
     )
     if event is None:
         raise HTTPException(status_code=404, detail="event not found")

@@ -48,6 +48,8 @@ class EventOut(BaseModel):
     week: Optional[int] = None
     #: 重复任务元数据（批量生成/批量修改用）
     recurrence: Optional[RecurrenceMeta] = None
+    #: 云端附加文件列表（每个不大于 100MB，支持下载与预览）
+    attachments: Optional[list[dict[str, Any]]] = None
     #: 「划掉」有没有成功推回微软待办：``{"ok": bool, "error": str | None}``
     ms_sync: Optional[dict[str, Any]] = None
 
@@ -81,7 +83,18 @@ class EventOut(BaseModel):
             teacher=_str_from_raw(event.raw_dict(), "teacher"),
             week=_int_from_raw(event.raw_dict(), "week"),
             recurrence=_recurrence_from_raw(event.raw_dict(), event.source_id),
+            attachments=_attachments_from_event(event),
         )
+
+
+def _attachments_from_event(event: Event) -> Optional[list[dict[str, Any]]]:
+    if not getattr(event, "attachments", None):
+        return None
+    try:
+        data = json.loads(event.attachments)  # type: ignore[arg-type]
+        return data if isinstance(data, list) else None
+    except Exception:
+        return None
 
 
 def _str_from_raw(raw: Any, key: str) -> Optional[str]:
@@ -174,6 +187,8 @@ class EventPatchIn(BaseModel):
     clear_end_time: bool = False
     #: 批量修改范围：single = 仅当前事件；all = 整个重复系列全部修改；future = 当前及后续所有重复事件
     apply_scope: Optional[str] = "single"
+    #: 云端附加文件列表（每个不大于 100MB）
+    attachments: Optional[list[dict[str, Any]]] = None
 
 
 class MsTaskIn(BaseModel):
