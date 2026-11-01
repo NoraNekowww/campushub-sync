@@ -144,12 +144,12 @@ html.has-custom-bg {
   /* 纯净高斯模糊核：全平台硬件加速，杜绝复合滤镜导致的 GPU 着色器崩溃丢弃 */
   --phys-glass-blur: blur(24px);
 
-  /* 物理漫透射亚克力雾化基底：告别单薄死白塑料片，采用高散射饱和基底 */
-  --phys-glass-bg-light: rgba(255, 255, 255, 0.62);
-  --phys-glass-bg-dark: rgba(15, 23, 42, 0.62);
+  /* 物理漫透射亚克力雾化基底：清澈自然，彻底杜绝整体过度泛白 */
+  --phys-glass-bg-light: rgba(255, 255, 255, 0.44);
+  --phys-glass-bg-dark: rgba(15, 23, 42, 0.55);
 
   /* 菲涅尔切线边界（Fresnel Rim）：微米级晶体高光边界 */
-  --phys-glass-border-light: rgba(255, 255, 255, 0.75);
+  --phys-glass-border-light: rgba(255, 255, 255, 0.50);
   --phys-glass-border-dark: rgba(255, 255, 255, 0.16);
 
   /* 物理光照模型：
@@ -159,8 +159,8 @@ html.has-custom-bg {
      4. 环境光遮蔽与悬浮漫散射阴影 (Ambient Occlusion): 0 12px 32px -8px rgba(...)
   */
   --phys-glass-shadow-light:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
-    inset 0 0 20px 0 rgba(255, 255, 255, 0.15),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.70),
+    inset 0 0 20px 0 rgba(255, 255, 255, 0.08),
     0 1px 2px 0 rgba(0, 0, 0, 0.03),
     0 12px 32px -8px rgba(0, 0, 0, 0.06);
 

@@ -275,13 +275,61 @@ export function saveBackgroundConfig(patch) {
 /* ------------------------------------------------------------- event feed */
 
 function fetchParams() {
-  const start = dayKey(new Date(Date.now() - 86400000))
+  // 往前拉取 30 天，确保近期的日程与已完成归档在常规刷新中也能即时拉回
+  const start = dayKey(new Date(Date.now() - 30 * 86400000))
   const end = dayKey(new Date(Date.now() + LOOKAHEAD_DAYS * 86400000))
   return {
     start_date: start,
     end_date: end,
-    limit: 800,
+    limit: 1000,
     source: state.source === 'all' ? undefined : state.source,
+  }
+}
+
+/**
+ * 从服务器全量拉取已完成的历史归档日程（不受 start_date 限制）
+ * 确保换设备、清缓存后历史归档 100% 留存于服务器数据库且能随时拉回
+ */
+export async function fetchHistoryEvents() {
+  try {
+    const res = await api.events({ status: 'completed', limit: 800 })
+    const historyItems = res.items || []
+    if (!historyItems.length) return
+    const eventMap = new Map((state.events || []).map((e) => [e.id, e]))
+    historyItems.forEach((item) => {
+      eventMap.set(item.id, { ...item, status: 'completed' })
+    })
+    state.events = [...eventMap.values()]
+    saveEventsCache(state.events, state.total)
+  } catch (e) {
+    console.warn('拉取服务器历史归档异常:', e.message)
+  }
+}
+
+/**
+ * 定时段的任务逻辑：过期自动划掉（status = 'completed'）
+ * 针对所有个人自定义日程/待办，凡是结束时间已过（now > end_time），自动标记为已划掉完成，
+ * 并持久化落盘同步提交至服务器，自动移出课表占用并流转至历史归档
+ */
+export function autoExpireEndedCustomTasks() {
+  const nowTs = Date.now()
+  const toPatch = []
+  ;(state.events || []).forEach((ev) => {
+    // 排除教务课表原生课程，仅针对个人安排的自定义日程与任务
+    if (ev.source !== 'tju_schedule' && ev.status !== 'completed') {
+      if (isEventEnded(ev, nowTs)) {
+        ev.status = 'completed'
+        recordCompletedOverride(ev.id, 'completed')
+        toPatch.push(ev.id)
+      }
+    }
+  })
+  if (toPatch.length > 0) {
+    saveEventsCache(state.events, state.total)
+    toPatch.forEach((id) => {
+      appendSyncQueue({ type: 'patch', id, payload: { status: 'completed' } })
+      api.patchEvent(id, { status: 'completed' }).catch(() => {})
+    })
   }
 }
 
@@ -536,6 +584,8 @@ export async function refresh({ silent = false } = {}) {
     state.lastUpdated = new Date()
     // 异步更新本地离线缓存
     saveEventsCache(state.events, state.total)
+    // 定时段任务到期自动划掉检测与同步
+    autoExpireEndedCustomTasks()
   } catch (error) {
     if (isAuthError(error)) {
       state.authRequired = true
@@ -584,7 +634,13 @@ export async function bootstrap() {
   // 1. 毫秒级闪存恢复全部状态：课表、日程、配置、用户信息全部就绪，0 延迟
   loadCachedData()
 
-  // 2. 移动端强本地化策略：如果本地已有缓存数据，则首屏完全不阻塞等待网络请求
+  // 2. 检查定时段任务是否已到期，到期自动划掉归档并持久化至服务器
+  autoExpireEndedCustomTasks()
+  if (typeof window !== 'undefined' && !window.__autoExpireTimer) {
+    window.__autoExpireTimer = setInterval(autoExpireEndedCustomTasks, 60000)
+  }
+
+  // 3. 移动端强本地化策略：如果本地已有缓存数据，则首屏完全不阻塞等待网络请求
   const isMobile = isMobileNativeApp()
   const hasLocalData = state.events && state.events.length > 0
 
@@ -596,7 +652,7 @@ export async function bootstrap() {
     return
   }
 
-  // 3. 首次启动或 Web 页面下并行拉取更新
+  // 4. 首次启动或 Web 页面下并行拉取更新
   await Promise.all([refresh(), loadStatus(), loadConfig()])
 }
 
@@ -1035,19 +1091,10 @@ export async function toggleCompleted(event) {
   recordCompletedOverride(event.id, next)
   saveEventsCache(state.events, state.total)
 
-  // 3. 打入离线同步队列
+  // 3. 打入离线同步队列双重保险
   appendSyncQueue({ type: 'patch', id: event.id, payload: { status: next } })
 
-  const isMobile = isMobileNativeApp()
-  if (isMobile) {
-    // 移动端：静默后台异步提交，不阻塞 UI
-    setTimeout(() => {
-      flushSyncQueue().catch(() => {})
-    }, 400)
-    return
-  }
-
-  // 网页端：立即发起后台提交
+  // 4. 立即向服务器发起 PATCH 写入落盘（计入服务器历史归档与完成态持久化）
   try {
     const updated = await api.patchEvent(event.id, { status: next })
     Object.assign(event, updated)
@@ -1062,8 +1109,11 @@ export async function toggleCompleted(event) {
       state.authRequired = true
       notify('请先登录账号后再操作', 'warn')
     } else {
-      // 网络慢或临时连接异常：坚决保留用户的划掉状态，等待下次自动重试同步，绝不回光返照！
+      // 网络慢或临时离线：坚决保留用户的划掉状态，等待离线队列自动重试同步，绝不回光返照！
       console.warn('离线暂存完成态，稍后自动重试同步:', error.message)
+      setTimeout(() => {
+        flushSyncQueue().catch(() => {})
+      }, 500)
     }
   }
 }

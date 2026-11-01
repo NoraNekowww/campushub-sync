@@ -16,10 +16,10 @@
         crossorigin="anonymous"
         loading="eager"
       />
-      <!-- 物理微遮罩层：保证深浅色模式下课表文字与排版的高对比度清晰度 -->
+      <!-- 物理微遮罩层：消除浅色过度泛白，保证深浅色模式下课表文字与排版的高对比度清晰度 -->
       <div
         class="absolute inset-0 transition-colors duration-500"
-        :class="state.isDarkTheme ? 'bg-slate-950/35' : 'bg-white/20'"
+        :class="state.isDarkTheme ? 'bg-slate-950/35' : 'bg-slate-900/5'"
       />
     </div>
 

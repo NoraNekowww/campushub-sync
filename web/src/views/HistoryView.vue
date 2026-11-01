@@ -69,12 +69,17 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { CheckCircle2, History } from 'lucide-vue-next'
 import EventCard from '../components/EventCard.vue'
 import SkeletonList from '../components/SkeletonList.vue'
-import { state, toggleCompleted } from '../store'
+import { fetchHistoryEvents, state, toggleCompleted } from '../store'
 import { dayDiff, dayLabel, isEventEnded, todayKey } from '../utils/datetime'
+
+// 进入历史归档页面时主动从服务器全量拉取已完成归档记录，确保换设备/清缓存后 100% 留存不丢失
+onMounted(() => {
+  fetchHistoryEvents()
+})
 
 /**
  * 历史完成过的所有日程：
