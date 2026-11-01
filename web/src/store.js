@@ -262,11 +262,19 @@ function applyTheme(mode) {
   document.documentElement.classList.toggle('dark', dark)
 }
 
+export function applyBackgroundClass() {
+  if (typeof document !== 'undefined') {
+    const enabled = Boolean(state.backgroundConfig?.enabled)
+    document.documentElement.classList.toggle('has-custom-bg', enabled)
+  }
+}
+
 export function saveBackgroundConfig(patch) {
   state.backgroundConfig = { ...state.backgroundConfig, ...patch }
   try {
     localStorage.setItem(BACKGROUND_CONFIG_KEY, JSON.stringify(state.backgroundConfig))
   } catch (e) {}
+  applyBackgroundClass()
 }
 
 /* ------------------------------------------------------------- event feed */

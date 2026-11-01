@@ -141,6 +141,7 @@ async function runToastAction() {
 onMounted(async () => {
   initTheme()
   initFrostedGlass()
+  applyBackgroundClass()
   initConnectivity()
   await fetchSession()
   bootstrap()

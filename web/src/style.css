@@ -21,6 +21,12 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* 当开启自定义背景图时，让 body 和 #app 背景透明，使底层的全局背景图无遮挡穿透显现 */
+html.has-custom-bg body,
+html.has-custom-bg #app {
+  background-color: transparent !important;
+}
+
 @layer components {
   .card {
     @apply rounded-2xl border border-slate-200 bg-white shadow-sm
