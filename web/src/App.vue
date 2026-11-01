@@ -85,6 +85,7 @@ import HistoryView from './views/HistoryView.vue'
 import SettingsView from './views/SettingsView.vue'
 import WeekView from './views/WeekView.vue'
 import {
+  applyBackgroundClass,
   autoRefreshTju,
   bootstrap,
   fetchSession,

@@ -23,9 +23,11 @@ const LOOKAHEAD_DAYS = 60
 function readInitialBackgroundConfig() {
   const defaults = {
     enabled: false,
-    // 预置默认高清壁纸：浅色清爽雪山微霭，深色深邃静谧星空极光（正常高质感风景图床）
-    lightUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1920&q=85',
-    darkUrl: 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=1920&q=85',
+    // 默认分类：真正的深空摄影（韦伯/哈勃深场、超新星与星系）
+    category: 'astronomy',
+    lightUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=85',
+    darkUrl: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1920&q=85',
+    wallpaperTitle: '宇宙深场与微光星系',
     opacity: 35, // 0 - 100%
     blur: 0,    // 0 - 20px
   }
