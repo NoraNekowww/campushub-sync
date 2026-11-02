@@ -57,6 +57,34 @@
           {{ noteText }}
         </p>
 
+        <!-- 云端附件列表（支持点击直接下载/在线预览） -->
+        <div
+          v-if="event.attachments && event.attachments.length"
+          class="mt-3 space-y-1.5 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-800/50"
+          data-testid="class-detail-attachments"
+        >
+          <div class="flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-200">
+            <Paperclip :size="13" class="text-brand-600 dark:text-brand-400" />
+            <span>云端附件 ({{ event.attachments.length }})</span>
+          </div>
+          <div class="space-y-1 pt-1">
+            <a
+              v-for="att in event.attachments"
+              :key="att.id"
+              :href="api.attachmentUrl(att.id)"
+              target="_blank"
+              class="flex items-center justify-between gap-2 rounded-lg border border-slate-200/80 bg-white px-2.5 py-1.5 transition-colors hover:border-brand-300 hover:bg-brand-50/50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-brand-500/40"
+              :title="`下载附件：${att.name}`"
+            >
+              <div class="flex min-w-0 items-center gap-1.5">
+                <FileText :size="13" class="shrink-0 text-slate-400" />
+                <span class="truncate font-medium text-slate-700 dark:text-slate-200">{{ att.name }}</span>
+              </div>
+              <span class="shrink-0 font-mono text-[10px] text-slate-400">{{ formatAttachmentSize(att.size) }}</span>
+            </a>
+          </div>
+        </div>
+
         <div class="mt-4 flex items-center gap-2">
           <button
             class="btn-ghost !text-rose-600 dark:!text-rose-400"
@@ -88,9 +116,17 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { Pencil, X } from 'lucide-vue-next'
+import { FileText, Paperclip, Pencil, X } from 'lucide-vue-next'
+import { api } from '../api'
 import { openCustomEditor, removeEvent } from '../store'
 import { splitNoteMeta } from '../utils/note'
+
+function formatAttachmentSize(size) {
+  if (!size) return '0 B'
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
 
 const props = defineProps({
   event: { type: Object, default: null },
