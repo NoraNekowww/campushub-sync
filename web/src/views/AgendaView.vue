@@ -215,7 +215,7 @@ const emptyKind = computed(() => (state.authRequired ? 'auth' : state.online ? '
 const emptyMessage = computed(() => {
   if (state.authRequired) return '后端已开启访问保护，填写 ADMIN_TOKEN 后即可同步与修改。'
   if (!state.online) return '正在显示离线缓存，恢复网络后会自动刷新。'
-  return '没有课程，也没有临近的 DDL。点右上角同步看看。'
+  return '当前没有待办与临近的 DDL。点右上角同步或右下角 + 添加。'
 })
 
 /* 触摸屏上「卡片可以左右滑开删掉」不是自明的，第一次用提示一次。 */
