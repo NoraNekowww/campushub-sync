@@ -124,6 +124,19 @@ def test_deactivated_account_loses_access(accounts_env):
                 "/api/auth/login", json={"username": "bob", "password": "another-good-one"}
             ).status_code == 401
 
+        # 管理员安全移除 bob 账号及其关联数据
+        del_resp = admin.delete(f"/api/auth/users/{bob['id']}")
+        assert del_resp.status_code == 200
+        assert del_resp.json()["ok"] is True
+
+        # 验证 bob 已不存在
+        users_after = admin.get("/api/auth/users").json()["items"]
+        assert not any(u["username"] == "bob" for u in users_after)
+
+        # 管理员不能移除自己的账号
+        self_del = admin.delete(f"/api/auth/users/{admin.get('/api/auth/session').json()['user']['id']}")
+        assert self_del.status_code == 400
+
 
 def test_only_admins_see_the_member_list(accounts_env):
     with make_client() as admin:
