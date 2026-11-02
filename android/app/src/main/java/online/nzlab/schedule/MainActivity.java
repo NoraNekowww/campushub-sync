@@ -197,12 +197,10 @@ public class MainActivity extends AppCompatActivity {
         // 进一步提速：允许后台线程优先渲染
         webView.getSettings().setRenderPriority(WebSettings.RenderPriority.HIGH);
 
-        // 下拉刷新
-        swipeRefresh.setColorSchemeColors(Color.parseColor("#2563eb"));
-        swipeRefresh.setProgressBackgroundColorSchemeColor(Color.parseColor("#1e293b"));
+        // 彻底取消上拉/下拉手势刷新，杜绝用户误触刷新拉取线上代码导致新老版本割裂
+        swipeRefresh.setEnabled(false);
         swipeRefresh.setOnRefreshListener(() -> {
-            CookieManager.getInstance().flush();
-            webView.reload();
+            swipeRefresh.setRefreshing(false);
         });
 
         // 监听系统后退手势
@@ -404,6 +402,19 @@ public class MainActivity extends AppCompatActivity {
                 return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
             } catch (Exception e) {
                 return "2.1.8";
+            }
+        }
+
+        @JavascriptInterface
+        public int getAppVersionCode() {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    return (int) getPackageManager().getPackageInfo(getPackageName(), 0).getLongVersionCode();
+                } else {
+                    return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
+                }
+            } catch (Exception e) {
+                return 1;
             }
         }
     }

@@ -54,9 +54,9 @@ function releaseSwipe(closer) {
         @pointercancel="allowDelete ? onPointerUp($event) : null"
         @click.capture="allowDelete ? onClickCapture($event) : null"
       >
-      <!-- 左侧强调指示条（内嵌绝对定位，消除单边不对称 border-l-4 破坏卡片圆角导致的方角问题） -->
+      <!-- 左侧强调指示条（内嵌绝对定位，消除单边不对称 border-l-4 破坏卡片圆角导致的方角问题；加宽并饱满着色，杜绝低饱和禁用感） -->
       <span
-        class="pointer-events-none absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl transition-colors"
+        class="pointer-events-none absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl transition-colors"
         :class="accentColor"
       />
       <!-- 内容层：将 opacity-60 加在内容层而非卡片外壳，彻底杜绝 Chromium/WebKit 将带 backdrop-filter 的半透明图层降级为直角方框的渲染 Bug -->
@@ -468,11 +468,14 @@ const noteParts = computed(() => splitNoteLocation(props.event.description))
 const noteLocation = computed(() => props.event.location || noteParts.value.location)
 const noteText = computed(() => noteParts.value.note)
 const sourceIcon = computed(() => (props.event.source === 'tju_schedule' ? GraduationCap : props.event.source === 'custom' ? Pencil : CalendarDays))
-const accentColor = computed(() =>
-  props.event.is_deadline
-    ? 'bg-rose-400 dark:bg-rose-500'
-    : 'bg-brand-400 dark:bg-brand-500',
-)
+const accentColor = computed(() => {
+  if (props.event.status === 'completed') {
+    return 'bg-emerald-500/50'
+  }
+  return props.event.is_deadline
+    ? 'bg-rose-500 dark:bg-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.35)]'
+    : 'bg-brand-600 dark:bg-brand-400 shadow-[0_0_8px_rgba(var(--brand-500),0.35)]'
+})
 
 const timeLabelSafe = timeLabel
 const endLabel = computed(() => timeLabel(props.event.end_time) || '—')

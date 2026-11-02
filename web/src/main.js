@@ -9,13 +9,29 @@ ingestUrlToken()
 const app = createApp(App)
 app.mount('#app')
 
-// Service worker: production only (dev would cache the HMR bundle). The scope
-// follows the deployment base so the same bundle works at `/` and `/schedule/`.
+// Service worker: production only, but strictly DISABLED on native Android client
+// to prevent remote asset caching from overriding local APK assets and causing mixed versions.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    const base = import.meta.env.BASE_URL || '/'
-    navigator.serviceWorker.register(`${base}sw.js`, { scope: base }).catch((error) => {
-      console.warn('[campushub] service worker registration failed', error)
+  const isNativeApp =
+    typeof window !== 'undefined' &&
+    Boolean(window.NativeAuthBridge || /CampusHubAndroid/i.test(navigator.userAgent || ''))
+
+  if (!isNativeApp) {
+    window.addEventListener('load', () => {
+      const base = import.meta.env.BASE_URL || '/'
+      navigator.serviceWorker.register(`${base}sw.js`, { scope: base }).catch((error) => {
+        console.warn('[campushub] service worker registration failed', error)
+      })
     })
-  })
+  } else {
+    // 原生客户端清理任何历史残留的 Service Worker 注册，确保 100% 纯净使用本地 assets
+    navigator.serviceWorker
+      .getRegistrations()
+      .then((registrations) => {
+        for (const reg of registrations) {
+          reg.unregister()
+        }
+      })
+      .catch(() => {})
+  }
 }
