@@ -113,12 +113,12 @@ export const state = reactive({
   /* 当前课表可视周次标签与居中状态 */
   weekLabel: '第 1 周',
   isCurrentWeekCentered: true,
-  /* 磨砂玻璃质感：默认开启 'on'，亦可随时手动切换为 'auto' 或 'off' */
+  /* 磨砂玻璃质感：默认关闭 'off'，保留纯净自然的轻量半透明质感 */
   frostedGlassMode: (function () {
     try {
-      return localStorage.getItem('campushub.frosted_glass_style') || 'on'
+      return localStorage.getItem('campushub.frosted_glass_style') || 'off'
     } catch (e) {
-      return 'on'
+      return 'off'
     }
   })(),
   isFrostedActive: false,
@@ -229,9 +229,9 @@ export function checkAutoFrostedSupport() {
 }
 
 export function initFrostedGlass() {
-  let stored = 'on'
+  let stored = 'off'
   try {
-    stored = localStorage.getItem(FROSTED_GLASS_KEY) || 'on'
+    stored = localStorage.getItem(FROSTED_GLASS_KEY) || 'off'
   } catch (e) {}
   state.frostedGlassMode = stored
   applyFrostedGlass(stored)

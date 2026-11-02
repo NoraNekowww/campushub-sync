@@ -4,16 +4,16 @@
 
 :root {
   color-scheme: light;
-  --brand-50: 238 244 255;
-  --brand-100: 217 230 255;
-  --brand-200: 188 211 255;
-  --brand-300: 142 181 255;
-  --brand-400: 89 140 255;
-  --brand-500: 51 102 255;
-  --brand-600: 31 71 230;
-  --brand-700: 26 55 180;
-  --brand-800: 27 49 144;
-  --brand-900: 28 47 116;
+  --brand-50: 243 246 251;
+  --brand-100: 228 235 245;
+  --brand-200: 206 218 236;
+  --brand-300: 172 192 222;
+  --brand-400: 128 156 198;
+  --brand-500: 74 111 165;
+  --brand-600: 61 92 139;
+  --brand-700: 50 74 113;
+  --brand-800: 43 62 93;
+  --brand-900: 37 53 78;
 }
 html.dark {
   color-scheme: dark;
@@ -238,13 +238,13 @@ html.has-custom-bg .swipe-pane {
   background-color: transparent !important;
 }
 
-/* 周课表课程卡片 (class-block) 物理磨砂晶莹质感 */
-html.frosted-glass-active [data-testid="class-block"],
-html.has-custom-bg [data-testid="class-block"] {
+/* 周课表课程卡片 (class-block) 物理磨砂晶莹质感：动态联动全局主题配色，杜绝写死浅蓝 */
+html.frosted-glass-active [data-testid="class-block"]:not(.border-amber-300\/80),
+html.has-custom-bg [data-testid="class-block"]:not(.border-amber-300\/80) {
   backdrop-filter: blur(20px) !important;
   -webkit-backdrop-filter: blur(20px) !important;
-  background-color: rgba(219, 234, 254, 0.58) !important;
-  border-color: rgba(147, 197, 253, 0.75) !important;
+  background-color: rgba(var(--brand-100), 0.82) !important;
+  border-color: rgba(var(--brand-300), 0.85) !important;
   box-shadow:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
     0 4px 12px -2px rgba(0, 0, 0, 0.04) !important;
@@ -254,10 +254,10 @@ html.has-custom-bg [data-testid="class-block"].border-amber-300\/80 {
   background-color: rgba(254, 243, 199, 0.60) !important;
   border-color: rgba(252, 211, 77, 0.75) !important;
 }
-html.dark.frosted-glass-active [data-testid="class-block"],
-html.dark.has-custom-bg [data-testid="class-block"] {
-  background-color: rgba(30, 58, 138, 0.45) !important;
-  border-color: rgba(96, 165, 250, 0.35) !important;
+html.dark.frosted-glass-active [data-testid="class-block"]:not(.border-amber-300\/80),
+html.dark.has-custom-bg [data-testid="class-block"]:not(.border-amber-300\/80) {
+  background-color: rgba(var(--brand-900), 0.65) !important;
+  border-color: rgba(var(--brand-400), 0.35) !important;
   box-shadow:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.15),
     0 4px 14px -2px rgba(0, 0, 0, 0.35) !important;

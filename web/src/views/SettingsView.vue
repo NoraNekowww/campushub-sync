@@ -59,56 +59,6 @@
         </div>
       </div>
 
-      <!-- 磨砂玻璃高级质感 (默认开启) -->
-      <div class="space-y-2">
-        <div class="flex items-center justify-between">
-          <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
-            <Sparkles :size="13" class="text-indigo-500" />
-            <span>磨砂玻璃高级质感</span>
-          </label>
-          <span
-            class="chip border-transparent text-[10px] py-0.5"
-            :class="
-              state.isFrostedActive
-                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300'
-                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-            "
-          >
-            {{ state.isFrostedActive ? '已开启' : '已关闭' }}
-          </span>
-        </div>
-
-        <div class="grid grid-cols-3 gap-2">
-          <button
-            type="button"
-            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
-            :class="state.frostedGlassMode === 'on' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
-            @click="setFrostedGlassMode('on')"
-          >
-            <span>开启 (默认)</span>
-          </button>
-          <button
-            type="button"
-            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
-            :class="state.frostedGlassMode === 'auto' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
-            @click="setFrostedGlassMode('auto')"
-          >
-            <span>智能识别</span>
-          </button>
-          <button
-            type="button"
-            class="flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition"
-            :class="state.frostedGlassMode === 'off' ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm' : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'"
-            @click="setFrostedGlassMode('off')"
-          >
-            <span>关闭</span>
-          </button>
-        </div>
-        <p class="text-[11px] text-slate-400">
-          全量支持物理半透明亚克力磨砂玻璃质感。顶底栏、日程卡片与课表课程块均具备通透液体光斑与次表面折射。
-        </p>
-      </div>
-
       <!-- 自定义背景图与主题图床 -->
       <div class="space-y-3 border-t border-slate-100 pt-3 dark:border-slate-800">
         <div class="flex items-center justify-between">
@@ -622,7 +572,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.6.1 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.6.2 · 原生极速' }}
         </span>
       </header>
 
@@ -964,7 +914,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.6.1'
+  return '2.6.2'
 })
 
 const isAndroidClient = computed(() => {
