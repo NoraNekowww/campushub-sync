@@ -49,9 +49,10 @@
         v-for="event in group.events"
         :key="`hist-${event.id}`"
         :event="event"
-        :allow-delete="false"
+        :allow-delete="true"
         :show-priority="false"
         @toggle="toggleCompleted"
+        @remove="removeEvent"
       />
     </section>
 
@@ -73,7 +74,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { CheckCircle2, History } from 'lucide-vue-next'
 import EventCard from '../components/EventCard.vue'
 import SkeletonList from '../components/SkeletonList.vue'
-import { fetchHistoryEvents, state, toggleCompleted } from '../store'
+import { fetchHistoryEvents, removeEvent, state, toggleCompleted } from '../store'
 import { dayDiff, dayLabel, isEventEnded, todayKey } from '../utils/datetime'
 
 // 进入历史归档页面时主动从服务器全量拉取已完成归档记录，确保换设备/清缓存后 100% 留存不丢失
