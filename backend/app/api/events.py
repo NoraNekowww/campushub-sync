@@ -18,7 +18,7 @@ from ..connectors import build_connectors
 from ..connectors.ms_todo import note_with_meta
 from ..db import get_session
 from ..models import Event, EventStatus, Source, User, make_event_id
-from ..schemas import EventListOut, EventOut, EventPatchIn, MsTaskIn
+from ..schemas import EventCreateIn, EventListOut, EventOut, EventPatchIn, MsTaskIn
 from ..security import require_read, timeline_owner
 from ..services import events as event_service
 from ..services.sync_engine import upsert_events
@@ -29,21 +29,6 @@ log = logging.getLogger("campushub.api.events")
 # Reads accept the admin token or the read-only subscribe token; the mutating
 # endpoints below re-assert the admin token explicitly.
 router = APIRouter(prefix="/events", tags=["events"], dependencies=[Depends(require_read)])
-
-
-class EventCreateIn(BaseModel):
-    title: str
-    start_time: str  # ISO 8601; naive input is read as Asia/Shanghai
-    end_time: Optional[str] = None
-    description: Optional[str] = None
-    location: Optional[str] = None
-    is_deadline: bool = False
-    reminder_minutes: Optional[int] = None
-    priority: int = 5
-    repeat_frequency: Optional[str] = None  # None | "day" | "week" | "month"
-    repeat_interval: int = 1
-    repeat_count: int = 1
-    attachments: Optional[list[dict[str, Any]]] = None
 
 
 def _add_months(dt: datetime, months: int) -> datetime:

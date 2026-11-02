@@ -214,6 +214,8 @@ def ensure_columns(settings: Optional[Settings] = None) -> list[str]:
         ("events", "user_id", "INTEGER"),
         # 软删除标记：0 = 正常；1 = 用户划掉/删掉了这条日程
         ("events", "hidden", "BOOLEAN NOT NULL DEFAULT 0"),
+        # 云端附件元数据列表 JSON 字符串
+        ("events", "attachments", "TEXT"),
     )
     applied: list[str] = []
     with engine.begin() as conn:
@@ -222,7 +224,8 @@ def ensure_columns(settings: Optional[Settings] = None) -> list[str]:
             if not existing or column in existing:
                 continue
             conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
-            conn.exec_driver_sql(f"CREATE INDEX IF NOT EXISTS ix_{table}_{column} ON {table}({column})")
+            if ddl != "TEXT":
+                conn.exec_driver_sql(f"CREATE INDEX IF NOT EXISTS ix_{table}_{column} ON {table}({column})")
             applied.append(f"{table}.{column}")
     return applied
 

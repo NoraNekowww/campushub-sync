@@ -172,6 +172,21 @@ class EventListOut(BaseModel):
     sources: list[str] = Field(default_factory=list)
 
 
+class EventCreateIn(BaseModel):
+    title: str
+    start_time: str  # ISO 8601; naive input is read as Asia/Shanghai
+    end_time: Optional[str] = None
+    description: Optional[str] = None
+    location: Optional[str] = None
+    is_deadline: bool = False
+    reminder_minutes: Optional[int] = None
+    priority: int = 5
+    repeat_frequency: Optional[str] = None  # None | "day" | "week" | "month"
+    repeat_interval: int = 1
+    repeat_count: int = 1
+    attachments: Optional[list[dict[str, Any]]] = None
+
+
 class EventPatchIn(BaseModel):
     status: Optional[EventStatus] = None
     title: Optional[str] = None
