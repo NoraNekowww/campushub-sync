@@ -239,36 +239,64 @@ html.has-custom-bg .swipe-pane {
 }
 
 /* 周课表课程卡片 (class-block) 纯物理光学高级磨砂玻璃材质：
-   1. 彻底消灭深色实线黑框，采用菲涅尔物理高光反射微倒角白边 (Fresnel Rim)；
-   2. 顶部迎光面镜面反射 (Specular Rim)；
-   3. 次表面微漫透射 (Subsurface Transmission)：纯净高透白雾质感，仅略微透出极浅主题色氛围；
-   4. 硬件高斯模糊 (Backdrop Blur)。无论任何开关与背景，一律呈现水晶磨砂质感 */
-[data-testid="class-block"]:not(.border-amber-300\/80) {
+   1. 带 30% 主题色透光漫射 (30% Subsurface Transmission)，绝无深色黑框；
+   2. 菲涅尔物理高光反射微倒角白边 (Fresnel Rim)；
+   3. 顶部迎光面镜面反射 (Specular Rim)；
+   4. 硬件高斯模糊 (Backdrop Blur)。无论任何背景，一律呈现水晶磨砂质感 */
+[data-testid="class-block"]:not(.border-amber-300\/80):not(.is-important) {
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
-  background-color: rgba(var(--brand-50), 0.72) !important;
-  border: 1px solid rgba(255, 255, 255, 0.75) !important;
+  background: linear-gradient(135deg, rgba(var(--brand-400), 0.32) 0%, rgba(var(--brand-500), 0.25) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.85) !important;
   box-shadow:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
-    0 2px 10px -2px rgba(var(--brand-900), 0.05) !important;
+    0 3px 12px -2px rgba(var(--brand-900), 0.08) !important;
+  color: #0f172a !important;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
 }
-[data-testid="class-block"]:not(.border-amber-300\/80):hover {
+[data-testid="class-block"]:not(.border-amber-300\/80):not(.is-important):hover {
   box-shadow:
     inset 0 1px 0 0 rgba(255, 255, 255, 1),
-    0 4px 16px -2px rgba(var(--brand-500), 0.28) !important;
+    0 4px 16px -2px rgba(var(--brand-500), 0.35) !important;
 }
-html.dark [data-testid="class-block"]:not(.border-amber-300\/80) {
-  background-color: rgba(var(--brand-900), 0.38) !important;
-  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+html.dark [data-testid="class-block"]:not(.border-amber-300\/80):not(.is-important) {
+  background: linear-gradient(135deg, rgba(var(--brand-500), 0.32) 0%, rgba(var(--brand-600), 0.28) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
   box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.16),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.20),
     0 4px 14px -2px rgba(0, 0, 0, 0.35) !important;
+  color: #f8fafc !important;
 }
-html.dark [data-testid="class-block"]:not(.border-amber-300\/80):hover {
+html.dark [data-testid="class-block"]:not(.border-amber-300\/80):not(.is-important):hover {
   box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.25),
-    0 4px 16px -2px rgba(var(--brand-500), 0.32) !important;
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.28),
+    0 4px 16px -2px rgba(var(--brand-500), 0.40) !important;
+}
+
+/* 重点课程 / 重点日程块 (is-important)：变色为高贵璀璨的琥珀暖金水晶玻璃卡片 */
+[data-testid="class-block"].is-important {
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.46) 0%, rgba(245, 158, 11, 0.32) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.95) !important;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 1),
+    0 4px 14px -2px rgba(245, 158, 11, 0.38) !important;
+  color: #78350f !important;
+  transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+}
+[data-testid="class-block"].is-important:hover {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 1),
+    0 6px 18px -2px rgba(245, 158, 11, 0.50) !important;
+}
+html.dark [data-testid="class-block"].is-important {
+  background: linear-gradient(135deg, rgba(180, 83, 9, 0.48) 0%, rgba(146, 64, 14, 0.38) 100%) !important;
+  border: 1px solid rgba(251, 191, 36, 0.35) !important;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.20),
+    0 4px 14px -2px rgba(0, 0, 0, 0.45) !important;
+  color: #fef3c7 !important;
 }
 
 [data-testid="class-block"].border-amber-300\/80 {

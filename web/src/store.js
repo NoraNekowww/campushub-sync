@@ -18,8 +18,54 @@ const STATUS_CACHE_KEY = 'campushub.status_cache.v1'
 const SYNC_QUEUE_KEY = 'campushub.offline_sync_queue.v1'
 const DELETED_IDS_KEY = 'campushub.deleted_event_ids.v1'
 const COMPLETED_OVERRIDES_KEY = 'campushub.completed_overrides.v1'
+const IMPORTANT_IDS_KEY = 'campushub.important_ids.v1'
 const BACKGROUND_CONFIG_KEY = 'campushub.background_config.v1'
 const LOOKAHEAD_DAYS = 60
+
+function readInitialImportantIds() {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(IMPORTANT_IDS_KEY)
+      return raw ? new Set(JSON.parse(raw)) : new Set()
+    }
+  } catch (e) {}
+  return new Set()
+}
+
+const importantEventIds = reactive(readInitialImportantIds())
+
+export function isImportantEvent(eventOrId) {
+  if (!eventOrId) return false
+  const id = typeof eventOrId === 'string' ? eventOrId : eventOrId?.id
+  if (id && importantEventIds.has(id)) return true
+  if (typeof eventOrId === 'object' && eventOrId?.priority === 1) return true
+  return false
+}
+
+export function toggleImportantEvent(event) {
+  if (!event || !event.id) return false
+  const id = event.id
+  const currentlyImportant = isImportantEvent(event)
+  const nextImportant = !currentlyImportant
+
+  if (nextImportant) {
+    importantEventIds.add(id)
+  } else {
+    importantEventIds.delete(id)
+  }
+
+  try {
+    localStorage.setItem(IMPORTANT_IDS_KEY, JSON.stringify([...importantEventIds]))
+  } catch (e) {}
+
+  // 若为自定义事件或待办，同步向服务端持久化 priority 字段 (1=高优先级重点，5=普通)
+  event.priority = nextImportant ? 1 : 5
+  if (event.source === 'custom') {
+    api.patchEvent(id, { priority: event.priority }).catch(() => {})
+  }
+
+  return nextImportant
+}
 
 function readInitialBackgroundConfig() {
   const defaults = {

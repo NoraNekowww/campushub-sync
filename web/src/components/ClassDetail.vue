@@ -87,6 +87,14 @@
 
         <div class="mt-4 flex items-center gap-2">
           <button
+            type="button"
+            class="btn-ghost !text-amber-600 hover:!bg-amber-50 dark:!text-amber-400 dark:hover:!bg-amber-950/30 flex items-center gap-1 text-xs"
+            @click="toggleStar"
+          >
+            <Star :size="14" :class="isImportant ? 'fill-current' : ''" />
+            <span>{{ isImportant ? '取消重点' : '标为重点' }}</span>
+          </button>
+          <button
             class="btn-ghost !text-rose-600 dark:!text-rose-400"
             :disabled="busy"
             data-testid="class-detail-remove"
@@ -116,10 +124,18 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { FileText, Paperclip, Pencil, X } from 'lucide-vue-next'
+import { FileText, Paperclip, Pencil, Star, X } from 'lucide-vue-next'
 import { api } from '../api'
-import { openCustomEditor, removeEvent } from '../store'
+import { isImportantEvent, openCustomEditor, removeEvent, toggleImportantEvent } from '../store'
 import { splitNoteMeta } from '../utils/note'
+
+const isImportant = computed(() => isImportantEvent(props.event))
+
+function toggleStar() {
+  if (props.event) {
+    toggleImportantEvent(props.event)
+  }
+}
 
 function formatAttachmentSize(size) {
   if (!size) return '0 B'

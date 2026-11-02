@@ -112,13 +112,17 @@
                     item.event.is_deadline
                       ? 'border-amber-300/80 bg-amber-100/80 text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/20 dark:text-amber-100'
                       : '',
+                    isImportantEvent(item.event) ? 'is-important' : '',
                     item.hasConflict ? 'animate-breathe-alternate' : ''
                   ]"
                   :style="blockStyle(item)"
                   :aria-pressed="selected?.id === item.event.id"
                   @click="selected = selected?.id === item.event.id ? null : item.event"
                 >
-                  <span class="font-semibold text-[9px] leading-[10px] line-clamp-2">{{ item.event.title }}</span>
+                  <span class="font-semibold text-[9px] leading-[10px] line-clamp-2">
+                    <span v-if="isImportantEvent(item.event)" class="text-amber-500 font-bold mr-0.5">★</span>
+                    {{ item.event.title }}
+                  </span>
                   <span class="block whitespace-nowrap text-[9px] leading-[11px] font-mono tracking-tighter opacity-80">
                     {{ timeLabel(item.event.start_time) }}-{{ timeLabel(item.event.end_time) }}
                   </span>
@@ -212,7 +216,7 @@ import ClassDetail from '../components/ClassDetail.vue'
 import EmptyState from '../components/EmptyState.vue'
 import EventCard from '../components/EventCard.vue'
 import { api } from '../api'
-import { isMobileNativeApp, loadWeekCache, matchesQuery, removeEvent, saveWeekCache, state, toggleCompleted } from '../store'
+import { isImportantEvent, isMobileNativeApp, loadWeekCache, matchesQuery, removeEvent, saveWeekCache, state, toggleCompleted } from '../store'
 import { dayKey, dayLabel, isEventEnded, minutesOfDay, periodLabel, timeLabel, todayKey, weekOffsetOf, weekWindow } from '../utils/datetime'
 
 const DAY_START = 8 * 60 // 08:00

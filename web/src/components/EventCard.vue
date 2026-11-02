@@ -16,20 +16,20 @@ function releaseSwipe(closer) {
     data-testid="event-card-row"
     @focusin="revealForFocus"
   >
-    <!-- 卡片底下那层：往左或往右拖开才看得到的「删除」（未滑动时完全隐藏，避免透过半透明磨砂卡片泛出红色光晕） -->
+    <!-- 卡片底层操作层：
+         1. 往左滑动 (offset < 0)：露出右侧红色「删除」按钮；
+         2. 往右滑动 (offset > 0)：露出左侧琥珀金色「重点」标记按钮 -->
+    <!-- 右侧：左滑删除 -->
     <div
       v-if="allowDelete"
-      class="absolute inset-y-0 flex items-center px-1.5 transition-opacity duration-150"
-      :class="[
-        offset > 0 ? 'left-0' : 'right-0',
-        Math.abs(offset) > 0 ? 'opacity-100' : 'opacity-0 pointer-events-none'
-      ]"
+      class="absolute inset-y-0 right-0 flex items-center px-1.5 transition-opacity duration-150"
+      :class="offset < 0 ? 'opacity-100' : 'opacity-0 pointer-events-none'"
     >
       <button
         type="button"
         class="inline-flex h-[calc(100%-0.75rem)] min-w-[72px] flex-col items-center justify-center gap-1
                rounded-xl bg-rose-500 px-3 text-xs font-semibold text-white
-               transition-colors hover:bg-rose-600 disabled:opacity-60"
+               transition-colors hover:bg-rose-600 disabled:opacity-60 shadow-sm shadow-rose-500/30"
         :aria-label="`删除日程：${event.title}`"
         data-testid="swipe-delete"
         :disabled="busy"
@@ -40,10 +40,37 @@ function releaseSwipe(closer) {
       </button>
     </div>
 
+    <!-- 左侧：右滑标记重点 / 取消重点 -->
+    <div
+      class="absolute inset-y-0 left-0 flex items-center px-1.5 transition-opacity duration-150"
+      :class="offset > 0 ? 'opacity-100' : 'opacity-0 pointer-events-none'"
+    >
+      <button
+        type="button"
+        class="inline-flex h-[calc(100%-0.75rem)] min-w-[72px] flex-col items-center justify-center gap-1
+               rounded-xl px-3 text-xs font-semibold transition-colors shadow-sm"
+        :class="
+          isImportant
+            ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/30'
+            : 'bg-amber-400 hover:bg-amber-500 text-amber-950 shadow-amber-400/30'
+        "
+        :aria-label="`${isImportant ? '取消重点' : '标为重点'}：${event.title}`"
+        data-testid="swipe-star"
+        :disabled="busy"
+        @click.stop="toggleStar"
+      >
+        <Star :size="15" :class="isImportant ? 'fill-current' : ''" />
+        {{ isImportant ? '取消重点' : '标为重点' }}
+      </button>
+    </div>
+
     <div class="swipe-pane rounded-2xl overflow-hidden" :style="allowDelete ? cardStyle : null" data-testid="event-swipe-pane">
       <article
         ref="cardEl"
-        class="card relative overflow-hidden rounded-2xl"
+        class="card relative overflow-hidden rounded-2xl transition-all"
+        :class="[
+          isImportant ? 'border-amber-300/80 bg-amber-50/40 dark:border-amber-500/40 dark:bg-amber-950/20 shadow-xs' : ''
+        ]"
         data-testid="event-card"
         :data-kind="event.is_deadline ? 'deadline' : 'class'"
         :data-source="event.source"
@@ -104,10 +131,17 @@ function releaseSwipe(closer) {
           <div class="flex items-start gap-2">
             <!-- 标题要能看全：长课名/长待办名换行显示，而不是被截成一行省略号 -->
             <h3
-              class="min-w-0 flex-1 break-words text-sm font-semibold leading-snug transition-all duration-300"
+              class="min-w-0 flex-1 break-words text-sm font-semibold leading-snug transition-all duration-300 flex items-center flex-wrap gap-1.5"
               :class="event.status === 'completed' ? 'line-through decoration-slate-400 text-slate-400 dark:text-slate-500' : ''"
             >
-              {{ event.title }}
+              <span>{{ event.title }}</span>
+              <span
+                v-if="isImportant"
+                class="inline-flex items-center gap-0.5 rounded-md bg-amber-100/90 px-1.5 py-0 text-[10px] font-bold text-amber-800 dark:bg-amber-500/20 dark:text-amber-300"
+              >
+                <Star :size="10" class="fill-current text-amber-500" />
+                重点
+              </span>
             </h3>
             <!-- 仅单点无时间段的 DDL 任务才显示紧迫性（且受 showPriority 开关控制） -->
             <span
@@ -250,12 +284,13 @@ import {
   MapPin,
   Paperclip,
   Pencil,
+  Star,
   Trash2,
 } from 'lucide-vue-next'
 import { api } from '../api'
 import { countdown, durationLabel, periodLabel, periodsShort, timeLabel } from '../utils/datetime'
 import { splitNoteLocation } from '../utils/note'
-import { openCustomEditor } from '../store'
+import { isImportantEvent, openCustomEditor, toggleImportantEvent } from '../store'
 
 function formatAttachmentSize(size) {
   if (!size) return '0 B'
@@ -468,7 +503,17 @@ const noteParts = computed(() => splitNoteLocation(props.event.description))
 const noteLocation = computed(() => props.event.location || noteParts.value.location)
 const noteText = computed(() => noteParts.value.note)
 const sourceIcon = computed(() => (props.event.source === 'tju_schedule' ? GraduationCap : props.event.source === 'custom' ? Pencil : CalendarDays))
+const isImportant = computed(() => isImportantEvent(props.event))
+
+function toggleStar() {
+  toggleImportantEvent(props.event)
+  close()
+}
+
 const accentColor = computed(() => {
+  if (isImportant.value) {
+    return 'bg-amber-400 dark:bg-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.55)]'
+  }
   if (props.event.status === 'completed') {
     return 'bg-emerald-500/50'
   }
