@@ -28,19 +28,19 @@ _STARTED_AT = time.time()
 @router.get("/version", summary="Version check for in-app update notification")
 async def app_version() -> dict:
     return {
-        "version": "2.6.5",
-        "tag": "v2.6.5",
-        "title": "CampusHub Android v2.6.5",
+        "version": "2.6.6",
+        "tag": "v2.6.6",
+        "title": "CampusHub Android v2.6.6",
         "download_url": "https://nzlab.online/schedule/CampusHub.apk",
         "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
         "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
         "features": [
-            "彻底移除微北洋直连/手动粘贴/本地令牌等历史冗余兜底，天大课表导入全面收敛为主路径官方教务 CAS（sso.tju.edu.cn）",
-            "顶栏交互视觉对齐：同步按钮与搜索、设置图标统一为 36px (h-9) 绝对等高对齐",
-            "历史归档全量显示：按从近到远（时间严格倒序上下排列），即开即见最新完成日程",
-            "彻底解决删除任务左右脑互搏与回写复活问题（本地删除墓碑强校验机制）",
-            "课表底色三态支持（标准网格 / 细分网格 / 极简空白底）与 DDL 冲突轮换呼吸"
-        ]
+            "推送链路与版本检测验证更新（保持当前功能完全不变）",
+            "课表课程玻璃卡片带 30% 主题色透光漫射与无黑框物理高光边缘",
+            "维持左滑日程删除，新增右滑标记重点并在课程表/线性列表联动变色",
+            "取消安卓端上拉手势刷新，杜绝代码新老混合问题",
+            "主题调色板升级为莫兰迪低饱和温润护眼色系，新增浅樱白粉",
+        ],
     }
 
 
