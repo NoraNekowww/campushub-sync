@@ -4,6 +4,16 @@
 
 :root {
   color-scheme: light;
+  --brand-50: 238 244 255;
+  --brand-100: 217 230 255;
+  --brand-200: 188 211 255;
+  --brand-300: 142 181 255;
+  --brand-400: 89 140 255;
+  --brand-500: 51 102 255;
+  --brand-600: 31 71 230;
+  --brand-700: 26 55 180;
+  --brand-800: 27 49 144;
+  --brand-900: 28 47 116;
 }
 html.dark {
   color-scheme: dark;

@@ -2,6 +2,7 @@ package online.nzlab.schedule;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.AssetManager;
 import android.graphics.Color;
@@ -14,6 +15,7 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -21,6 +23,8 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import androidx.webkit.WebViewAssetLoader;
@@ -40,6 +44,29 @@ public class MainActivity extends AppCompatActivity {
     private SwipeRefreshLayout swipeRefresh;
     private SharedPreferences prefs;
     private WebViewAssetLoader assetLoader;
+    private ValueCallback<Uri[]> fileUploadCallback;
+
+    private final ActivityResultLauncher<Intent> fileChooserLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (fileUploadCallback == null) {
+                    return;
+                }
+                Uri[] results = null;
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    Intent data = result.getData();
+                    if (data.getData() != null) {
+                        results = new Uri[]{data.getData()};
+                    } else if (data.getClipData() != null) {
+                        int count = data.getClipData().getItemCount();
+                        results = new Uri[count];
+                        for (int i = 0; i < count; i++) {
+                            results[i] = data.getClipData().getItemAt(i).getUri();
+                        }
+                    }
+                }
+                fileUploadCallback.onReceiveValue(results);
+                fileUploadCallback = null;
+            });
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -131,8 +158,41 @@ public class MainActivity extends AppCompatActivity {
         // 极速秒开架构：静态资源本地 0 延迟秒开拦截，API 走网络
         webView.setWebViewClient(new FastLocalWebViewClient());
 
-        // 注入 WebChromeClient：优化渲染管道与控制台日志
-        webView.setWebChromeClient(new WebChromeClient());
+        // 注入 WebChromeClient：优化渲染管道、控制台日志并支持点击 <input type="file"> 唤起原生文件管理器
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                if (fileUploadCallback != null) {
+                    fileUploadCallback.onReceiveValue(null);
+                    fileUploadCallback = null;
+                }
+                fileUploadCallback = filePathCallback;
+
+                Intent intent = null;
+                if (fileChooserParams != null) {
+                    try {
+                        intent = fileChooserParams.createIntent();
+                    } catch (Exception ignored) {
+                    }
+                }
+                if (intent == null) {
+                    intent = new Intent(Intent.ACTION_GET_CONTENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("*/*");
+                }
+                try {
+                    fileChooserLauncher.launch(intent);
+                    return true;
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to launch file chooser", e);
+                    if (fileUploadCallback != null) {
+                        fileUploadCallback.onReceiveValue(null);
+                        fileUploadCallback = null;
+                    }
+                    return false;
+                }
+            }
+        });
 
         // 进一步提速：允许后台线程优先渲染
         webView.getSettings().setRenderPriority(WebSettings.RenderPriority.HIGH);

@@ -7,6 +7,58 @@
         <h2 class="text-sm font-semibold">外观与个性化</h2>
       </header>
 
+      <!-- 主题配色 (经典预设 + 自由自定义) -->
+      <div class="space-y-2 pb-1">
+        <div class="flex items-center justify-between">
+          <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+            <Palette :size="13" class="text-brand-500" />
+            <span>主题配色</span>
+          </label>
+          <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+            {{ currentThemeColorName }}
+          </span>
+        </div>
+
+        <!-- 6 款精选预设色块 -->
+        <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
+          <button
+            v-for="color in THEME_COLOR_PRESETS"
+            :key="color.id"
+            type="button"
+            class="flex items-center gap-1.5 rounded-lg border p-2 text-xs font-medium transition"
+            :class="
+              state.themeColor === color.id
+                ? 'border-brand-500 bg-brand-50/70 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-xs'
+                : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'
+            "
+            @click="setThemeColor(color.id)"
+          >
+            <span
+              class="h-3.5 w-3.5 rounded-full shrink-0 shadow-2xs border border-black/10 dark:border-white/10"
+              :style="{ backgroundColor: color.hex }"
+            />
+            <span class="truncate">{{ color.name }}</span>
+          </button>
+        </div>
+
+        <!-- 自定义取色器 -->
+        <div class="flex items-center gap-2.5 pt-0.5">
+          <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200">
+            <input
+              type="color"
+              :value="customColorHex"
+              class="h-5 w-6 cursor-pointer rounded border border-slate-300 bg-transparent p-0 dark:border-slate-700"
+              title="自由选择任意主色调"
+              @input="onCustomColorInput($event.target.value)"
+            />
+            <span>自由拾色器</span>
+          </label>
+          <span v-if="isCustomThemeColor" class="font-mono text-xs text-brand-600 dark:text-brand-400 font-medium">
+            {{ state.themeColor }}
+          </span>
+        </div>
+      </div>
+
       <!-- 磨砂玻璃高级质感 (默认开启) -->
       <div class="space-y-2">
         <div class="flex items-center justify-between">
@@ -570,7 +622,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.6.0 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.6.1 · 原生极速' }}
         </span>
       </header>
 
@@ -856,6 +908,7 @@ import {
 import { api } from '../api'
 import DetailList from '../components/DetailList.vue'
 import TjuConnect from '../components/TjuConnect.vue'
+import { THEME_COLOR_PRESETS } from '../utils/themeColors'
 import { WALLPAPER_CATEGORIES, getRandomWallpaper } from '../utils/wallpapers'
 import {
   changePassword,
@@ -873,12 +926,36 @@ import {
   saveRegistrationSettings,
   setFrostedGlassMode,
   setTheme,
+  setThemeColor,
   setWeekGridStyle,
   setUserActive,
   state,
 } from '../store'
 
 const isAndroid = computed(() => typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || ''))
+
+/* ----------------------------------------------------------- 主题配色响应式与拾色逻辑 */
+const currentThemeColorName = computed(() => {
+  const p = THEME_COLOR_PRESETS.find((c) => c.id === state.themeColor)
+  if (p) return p.name
+  return `自定义 (${state.themeColor})`
+})
+
+const isCustomThemeColor = computed(() => {
+  return !THEME_COLOR_PRESETS.some((c) => c.id === state.themeColor)
+})
+
+const customColorHex = computed(() => {
+  const p = THEME_COLOR_PRESETS.find((c) => c.id === state.themeColor)
+  return p ? p.hex : state.themeColor?.startsWith('#') ? state.themeColor : '#3366ff'
+})
+
+function onCustomColorInput(hex) {
+  if (hex) {
+    setThemeColor(hex)
+  }
+}
+
 /** 读取客户端实际运行版本号（优先从 Android 原生 NativeAuthBridge 获取，若未接入则显示静态配置版本） */
 const clientAppVersion = computed(() => {
   if (typeof window !== 'undefined' && window.NativeAuthBridge?.getAppVersion) {
@@ -887,7 +964,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.6.0'
+  return '2.6.1'
 })
 
 const isAndroidClient = computed(() => {

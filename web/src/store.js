@@ -5,6 +5,7 @@
 import { reactive } from 'vue'
 import { api, ApiError, getSessionToken, getToken, isAuthError, setSessionToken, setToken } from './api'
 import { dayKey, isEventEnded, todayKey } from './utils/datetime'
+import { applyThemeColor, getSavedThemeColor } from './utils/themeColors'
 
 const THEME_KEY = 'campushub.theme'
 const GRID_STYLE_KEY = 'campushub.week_grid_style'
@@ -107,6 +108,8 @@ export const state = reactive({
       return 'grid'
     }
   })(),
+  /* 全局自定义主题主色调（预设 id 或自定义 hex） */
+  themeColor: getSavedThemeColor(),
   /* 当前课表可视周次标签与居中状态 */
   weekLabel: '第 1 周',
   isCurrentWeekCentered: true,
@@ -183,6 +186,13 @@ export function initTheme() {
   }
   state.theme = stored
   applyTheme(stored)
+  // 初始化全局主题配色
+  applyThemeColor(state.themeColor)
+}
+
+export function setThemeColor(colorIdOrHex) {
+  state.themeColor = colorIdOrHex
+  applyThemeColor(colorIdOrHex)
 }
 
 export function setTheme(mode) {
