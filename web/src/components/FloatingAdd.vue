@@ -5,8 +5,9 @@
   -->
   <button
     class="fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full
-           bg-brand-600 text-white shadow-lg shadow-brand-600/30 transition
+           bg-brand-600 text-white transition
            hover:bg-brand-700 active:scale-95 sm:bottom-6 sm:right-6"
+    :style="{ boxShadow: '0 10px 26px -4px rgba(var(--brand-500), 0.42)' }"
     title="新建日程"
     aria-label="新建日程"
     data-testid="fab-new-event"

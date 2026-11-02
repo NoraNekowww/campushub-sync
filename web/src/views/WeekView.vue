@@ -105,9 +105,9 @@
                   v-if="item.end !== null"
                   data-testid="class-block"
                   :data-day="day.key"
-                  class="absolute inset-x-0 overflow-hidden rounded-lg border border-brand-300/80 bg-brand-100/85 px-px py-1
-                         text-left text-[10px] leading-tight text-brand-950 transition-shadow hover:shadow-md
-                         dark:border-brand-500/30 dark:bg-brand-500/25 dark:text-brand-100"
+                  class="absolute inset-x-0 overflow-hidden rounded-lg px-px py-1
+                         text-left text-[10px] leading-tight text-slate-800 transition-all hover:scale-[1.01]
+                         dark:text-slate-100"
                   :class="[
                     item.event.is_deadline
                       ? 'border-amber-300/80 bg-amber-100/80 text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/20 dark:text-amber-100'

@@ -238,34 +238,54 @@ html.has-custom-bg .swipe-pane {
   background-color: transparent !important;
 }
 
-/* 周课表课程卡片 (class-block) 物理磨砂晶莹质感：动态联动全局主题配色，杜绝写死浅蓝 */
-html.frosted-glass-active [data-testid="class-block"]:not(.border-amber-300\/80),
-html.has-custom-bg [data-testid="class-block"]:not(.border-amber-300\/80) {
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
-  background-color: rgba(var(--brand-100), 0.82) !important;
-  border-color: rgba(var(--brand-300), 0.85) !important;
+/* 周课表课程卡片 (class-block) 纯物理光学高级磨砂玻璃材质：
+   1. 彻底消灭深色实线黑框，采用菲涅尔物理高光反射微倒角白边 (Fresnel Rim)；
+   2. 顶部迎光面镜面反射 (Specular Rim)；
+   3. 次表面微漫透射 (Subsurface Transmission)：纯净高透白雾质感，仅略微透出极浅主题色氛围；
+   4. 硬件高斯模糊 (Backdrop Blur)。无论任何开关与背景，一律呈现水晶磨砂质感 */
+[data-testid="class-block"]:not(.border-amber-300\/80) {
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  background-color: rgba(var(--brand-50), 0.72) !important;
+  border: 1px solid rgba(255, 255, 255, 0.75) !important;
   box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
-    0 4px 12px -2px rgba(0, 0, 0, 0.04) !important;
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
+    0 2px 10px -2px rgba(var(--brand-900), 0.05) !important;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
 }
-html.frosted-glass-active [data-testid="class-block"].border-amber-300\/80,
-html.has-custom-bg [data-testid="class-block"].border-amber-300\/80 {
-  background-color: rgba(254, 243, 199, 0.60) !important;
-  border-color: rgba(252, 211, 77, 0.75) !important;
+[data-testid="class-block"]:not(.border-amber-300\/80):hover {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 1),
+    0 4px 16px -2px rgba(var(--brand-500), 0.28) !important;
 }
-html.dark.frosted-glass-active [data-testid="class-block"]:not(.border-amber-300\/80),
-html.dark.has-custom-bg [data-testid="class-block"]:not(.border-amber-300\/80) {
-  background-color: rgba(var(--brand-900), 0.65) !important;
-  border-color: rgba(var(--brand-400), 0.35) !important;
+html.dark [data-testid="class-block"]:not(.border-amber-300\/80) {
+  background-color: rgba(var(--brand-900), 0.38) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.16),
+    0 4px 14px -2px rgba(0, 0, 0, 0.35) !important;
+}
+html.dark [data-testid="class-block"]:not(.border-amber-300\/80):hover {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.25),
+    0 4px 16px -2px rgba(var(--brand-500), 0.32) !important;
+}
+
+[data-testid="class-block"].border-amber-300\/80 {
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  background-color: rgba(254, 243, 199, 0.70) !important;
+  border: 1px solid rgba(255, 255, 255, 0.75) !important;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.9),
+    0 2px 10px -2px rgba(245, 158, 11, 0.12) !important;
+}
+html.dark [data-testid="class-block"].border-amber-300\/80 {
+  background-color: rgba(120, 53, 15, 0.45) !important;
+  border: 1px solid rgba(251, 191, 36, 0.25) !important;
   box-shadow:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.15),
     0 4px 14px -2px rgba(0, 0, 0, 0.35) !important;
-}
-html.dark.frosted-glass-active [data-testid="class-block"].border-amber-300\/80,
-html.dark.has-custom-bg [data-testid="class-block"].border-amber-300\/80 {
-  background-color: rgba(120, 53, 15, 0.45) !important;
-  border-color: rgba(251, 191, 36, 0.35) !important;
 }
 
 /* 横向日期分组卡片（今天 · 周X 等）悬浮晶体磨砂玻璃，圆角收口防截断 */
@@ -290,13 +310,21 @@ html.dark.has-custom-bg [data-testid="history-day-group"] > header {
   border-radius: 0.75rem !important;
 }
 
-/* 右下角悬浮按钮水晶微光透镜质感 */
+/* 右下角悬浮按钮水晶微光透镜质感：随全局主题色动态漫透射光学光晕，杜绝写死蓝色 */
+button[data-testid="fab-new-event"] {
+  box-shadow:
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.6),
+    0 8px 24px -4px rgba(var(--brand-500), 0.40) !important;
+  transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+}
+button[data-testid="fab-new-event"]:hover {
+  box-shadow:
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.75),
+    0 12px 28px -4px rgba(var(--brand-500), 0.50) !important;
+}
 html.frosted-glass-active button[data-testid="fab-new-event"] {
   backdrop-filter: blur(16px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
-  box-shadow:
-    inset 0 1px 1px 0 rgba(255, 255, 255, 0.6),
-    0 10px 26px -4px rgba(22, 101, 216, 0.42) !important;
 }
 
 /* 弹窗与抽屉物理光学景深散焦 */
