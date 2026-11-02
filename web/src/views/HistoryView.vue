@@ -1,18 +1,5 @@
 <template>
-  <div class="space-y-4 px-4 pb-12">
-    <!-- 顶部统计栏（纯粹归档，去除非必要下拉） -->
-    <header class="flex flex-wrap items-center justify-between gap-3 pt-1">
-      <div>
-        <h2 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-          <History :size="18" class="text-brand-600 dark:text-brand-400" />
-          <span>历史完成归档</span>
-        </h2>
-        <p class="text-xs text-slate-700 dark:text-slate-300 font-medium mt-0.5">
-          共记录 {{ completedEvents.length }} 条已完结的个人日程与待办
-        </p>
-      </div>
-    </header>
-
+  <div class="space-y-4 px-4 pb-12 pt-1">
     <!-- 骨架屏加载 -->
     <SkeletonList v-if="state.loading && !completedEvents.length" :rows="4" />
 

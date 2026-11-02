@@ -107,6 +107,9 @@ export const state = reactive({
       return 'grid'
     }
   })(),
+  /* 当前课表可视周次标签与居中状态 */
+  weekLabel: '第 1 周',
+  isCurrentWeekCentered: true,
   /* 磨砂玻璃质感：默认开启 'on'，亦可随时手动切换为 'auto' 或 'off' */
   frostedGlassMode: (function () {
     try {

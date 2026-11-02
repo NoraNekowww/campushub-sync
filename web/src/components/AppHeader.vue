@@ -36,7 +36,23 @@
     <template v-else>
       <div class="mx-auto flex max-w-3xl items-center gap-2 px-4 py-1">
         <div class="flex min-w-0 flex-1 items-center gap-1.5">
-          <h1 class="truncate text-sm font-semibold tracking-tight">CampusHub Sync</h1>
+          <h1
+            class="truncate text-sm font-semibold tracking-tight select-none"
+            :class="state.view === 'week' ? 'cursor-pointer hover:text-brand-600 dark:hover:text-brand-400 transition-colors' : ''"
+            :title="state.view === 'week' ? '点击回到本周' : ''"
+            @click="state.view === 'week' && triggerFocusToday()"
+          >
+            {{ currentSectionTitle }}
+          </h1>
+          <button
+            v-if="state.view === 'week' && !state.isCurrentWeekCentered"
+            type="button"
+            class="chip cursor-pointer border-brand-200 bg-brand-50 px-1.5 py-0 text-[10px] text-brand-700 hover:bg-brand-100 transition-colors dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300 dark:hover:bg-brand-500/20"
+            title="回到当前周"
+            @click="triggerFocusToday()"
+          >
+            回今天
+          </button>
           <span
             v-if="!state.online"
             class="chip border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700/60 dark:bg-amber-900/30 dark:text-amber-300"
@@ -74,12 +90,33 @@
 </template>
 
 <script setup>
-import { nextTick, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { ArrowLeft, RefreshCw, Search, Settings, WifiOff, X } from 'lucide-vue-next'
 import { state, runSync } from '../store'
 
 const searching = ref(false)
 const searchInput = ref(null)
+
+const currentSectionTitle = computed(() => {
+  switch (state.view) {
+    case 'agenda':
+      return '日程'
+    case 'week':
+      return state.weekLabel || '第 1 周'
+    case 'history':
+      return '历史归档'
+    case 'settings':
+      return '系统设置'
+    default:
+      return 'CampusHub'
+  }
+})
+
+function triggerFocusToday() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('campushub:focus-today'))
+  }
+}
 
 function openSearch() {
   searching.value = true

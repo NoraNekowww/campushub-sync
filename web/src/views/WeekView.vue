@@ -1,25 +1,5 @@
 <template>
   <div class="space-y-4 px-4">
-    <div class="flex items-center gap-2">
-      <button class="btn-ghost !px-2" title="向左平滑滑动" @click="scrollWeeks(-1)">
-        <ChevronLeft :size="16" />
-      </button>
-      <div class="flex-1 text-center cursor-pointer" title="点击回到今天" @click="focusToday('smooth')">
-        <div class="flex items-center justify-center gap-1.5">
-          <p class="text-sm font-semibold">{{ currentVisibleWeekLabel }}</p>
-          <span
-            v-if="!isCurrentWeekCentered"
-            class="chip border-brand-200 bg-brand-50 px-1.5 py-0 text-[10px] text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300"
-          >
-            回今天
-          </span>
-        </div>
-      </div>
-      <button class="btn-ghost !px-2" title="向右平滑滑动" @click="scrollWeeks(1)">
-        <ChevronRight :size="16" />
-      </button>
-    </div>
-
     <div class="card overflow-hidden">
       <div
         ref="scroller"
@@ -352,6 +332,22 @@ const currentVisibleWeekLabel = computed(() => {
   return `第 ${weekNum} 周`
 })
 
+watch(
+  currentVisibleWeekLabel,
+  (val) => {
+    state.weekLabel = val
+  },
+  { immediate: true },
+)
+
+watch(
+  isCurrentWeekCentered,
+  (val) => {
+    state.isCurrentWeekCentered = val
+  },
+  { immediate: true },
+)
+
 let scrollRaf = null
 function onScrollerScroll() {
   if (scrollRaf) return
@@ -601,15 +597,23 @@ watch(
   { deep: true },
 )
 
+const handleGlobalFocusToday = () => focusToday('smooth')
+
 watch(() => state.lastUpdated, () => loadWeek(true))
 onMounted(() => {
   loadWeek()
   nowTimer = setInterval(() => {
     now.value = new Date()
   }, 30000)
+  if (typeof window !== 'undefined') {
+    window.addEventListener('campushub:focus-today', handleGlobalFocusToday)
+  }
 })
 onUnmounted(() => {
   if (nowTimer) clearInterval(nowTimer)
   if (scrollRaf) cancelAnimationFrame(scrollRaf)
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('campushub:focus-today', handleGlobalFocusToday)
+  }
 })
 </script>

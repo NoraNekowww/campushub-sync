@@ -1,5 +1,47 @@
 <template>
   <div class="space-y-4 px-4">
+    <!-- 线性列表模式切换胶囊：仅 DDL vs 含课表（全部日程） -->
+    <div class="flex items-center justify-between pt-1">
+      <div
+        class="inline-flex rounded-xl p-0.5 bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 text-xs shadow-2xs backdrop-blur-md"
+        role="tablist"
+        aria-label="日程展示模式"
+      >
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="agendaMode === 'ddl'"
+          class="px-2.5 py-1 rounded-lg font-medium transition-all"
+          :class="
+            agendaMode === 'ddl'
+              ? 'bg-white text-brand-600 shadow-xs dark:bg-slate-700 dark:text-brand-300'
+              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+          "
+          @click="setAgendaMode('ddl')"
+        >
+          仅 DDL
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="agendaMode === 'all'"
+          class="px-2.5 py-1 rounded-lg font-medium transition-all"
+          :class="
+            agendaMode === 'all'
+              ? 'bg-white text-brand-600 shadow-xs dark:bg-slate-700 dark:text-brand-300'
+              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+          "
+          @click="setAgendaMode('all')"
+        >
+          含课表
+        </button>
+      </div>
+
+      <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+        {{ visible.length }} 条{{ agendaMode === 'ddl' ? '待办' : '日程' }}
+      </span>
+    </div>
+
     <!-- overdue deadlines stay pinned at the top, whatever the day grouping says -->
     <section v-if="overdue.length" class="space-y-2">
       <header class="flex items-center gap-2 pt-1 text-xs font-semibold uppercase tracking-wide text-rose-500">
@@ -126,6 +168,25 @@ import { filterEvents, notify, openCustomEditor, refresh, removeEvent, state, to
 import { groupByDay, todayKey, dayKey } from '../utils/datetime'
 
 const today = todayKey()
+
+const AGENDA_MODE_KEY = 'campushub.agenda_mode'
+const agendaMode = ref(
+  (function () {
+    try {
+      return localStorage.getItem(AGENDA_MODE_KEY) || 'ddl'
+    } catch (e) {
+      return 'ddl'
+    }
+  })(),
+)
+
+function setAgendaMode(mode) {
+  agendaMode.value = mode
+  try {
+    localStorage.setItem(AGENDA_MODE_KEY, mode)
+  } catch (e) {}
+}
+
 function isRangeTask(event) {
   if (!event) return false
   if (Array.isArray(event.periods) && event.periods.length > 0) return true
@@ -133,10 +194,14 @@ function isRangeTask(event) {
   return false
 }
 
-// 左侧线性列表只显示纯粹的单点 DDL（排除带时段、有起止范围的课程与活动日程）
-const visible = computed(() =>
-  filterEvents().filter((event) => event.is_deadline && !isRangeTask(event)),
-)
+// 线性列表展示逻辑：支持仅 DDL 模式 vs 含课表全部日程模式
+const visible = computed(() => {
+  const list = filterEvents()
+  if (agendaMode.value === 'ddl') {
+    return list.filter((event) => event.is_deadline && !isRangeTask(event))
+  }
+  return list
+})
 
 const overdue = computed(() =>
   visible.value.filter(
@@ -215,6 +280,7 @@ const emptyKind = computed(() => (state.authRequired ? 'auth' : state.online ? '
 const emptyMessage = computed(() => {
   if (state.authRequired) return '后端已开启访问保护，填写 ADMIN_TOKEN 后即可同步与修改。'
   if (!state.online) return '正在显示离线缓存，恢复网络后会自动刷新。'
+  if (agendaMode.value === 'all') return '当前没有日程安排。点右上角同步看看。'
   return '当前没有待办与临近的 DDL。点右上角同步或右下角 + 添加。'
 })
 
