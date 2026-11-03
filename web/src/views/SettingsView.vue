@@ -298,6 +298,15 @@
           <button class="btn-ghost !py-1.5 text-xs" @click="showPasswordForm = !showPasswordForm">
             {{ showPasswordForm ? '收起' : '修改密码' }}
           </button>
+          <button
+            type="button"
+            class="btn-ghost !py-1.5 text-xs !text-rose-600 hover:!bg-rose-50 dark:!text-rose-400 dark:hover:!bg-rose-950/30"
+            :disabled="state.authBusy"
+            data-testid="account-delete-self"
+            @click="confirmDeleteAccount"
+          >
+            注销账号
+          </button>
         </div>
 
         <form v-if="showPasswordForm" class="space-y-2" @submit.prevent="submitPassword()">
@@ -572,7 +581,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.6.6 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.6.7 · 原生极速' }}
         </span>
       </header>
 
@@ -863,6 +872,7 @@ import { WALLPAPER_CATEGORIES, getRandomWallpaper } from '../utils/wallpapers'
 import {
   changePassword,
   clearAllLocalData,
+  deleteMyAccount,
   listUsers,
   loadRegistrationSettings,
   loadStatus,
@@ -914,7 +924,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.6.6'
+  return '2.6.7'
 })
 
 const isAndroidClient = computed(() => {
@@ -1234,6 +1244,22 @@ async function signOut() {
   await logout()
   showPasswordForm.value = false
   members.value = []
+}
+
+async function confirmDeleteAccount() {
+  const currentName = account.value?.username || '当前账号'
+  if (
+    !window.confirm(
+      `确定要注销您的账号「${currentName}」吗？\n\n注意：此操作将永久清理您名下的所有课程、待办日程与个人配置，操作不可撤销！`
+    )
+  ) {
+    return
+  }
+  try {
+    await deleteMyAccount()
+  } catch (e) {
+    notify(e.message || '注销账号失败', 'danger')
+  }
 }
 
 async function submitPassword() {

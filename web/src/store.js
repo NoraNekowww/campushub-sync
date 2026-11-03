@@ -69,7 +69,7 @@ export function toggleImportantEvent(event) {
 
 function readInitialBackgroundConfig() {
   const defaults = {
-    enabled: false,
+    enabled: true, // 默认开启深空摄影背景图与通透微晶磨砂深度融合
     // 默认分类：真正的深空摄影（韦伯/哈勃深场、超新星与星系）
     category: 'astronomy',
     lightUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=85',
@@ -1106,8 +1106,20 @@ export async function listUsers() {
 }
 
 export async function setUserActive(userId, isActive) {
-  await api.updateUser(userId, { is_active: isActive })
+  if (api.patchUser) {
+    await api.patchUser(userId, { is_active: isActive })
+  } else if (api.updateUser) {
+    await api.updateUser(userId, { is_active: isActive })
+  }
   notify(isActive ? '已启用该账号' : '已停用该账号', 'ok')
+}
+
+export async function deleteMyAccount() {
+  await api.deleteMyAccount()
+  notify('您的账号及数据已成功注销', 'ok')
+  clearAllLocalData()
+  state.user = null
+  openAuthGate()
 }
 
 export function aboutMe() {

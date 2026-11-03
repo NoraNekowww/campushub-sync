@@ -290,6 +290,20 @@ def patch_user(
     return {"ok": True, "user": accounts.user_payload(target)}
 
 
+@router.delete("/me", summary="Delete my own account and cascade clean all personal events")
+def delete_my_account(
+    user: User = Depends(current_account),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """用户自主注销账号：彻底清理当前账号名下所有的事件、待办与用户记录。"""
+    # 1. 级联清理该用户的所有日程与待办
+    session.exec(delete(Event).where(Event.user_id == user.id))
+    # 2. 移除用户自身
+    session.delete(user)
+    session.commit()
+    return {"ok": True, "message": f"账号「{user.username}」及所有数据已成功注销"}
+
+
 @router.delete("/users/{user_id}", summary="Delete an account and cascade clean its events (admin)")
 def delete_user(
     user_id: int,

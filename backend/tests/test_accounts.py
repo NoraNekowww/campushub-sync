@@ -138,6 +138,34 @@ def test_deactivated_account_loses_access(accounts_env):
         assert self_del.status_code == 400
 
 
+def test_delete_my_own_account(accounts_env):
+    """测试普通用户自主注销自身账号（DELETE /api/auth/me）及其事件级联清理。"""
+    with make_client() as admin:
+        register(admin, invite_code=INVITE)
+        with make_client() as member:
+            register(member, username="carol", password="carol-password-123", invite_code=INVITE)
+            # 用户创建一条日程
+            ev_resp = member.post(
+                "/api/events",
+                json={
+                    "title": "Carol's task",
+                    "start_time": "2026-11-03T10:00:00",
+                    "is_deadline": True,
+                },
+            )
+            assert ev_resp.status_code == 201
+
+            # 用户自主注销自己的账号
+            del_resp = member.delete("/api/auth/me")
+            assert del_resp.status_code == 200
+            assert del_resp.json()["ok"] is True
+
+            # 注销后尝试再次登录，应返回 401
+            assert member.post(
+                "/api/auth/login", json={"username": "carol", "password": "carol-password-123"}
+            ).status_code == 401
+
+
 def test_only_admins_see_the_member_list(accounts_env):
     with make_client() as admin:
         register(admin, invite_code=INVITE)  # first account → the admin
