@@ -299,6 +299,54 @@ html.dark [data-testid="class-block"].is-important {
   color: #fef3c7 !important;
 }
 
+/* 课程已过部分 / 正在上一半的过去进度遮罩层：变灰并附带高雅 45° 细腻斜纹 */
+.class-past-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 2;
+  background-color: rgba(148, 163, 184, 0.28);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(100, 116, 139, 0.22) 0px,
+    rgba(100, 116, 139, 0.22) 2.5px,
+    transparent 2.5px,
+    transparent 6px
+  );
+  border-bottom: 1.5px dashed rgba(100, 116, 139, 0.45);
+  backdrop-filter: grayscale(80%) contrast(90%);
+  -webkit-backdrop-filter: grayscale(80%) contrast(90%);
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
+  transition: height 0.3s ease;
+}
+
+html.dark .class-past-overlay {
+  background-color: rgba(15, 23, 42, 0.48);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.12) 0px,
+    rgba(255, 255, 255, 0.12) 2.5px,
+    transparent 2.5px,
+    transparent 6px
+  );
+  border-bottom: 1.5px dashed rgba(255, 255, 255, 0.25);
+  backdrop-filter: grayscale(80%) contrast(85%);
+  -webkit-backdrop-filter: grayscale(80%) contrast(85%);
+}
+
+/* 已经完全上完过去的整节课程卡片：黑白灰阶淡雅收敛 */
+[data-testid="class-block"].is-past-entirely {
+  opacity: 0.65 !important;
+  filter: grayscale(85%) !important;
+}
+[data-testid="class-block"].is-past-entirely .class-past-overlay {
+  border-bottom: none !important;
+  border-radius: 0.5rem !important;
+}
+
 [data-testid="class-block"].border-amber-300\/80 {
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;

@@ -113,6 +113,7 @@
                       ? 'border-amber-300/80 bg-amber-100/80 text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/20 dark:text-amber-100'
                       : '',
                     isImportantEvent(item.event) ? 'is-important' : '',
+                    isItemPastEntirely(day.key, item) ? 'is-past-entirely' : '',
                     item.hasConflict ? 'animate-breathe-alternate' : ''
                   ]"
                   :style="blockStyle(item)"
@@ -135,6 +136,12 @@
                   >
                     {{ formatShortLocation(item.event.location) }}
                   </span>
+                  <!-- 已经过去部分的灰度斜纹覆盖层（上一半就把上过的部分变灰+斜纹） -->
+                  <div
+                    v-if="getItemPastProgress(day.key, item) > 0"
+                    class="class-past-overlay"
+                    :style="{ height: `${getItemPastProgress(day.key, item)}%` }"
+                  />
                 </button>
 
                 <!-- 没有结束时间（DDL）：精准定位在时间轴上，优先对齐线，字绝不挤占线的高低 -->
@@ -503,6 +510,22 @@ function layoutItems(items) {
   })
 
   return sorted
+}
+
+function getItemPastProgress(dayKeyVal, item) {
+  const today = todayKey()
+  if (dayKeyVal < today) return 100
+  if (dayKeyVal > today) return 0
+  if (item.end === null) return 0
+  const cur = nowMinutes.value
+  if (cur >= item.end) return 100
+  if (cur <= item.start) return 0
+  const pctVal = ((cur - item.start) / (item.end - item.start)) * 100
+  return Math.min(100, Math.max(0, Math.round(pctVal)))
+}
+
+function isItemPastEntirely(dayKeyVal, item) {
+  return getItemPastProgress(dayKeyVal, item) >= 100
 }
 
 function blockStyle(item) {

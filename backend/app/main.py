@@ -148,18 +148,18 @@ def create_app() -> FastAPI:
     @app.get("/api/version", summary="Version check for in-app update notification")
     async def app_version() -> dict:
         return {
-            "version": "2.6.7",
-            "tag": "v2.6.7",
-            "title": "CampusHub Android v2.6.7",
+            "version": "2.6.8",
+            "tag": "v2.6.8",
+            "title": "CampusHub Android v2.6.8",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
             "features": [
-                "默认启用深空摄影背景图与通透物理微晶磨砂玻璃深度融合",
-                "修复停用用户账号时的 API 调用异常（updateUser/patchUser）",
-                "新增用户自主注销账号功能（DELETE /api/auth/me 并级联清理所有数据）",
+                "课表课程卡片过去时态可视化：已过去与正在上一半的部分动态灰阶覆盖并加入 45° 优雅斜纹",
                 "课程表上的课程玻璃卡片带 30% 主题色透光漫射与无黑框物理高光边缘",
                 "维持左滑日程删除，新增右滑标记重点并在课程表与线性列表联动变色",
+                "默认启用深空摄影背景图与通透物理微晶磨砂玻璃深度融合",
+                "新增用户自主注销账号功能（DELETE /api/auth/me 并级联清理所有数据）",
             ],
         }
 
