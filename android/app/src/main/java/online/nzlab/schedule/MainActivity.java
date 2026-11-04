@@ -1,14 +1,19 @@
 package online.nzlab.schedule;
 
 import android.annotation.SuppressLint;
+import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.res.AssetManager;
+import android.database.Cursor;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
@@ -22,11 +27,15 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Toast;
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.FileProvider;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
+import java.io.File;
 import androidx.webkit.WebViewAssetLoader;
 
 import java.io.InputStream;
@@ -416,6 +425,87 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception e) {
                 return 1;
             }
+        }
+
+        /**
+         * 原生应用内直接下载 APK 并通过系统 Intent 触发升级安装
+         */
+        @JavascriptInterface
+        public void downloadAndInstallApk(String url) {
+            if (url == null || url.trim().isEmpty()) return;
+            runOnUiThread(() -> {
+                try {
+                    Toast.makeText(MainActivity.this, "开始在后台下载最新安装包...", Toast.LENGTH_SHORT).show();
+                    DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                    if (dm == null) {
+                        Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        startActivity(browserIntent);
+                        return;
+                    }
+
+                    Uri downloadUri = Uri.parse(url);
+                    DownloadManager.Request request = new DownloadManager.Request(downloadUri);
+                    request.setTitle("CampusHub 更新下载");
+                    request.setDescription("正在下载最新版 CampusHub.apk...");
+                    request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                    request.setMimeType("application/vnd.android.package-archive");
+                    request.setDestinationInExternalFilesDir(MainActivity.this, Environment.DIRECTORY_DOWNLOADS, "CampusHub.apk");
+
+                    long downloadId = dm.enqueue(request);
+
+                    BroadcastReceiver receiver = new BroadcastReceiver() {
+                        @Override
+                        public void onReceive(Context context, Intent intent) {
+                            long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+                            if (id == downloadId) {
+                                try {
+                                    unregisterReceiver(this);
+                                } catch (Exception ignored) {}
+
+                                File apkFile = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "CampusHub.apk");
+                                if (apkFile.exists()) {
+                                    installApk(apkFile);
+                                } else {
+                                    Toast.makeText(MainActivity.this, "下载完成，请在通知栏或下载管理中打开安装", Toast.LENGTH_LONG).show();
+                                }
+                            }
+                        }
+                    };
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        registerReceiver(receiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_NOT_EXPORTED);
+                    } else {
+                        registerReceiver(receiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "下载安装 APK 失败，降级为系统外部跳转", e);
+                    try {
+                        Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        startActivity(browserIntent);
+                    } catch (Exception ex) {
+                        Toast.makeText(MainActivity.this, "下载失败，请手动访问发布页面", Toast.LENGTH_LONG).show();
+                    }
+                }
+            });
+        }
+    }
+
+    private void installApk(File apkFile) {
+        try {
+            Intent installIntent = new Intent(Intent.ACTION_VIEW);
+            installIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            Uri apkUri;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                installIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                apkUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", apkFile);
+            } else {
+                apkUri = Uri.fromFile(apkFile);
+            }
+            installIntent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+            startActivity(installIntent);
+        } catch (Exception e) {
+            Log.e(TAG, "调用系统安装器失败", e);
+            Toast.makeText(this, "调起系统安装器失败，请前往下载目录点击安装", Toast.LENGTH_LONG).show();
         }
     }
 

@@ -87,7 +87,18 @@
           </div>
         </div>
 
-        <div class="mt-4 flex items-center gap-2">
+        <div class="mt-4 flex flex-wrap items-center gap-2">
+          <!-- 附带 DDL 功能：在课程开始时附带一个截止日期提醒（走默认 DDL 模式并预填时间，隐藏重复任务选项） -->
+          <button
+            type="button"
+            class="btn-secondary !text-brand-700 hover:!bg-brand-50 dark:!text-brand-300 dark:hover:!bg-brand-950/40 flex items-center gap-1 text-xs"
+            title="为这节课在开始时刻设置一项截止日期（DDL）提醒"
+            data-testid="class-detail-attach-ddl"
+            @click="attachClassStartDdl"
+          >
+            <Clock :size="14" />
+            <span>附带开始时 DDL</span>
+          </button>
           <button
             type="button"
             class="btn-ghost !text-amber-600 hover:!bg-amber-50 dark:!text-amber-400 dark:hover:!bg-amber-950/30 flex items-center gap-1 text-xs"
@@ -126,7 +137,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { FileText, Paperclip, Pencil, Star, X } from 'lucide-vue-next'
+import { Clock, FileText, Paperclip, Pencil, Star, X } from 'lucide-vue-next'
 import { api } from '../api'
 import { isImportantEvent, openCustomEditor, removeEvent, toggleImportantEvent } from '../store'
 import { splitNoteMeta } from '../utils/note'
@@ -230,6 +241,24 @@ function edit() {
   const event = props.event
   close()
   openCustomEditor(event)
+}
+
+function attachClassStartDdl() {
+  const event = props.event
+  if (!event) return
+  close()
+  // 构建在课程开始时刻的 DDL 预填对象，隐藏重复任务选项，走标准 DDL 生成通道
+  const draftDdl = {
+    title: `[课前] ${event.title}`,
+    start_time: event.start_time,
+    end_time: null,
+    is_deadline: true,
+    location: event.location || '',
+    description: `课程关联提醒：${event.title}`,
+    is_draft: true,
+    hide_recurring: true,
+  }
+  openCustomEditor(draftDdl)
 }
 
 async function remove() {

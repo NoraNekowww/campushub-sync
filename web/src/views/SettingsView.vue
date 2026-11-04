@@ -275,6 +275,67 @@
       </div>
     </section>
 
+    <!-- ----------------------------------------------------------- 检查更新与下载安装板块 -->
+    <section class="card space-y-3 p-4" data-testid="update-section">
+      <header class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <Rocket :size="15" class="text-brand-600 dark:text-brand-400" />
+          <h2 class="text-sm font-semibold">软件版本与在线更新</h2>
+        </div>
+        <span class="chip border-transparent bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 font-mono text-[10px]">
+          v{{ appVersionDisplay }}
+        </span>
+      </header>
+
+      <div class="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3 text-xs dark:border-slate-800 dark:bg-slate-800/40 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <div class="space-y-0.5">
+            <div class="font-medium text-slate-800 dark:text-slate-200">
+              {{ updateCheckStatus || '保持最新可获得最流畅体验' }}
+            </div>
+            <p v-if="latestReleaseInfo" class="text-[11px] text-slate-500 dark:text-slate-400">
+              最新版本：<strong>v{{ latestReleaseInfo.version }}</strong>
+            </p>
+          </div>
+          <button
+            type="button"
+            class="btn-secondary !h-8 !py-0 !px-3 text-xs gap-1.5 shadow-2xs shrink-0"
+            :disabled="checkingUpdate"
+            @click="manualCheckUpdate"
+          >
+            <RotateCcw :size="12" :class="checkingUpdate ? 'animate-spin' : ''" />
+            <span>{{ checkingUpdate ? '检查中...' : '检查更新' }}</span>
+          </button>
+        </div>
+
+        <!-- 发现新版本时的更新卡片与一键下载安装 -->
+        <div
+          v-if="hasNewVersion"
+          class="rounded-lg border border-brand-200/80 bg-brand-50/60 p-2.5 space-y-2 dark:border-brand-500/30 dark:bg-brand-950/30 animate-fade-in"
+        >
+          <div class="flex items-center gap-1.5 font-semibold text-brand-700 dark:text-brand-300 text-xs">
+            <Sparkles :size="13" />
+            <span>发现新版本 v{{ latestReleaseInfo?.version }}</span>
+          </div>
+          <p v-if="latestReleaseInfo?.features?.length" class="text-[11px] text-slate-600 dark:text-slate-300 space-y-0.5">
+            <span v-for="(feat, idx) in latestReleaseInfo.features" :key="idx" class="block">
+              · {{ feat }}
+            </span>
+          </p>
+          <div class="flex items-center gap-2 pt-1">
+            <button
+              type="button"
+              class="btn-primary !h-8 !py-0 !px-3 text-xs gap-1.5 shadow-sm"
+              @click="downloadAndInstall"
+            >
+              <Download :size="13" />
+              <span>直接在应用内下载安装</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ------------------------------------------------------------ account -->
     <section v-if="accountsEnabled" class="card space-y-3 p-4" data-testid="account-section">
       <header class="flex items-center gap-2">
@@ -603,7 +664,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.7.3 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.7.4 · 原生极速' }}
         </span>
       </header>
 
@@ -886,6 +947,8 @@ import {
   Users,
   Image as ImageIcon,
   Palette,
+  Rocket,
+  RotateCcw,
 } from 'lucide-vue-next'
 import { api } from '../api'
 import DetailList from '../components/DetailList.vue'
@@ -947,8 +1010,112 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.7.3'
+  return '2.7.4'
 })
+
+const appVersionDisplay = clientAppVersion
+
+/* ----------------------------------------------------------- 手动检查更新与下载安装逻辑 */
+const checkingUpdate = ref(false)
+const updateCheckStatus = ref('')
+const latestReleaseInfo = ref(null)
+
+const hasNewVersion = computed(() => {
+  if (!latestReleaseInfo.value?.version) return false
+  return isNewerVersion(latestReleaseInfo.value.version, clientAppVersion.value)
+})
+
+function isNewerVersion(latest, current) {
+  if (!latest || !current) return false
+  const cleanL = String(latest).trim().replace(/^v/i, '')
+  const cleanC = String(current).trim().replace(/^v/i, '')
+  if (cleanL === cleanC) return false
+  const parse = (v) => v.split('.').map((n) => parseInt(n, 10) || 0)
+  const l = parse(cleanL)
+  const c = parse(cleanC)
+  const maxLen = Math.max(l.length, c.length)
+  for (let i = 0; i < maxLen; i++) {
+    const lv = l[i] ?? 0
+    const cv = c[i] ?? 0
+    if (lv > cv) return true
+    if (lv < cv) return false
+  }
+  return false
+}
+
+async function manualCheckUpdate() {
+  checkingUpdate.value = true
+  updateCheckStatus.value = '正在查询最新版本发布...'
+  try {
+    let version = ''
+    let title = ''
+    let downloadUrl = ''
+    let features = []
+
+    try {
+      const vData = await api.appVersion()
+      if (vData?.version) {
+        version = String(vData.version).replace(/^v/i, '')
+        title = vData.title || ''
+        downloadUrl = vData.download_url || vData.github_download_url || ''
+        features = vData.features || []
+      }
+    } catch (e) {}
+
+    if (!version) {
+      const resp = await fetch('https://api.github.com/repos/NoraNekowww/campushub-sync/releases/latest', {
+        headers: { Accept: 'application/vnd.github.v3+json' },
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        version = (data.tag_name || '').replace(/^v/i, '')
+        title = data.name || ''
+        const apkAsset = data.assets?.find((a) => a.name === 'CampusHub.apk')
+        downloadUrl = apkAsset?.browser_download_url || ''
+      }
+    }
+
+    if (!version) {
+      updateCheckStatus.value = '未检测到版本信息，请稍后再试'
+      notify('检测版本异常，请检查网络连接', 'warn')
+      return
+    }
+
+    latestReleaseInfo.value = {
+      version,
+      title,
+      downloadUrl: downloadUrl || 'https://nzlab.online/schedule/CampusHub.apk',
+      features,
+    }
+
+    if (isNewerVersion(version, clientAppVersion.value)) {
+      updateCheckStatus.value = `发现新版本 v${version}`
+      notify(`发现新版本 v${version}，可立即下载安装！`, 'ok')
+    } else {
+      updateCheckStatus.value = `当前已是最新版本 (v${clientAppVersion.value})`
+      notify(`当前已是最新版本 (v${clientAppVersion.value})`, 'ok')
+    }
+  } catch (err) {
+    updateCheckStatus.value = '检查更新失败，请稍后重试'
+    notify('检查更新失败：' + (err.message || '网络连接超时'), 'danger')
+  } finally {
+    checkingUpdate.value = false
+  }
+}
+
+function downloadAndInstall() {
+  const targetUrl = latestReleaseInfo.value?.downloadUrl || 'https://nzlab.online/schedule/CampusHub.apk'
+  if (typeof window !== 'undefined' && window.NativeAuthBridge?.downloadAndInstallApk) {
+    try {
+      window.NativeAuthBridge.downloadAndInstallApk(targetUrl)
+      notify('已调起后台极速下载，完成后将自动拉起安装', 'ok')
+      return
+    } catch (e) {
+      console.warn('Native download failed:', e)
+    }
+  }
+  window.open(targetUrl, '_blank')
+}
 
 const isAndroidClient = computed(() => {
   if (typeof window === 'undefined') return false
@@ -1405,7 +1572,6 @@ async function toggleMember(row) {
 
 const storageStats = ref(null)
 const storageBusy = ref(false)
-const checkingUpdate = ref(false)
 
 async function loadStorageStats() {
   if (!isAdminUser.value) return

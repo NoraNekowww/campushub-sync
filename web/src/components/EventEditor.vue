@@ -83,7 +83,7 @@
             <span class="text-slate-500 dark:text-slate-400">截止时间</span>
             <input v-model="form.start" type="time" class="input" required />
           </label>
-          <div v-if="!isEdit" class="flex flex-col justify-end">
+          <div v-if="!isEdit && !hideRecurring" class="flex flex-col justify-end">
             <label class="flex h-[38px] cursor-pointer items-center gap-2 rounded-lg border border-slate-200/80 bg-slate-50/70 px-2.5 text-xs font-medium dark:border-slate-800 dark:bg-slate-800/40">
               <input
                 v-model="form.recurring"
@@ -122,9 +122,9 @@
           </label>
         </div>
 
-        <!-- 重复任务详细参数：仅当开启重复时展开 -->
+        <!-- 重复任务详细参数：仅当开启重复时展开（若当前为课程附带 DDL 则隐藏） -->
         <div
-          v-if="!isEdit && form.recurring"
+          v-if="!isEdit && form.recurring && !hideRecurring"
           class="space-y-2 rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5 text-xs dark:border-slate-800 dark:bg-slate-800/40 animate-fade-in"
         >
           <!-- 如果是 class 模式，保留重复标题；如果是 deadline 模式已在上方勾选 -->
@@ -363,7 +363,9 @@ function setKind(k) {
 }
 
 const editing = computed(() => state.customEditor.event)
-const isEdit = computed(() => Boolean(editing.value))
+const isDraft = computed(() => Boolean(editing.value?.is_draft))
+const isEdit = computed(() => Boolean(editing.value) && !isDraft.value)
+const hideRecurring = computed(() => Boolean(editing.value?.hide_recurring))
 const editingRecurrence = computed(() => editing.value?.recurrence)
 // 来源决定这个弹窗的语气：自定义日程可以整个删掉；课表是外部来源
 const source = computed(() => editing.value?.source || 'custom')

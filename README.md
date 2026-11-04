@@ -1,15 +1,12 @@
-# CampusHub Sync
+# CampusHub Sync (CampusHub Android)
 
-把**微软 To Do 的任务/DDL**和**天津大学课表**聚合成一条干净的时间线，用手机 PWA 看，并提供一个
-**iCalendar（.ics）订阅地址**，让系统日历（iOS / Android / Outlook / GNOME）自动同步。
+统一聚合**个人日程待办（DDL）**、**时间段活动日程**与**天津大学官方教务课表**的高性能全栈日程系统。提供流畅细腻的 Android 原生客户端（APK）、响应式微晶磨砂 PWA 以及标准的 **iCalendar（.ics）日历订阅**（支持 iOS、Android 系统日历、Outlook 自动同步）。
 
-- 后端：FastAPI + SQLModel(SQLite) + APScheduler，后台每 20 分钟增量同步
-- 前端：Vite + Vue 3 + TailwindCSS + Lucide，PWA（manifest + service worker，可离线看缓存课表）
-- 访问控制：**账号系统**（注册/登录/邀请码/管理员/停用）——登录墙在 App 里，账号入口在门户右上角
-- 部署：VPS 上以 **venv + systemd** 跑单进程（监听 127.0.0.1:8010），Nginx 挂在
-  `https://nzlab.online/schedule/`（子路径，与既有站点同 server 块）；也提供 Docker 方案
-- 设计取向：**单进程**（FastAPI 同时提供 `/api/*` 和编译好的前端）、**少依赖**（账号系统只用标准库 crypto）、
-  **读/写权限分离**
+- **高透物理光学磨砂美学**：基于 24px 硬件级高斯模糊、菲涅尔高光边缘、30% 主题色次表面漫透射与动态对比反色，呈现纯净高级的水晶磨砂质感；
+- **全生命周期手势交互**：线性日程列表支持左滑删除、右滑星标重点，双端联动变色；
+- **自研多端数据强同步**：本地单数据源架构与 Last-Write-Wins 防倒流时间戳机制，网络断连/多端并发提交时数据绝不丢失回退；
+- **天津大学教务直连**：服务端直连天大统一认证 SSO 与教务系统（classes.tju.edu.cn/eams），精准解析全学期周次、节次、教师与教室地点；
+- **云端附件与多租户隔离**：内置每文件最高 100MB 附件云端托管，会话级安全多租户权限隔离与一键注销。
 
 ---
 
@@ -17,67 +14,53 @@
 
 ```
 campushub-sync/
-├── backend/                        # FastAPI 服务
+├── android/                         # 原生 Android 客户端（Java / WebViewAssetLoader / AppWidget）
 │   ├── app/
-│   │   ├── main.py                 # 应用工厂：挂载 /api、静态 PWA、启动调度器
-│   │   ├── config.py               # pydantic-settings 配置（.env）
-│   │   ├── models.py               # SQLModel 统一事件模型 + 枚举
-│   │   ├── schemas.py              # API 出入参模型（含 CountsOut）
-│   │   ├── db.py                   # engine/session + KV 表（存 refresh_token 等）
-│   │   ├── security.py             # 令牌 + 账号会话的统一守卫（require_read/write/account）
-│   │   ├── accounts.py             # 账号核心：PBKDF2 口令、HMAC 会话 Cookie、登录限流
-│   │   ├── timeutil.py             # 时区工具（存储 UTC、展示 Asia/Shanghai）
-│   │   ├── api/                    # 路由层
-│   │   │   ├── accounts.py         # /api/auth/{session,register,login,logout,me,password,users}
-│   │   │   ├── events.py           # GET/POST/PATCH/DELETE /api/events
-│   │   │   ├── calendar.py         # GET /api/subscribe/calendar.ics（RFC 5545）
-│   │   │   ├── sync.py             # POST /api/sync（手动触发）
-│   │   │   ├── status.py           # GET /api/status|/api/config|/api/logs
-│   │   │   ├── auth_ms.py          # POST /api/auth/ms（设备代码流）
-│   │   │   └── schedule.py         # POST /api/schedule（上传 ICS / 学期设置）
-│   │   ├── connectors/             # 外部数据源
-│   │   │   ├── base.py             # 连接器基类：重试/退避/抖动/错误分类
-│   │   │   ├── ms_todo.py          # MSAL 机密客户端 + Graph To Do + 令牌自动刷新
-│   │   │   ├── tju_schedule.py     # 微北洋(WePeiyang)抓取 + 静态 ICS 兜底
-│   │   │   └── demo.py             # DEMO_MODE=1 时的合成数据
-│   │   └── services/
-│   │       ├── sync_engine.py      # 抓取 → 规范化 → upsert（不覆盖本地状态）→ 清理
-│   │       ├── events.py           # 事件查询/落库/过期清理
-│   │       ├── ics_export.py       # ics 生成 + ETag
-│   │       └── scheduler.py        # APScheduler 装配
-│   ├── tests/                      # pytest（63 项，含越权探测）
-│   ├── requirements.txt
-│   └── pytest.ini
-├── web/                            # 前端 PWA
+│   │   ├── src/main/java/          # MainActivity（原生离线拦截、下载安装管理器、小部件）
+│   │   └── src/main/res/           # 桌面小部件布局、FileProvider 权限与图标
+├── backend/                         # FastAPI 高性能异步后端
+│   ├── app/
+│   │   ├── main.py                  # 应用工厂、在线版本更新端点、生命周期管理
+│   │   ├── config.py                # 环境变量与安全密钥配置
+│   │   ├── models.py                # SQLModel 数据模型（Event、User、KV、SyncRun）
+│   │   ├── schemas.py               # Pydantic 入参出参校验（含 client_updated_at 冲突裁决）
+│   │   ├── db.py                    # 数据库引擎、KV 存储与加密迁移
+│   │   ├── api/                     # 模块化路由（events、accounts、tju、attachments 等）
+│   │   └── connectors/              # 天大教务直连爬虫、CAS 验证码与解析器
+│   └── tests/                       # 152 项自动化测试（覆盖鉴权、级联清理、附件管理等）
+├── web/                             # Vue 3 + TailwindCSS 高性能前端
 │   ├── src/
-│   │   ├── App.vue  main.js        # 外壳、视图切换、离线与主题
-│   │   ├── api.js   store.js       # 极简 API 客户端 + reactive 状态（无 Pinia）
-│   │   ├── utils/datetime.js       # 上海时区日期工具（不依赖设备时区）
-│   │   ├── views/                  # AgendaView / WeekView / SettingsView
-│   │   └── components/             # 卡片、筛选、底栏、骨架屏、详情弹层、AuthGate（登录墙）
-│   ├── public/{manifest.webmanifest, sw.js, icons/}
-│   ├── index.html  vite.config.js  tailwind.config.js
-├── deploy/
-│   ├── install.sh                  # VPS 一键安装/升级（venv → systemd → nginx → 生成 .env）
-│   ├── systemd/campushub-sync.service
-│   ├── nginx/nzlab.online.schedule.conf   # 插进既有 server 块的 /schedule/ 片段
-│   ├── nginx/schedule.nzlab.online.conf   # 独立子域方案（可选）
-│   └── portal/index.html           # 门户首页（含右上角账号区）
-├── tools/
-│   ├── make_icons.py               # 零依赖生成 PWA 图标
-│   ├── smoke_test.py               # 对运行中的实例做 34 项端到端检查
-│   ├── check-feed-hide.py          # 线上自检：删一条日程 → 订阅日历里消失 + 墓碑（跑完自动撤销）
-│   ├── check-week-alignment.py     # 线上自检：学期锚点 / 教务周次换算 / 有没有重复行
-│   ├── check-todo-sync.py          # 线上自检：课表事件带 periods/teacher/week + 两个同步间隔都在跑
-│   ├── check-todo-roundtrip.py     # 线上自检：待办里勾掉 → 客户端跟着划掉（真建真勾真删）
-│   ├── encrypt_kv_secrets.py       # 凭据迁移/巡检（--check / --dry-run）
-│   ├── t_e2e_user.py               # 建/删临时账号（--cleanup 连它的日程一起清）
-│   └── visual/                     # puppeteer-core + 系统 Edge 的无头校验
-│       ├── verify-ui.mjs           # 三个视图的 23 项 UI 检查
-│       ├── verify-auth.mjs         # 登录墙 → 注册 → 持久化 → 退出（13 项）
-│       └── verify-portal.mjs       # 线上门户账号区 + /schedule/ 联动（16 项）
-├── web/tools/                      # 前端侧的线上校验（同一套 headless Edge 套路）
-│   ├── verify-swipe-delete.mjs     # 卡片左右滑动删除 + 撤销 + 划掉未被手势吃掉
+│   │   ├── views/                   # WeekView（无极水平连续周课表）、AgendaView、HistoryView、SettingsView
+│   │   ├── components/              # EventCard（双向滑动手势）、ClassDetail（居中水晶大卡片）、UpdateNotification
+│   │   ├── utils/                   # 莫兰迪主题色板、精选深空壁纸库、时区日期计算
+│   │   └── store.js                 # 响应式状态中心、离线同步队列、Last-Write-Wins 冲突处理
+│   └── tools/                       # 无头浏览器自动化回归验收套件（verify-week-grid.mjs 等）
+└── CampusHub.apk                    # 预编译生成的原生 Android 正式版安装包
+```
+
+---
+
+## 2. 核心功能与亮点
+
+- **自研多端数据强同步 (Last-Write-Wins)**：
+  - 为所有日程引入客户端 `client_updated_at` 时间戳标签；
+  - 彻底解决弱网环境或多次上传重试导致的服务器历史数据倒流问题，确保最新改动永不被旧版本覆盖；
+  - 本地统一单数据源驱动，待办 DDL 与时间段日程 100% 同步穿透渲染至周课表网格中。
+- **高透物理光学磨砂美学**：
+  - 硬件级 24px 高斯模糊 + 菲涅尔白边微倒角高光；
+  - 课表卡片采用极浅纯净白雾（0.08）结合 30% 主题色次表面漫透射，彻底消除塑料泛白与底框晕影，呈现纯净高级的水晶微晶质感；
+  - 浅色高透模式下采用高对比深色文字叠加立体微轮廓，无论底层背景图如何变化，文字永久清晰锐利。
+- **全生命周期交互与手势**：
+  - 线性列表（AgendaView）支持「仅 DDL / 仅日程 / 含课表」三段式自由切换；
+  - 任务卡片支持双向滑动手势：左滑快捷删除，右滑星标标记重点；
+  - 重点日程在课程表、线性日程卡片与详情弹窗全链路联动变色（琥珀暖金色流光）；
+  - 课表课程详情弹窗升级为居中悬浮水晶大卡片，并支持一键为课程附带开始时刻的截止日期（DDL）。
+- **天津大学教务全链路直连**：
+  - 服务端直连天津大学统一认证（SSO CAS）与教务系统（classes.tju.edu.cn/eams）；
+  - 真实节次（1-12节）与天津大学作息作息表精准对齐，自动解析全学期周次、节次、教师、教室与课程类型。
+- **原生 Android 深度集成与在线更新**：
+  - 原生支持应用内一键下载并调用系统安装器平滑升级安装 APK；
+  - 系统桌面小部件（AppWidget）实时刷新今日课程与近期待办。
 │   ├── verify-tju-ui.mjs           # 真账号回归：教务绑定面板
 │   ├── verify-panel.mjs            # 设置页渲染 + 底部反馈链接
 │   └── verify-class-cards.mjs      # 课表卡片：折叠只看时间+地点、点开才有教师/周次（本地 dist + API fixture，不碰线上数据）

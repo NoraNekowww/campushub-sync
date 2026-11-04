@@ -113,15 +113,14 @@
               >
                 稍后再说
               </button>
-              <a
-                :href="downloadUrl"
-                target="_blank"
+              <button
+                type="button"
                 class="btn-primary !px-4 !py-2 text-xs flex items-center gap-1.5 shadow-md shadow-brand-500/20"
-                @click="closeModal"
+                @click="startDownloadAndInstall"
               >
                 <Download :size="14" />
-                <span>立即下载更新</span>
-              </a>
+                <span>立即下载安装</span>
+              </button>
             </div>
           </div>
         </div>
@@ -135,7 +134,7 @@ import { computed, onMounted, ref } from 'vue'
 import { BellOff, Download, Rocket, Sparkles, X } from 'lucide-vue-next'
 import { API_BASE, api } from '../api'
 
-const CURRENT_VERSION = '2.7.3'
+const CURRENT_VERSION = '2.7.4'
 const DISMISSED_KEY = 'campushub.dismissed_update'
 const POPUP_SEEN_KEY = 'campushub.popup_seen_version'
 
@@ -218,6 +217,20 @@ function closeModal() {
   showModal.value = false
 }
 
+function startDownloadAndInstall() {
+  closeModal()
+  const targetUrl = downloadUrl.value
+  if (typeof window !== 'undefined' && window.NativeAuthBridge?.downloadAndInstallApk) {
+    try {
+      window.NativeAuthBridge.downloadAndInstallApk(targetUrl)
+      return
+    } catch (e) {
+      console.warn('NativeAuthBridge downloadAndInstallApk error:', e)
+    }
+  }
+  window.open(targetUrl, '_blank')
+}
+
 function dismissBannerOnly() {
   bannerDismissed.value = true
 }
@@ -281,14 +294,15 @@ async function checkLatestVersion() {
       apkUrl: apkUrl || 'https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk',
     }
 
-    // 网络检测到有新版本时，自动弹出居中弹窗推送（仅在移动端环境弹出，桌面网页端不弹；每个版本只主动弹一次，避免反复打扰）
-    if (isNewer(version, CURRENT_VERSION) && popupSeen !== version) {
+    // 网络检测到有新版本时，自动弹出居中弹窗推送（每个新版本主动弹一次，避免反复打扰）
+    const currentActiveVer = getActiveVersion()
+    if (isNewer(version, currentActiveVer) && popupSeen !== version) {
       setTimeout(() => {
         showModal.value = true
         try {
           localStorage.setItem(POPUP_SEEN_KEY, version)
         } catch {}
-      }, 800)
+      }, 600)
     }
   } catch {
     /* 离线或网络异常时不阻塞主界面 */

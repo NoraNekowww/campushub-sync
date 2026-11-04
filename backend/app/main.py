@@ -148,19 +148,17 @@ def create_app() -> FastAPI:
     @app.get("/api/version", summary="Version check for in-app update notification")
     async def app_version() -> dict:
         return {
-            "version": "2.7.3",
-            "tag": "v2.7.3",
-            "title": "CampusHub Android v2.7.3",
+            "version": "2.7.4",
+            "tag": "v2.7.4",
+            "title": "CampusHub Android v2.7.4",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
             "features": [
-                "日程后改动优先(Last-Write-Wins)：打上 client_updated_at 时间戳标签并本地强保护，防多次上传冲突与数据倒流",
-                "统一本地单数据源缓存：待办与日程无缝互通显示在课表网格",
-                "课表移除下方重复的 7 天内日程区，视图清爽紧凑",
-                "线性列表支持「仅 DDL / 仅日程 / 含课表」三段式模式自由切换",
-                "DDL 编辑表单彻底移除时长选择器，杜绝无意义时间段配置",
-                "全站页面视觉玻璃化统一：顶底栏高透折射、左侧时间轴玻璃化、课表详情改为大号居中水晶卡片",
+                "设置页新增在线检查更新与一键下载安装板块，打通 Android 原生 DownloadManager + FileProvider",
+                "修复 Android 移动端更新弹窗未能弹出的根因，确保新版本自动感知并提醒",
+                "课程详情大卡片新增「附带开始时 DDL」功能，预填课程时刻并自动隐藏重复选项",
+                "重构 GitHub 首页与项目 README，全面适配天大教务直连与物理微晶磨砂架构，移除已废弃的 Microsoft To Do 描述",
             ],
         }
 
