@@ -148,16 +148,17 @@ def create_app() -> FastAPI:
     @app.get("/api/version", summary="Version check for in-app update notification")
     async def app_version() -> dict:
         return {
-            "version": "2.7.4",
-            "tag": "v2.7.4",
-            "title": "CampusHub Android v2.7.4",
+            "version": "2.7.5",
+            "tag": "v2.7.5",
+            "title": "CampusHub Android v2.7.5",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
             "features": [
+                "课程详情大卡片增加专属「附带开始时 DDL」点击卡片，交互更直观",
+                "课表左侧时间轴优化为纯时钟小时展示（08..21），宽度自适应收窄更清爽紧凑",
                 "设置页新增在线检查更新与一键下载安装板块，打通 Android 原生 DownloadManager + FileProvider",
                 "修复 Android 移动端更新弹窗未能弹出的根因，确保新版本自动感知并提醒",
-                "课程详情大卡片新增「附带开始时 DDL」功能，预填课程时刻并自动隐藏重复选项",
                 "重构 GitHub 首页与项目 README，全面适配天大教务直连与物理微晶磨砂架构，移除已废弃的 Microsoft To Do 描述",
             ],
         }

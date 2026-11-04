@@ -44,10 +44,10 @@
               <div
                 v-for="hour in hours"
                 :key="`tick-${hour}`"
-                class="absolute right-1.5 -translate-y-1/2 text-[10px] text-slate-400"
+                class="absolute right-1 -translate-y-1/2 text-[10.5px] font-mono font-medium text-slate-400 dark:text-slate-500 select-none"
                 :style="{ top: pct(hour * 60) + '%' }"
               >
-                {{ String(hour).padStart(2, '0') }}:00
+                {{ String(hour).padStart(2, '0') }}
               </div>
 
               <!-- 当前时间指示（呼吸闪烁） -->
@@ -287,8 +287,8 @@ const days = computed(() => {
 
 const hasTodayInView = computed(() => days.value.some((d) => d.isToday))
 
-const GUTTER = 34
-const COL_WIDTH = 54
+const GUTTER = 26
+const COL_WIDTH = 55
 const gridStyle = computed(() => ({
   gridTemplateColumns: `${GUTTER}px repeat(${days.value.length}, ${COL_WIDTH}px)`,
 }))

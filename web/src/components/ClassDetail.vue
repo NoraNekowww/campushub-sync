@@ -87,18 +87,34 @@
           </div>
         </div>
 
+        <!-- 附带开始时 DDL 独立点击卡片（卡片化入口，点击自动预填课程时刻并进入 DDL 设定） -->
+        <button
+          type="button"
+          class="mt-3.5 flex w-full items-center justify-between gap-3 rounded-2xl border border-brand-200/90
+                 bg-brand-50/70 p-3 text-left transition-all hover:border-brand-400 hover:bg-brand-50
+                 dark:border-brand-500/30 dark:bg-brand-950/30 dark:hover:border-brand-400/50"
+          data-testid="class-detail-attach-ddl-card"
+          @click="attachClassStartDdl"
+        >
+          <div class="flex items-center gap-2.5">
+            <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-500/15 text-brand-700 dark:text-brand-300">
+              <Clock :size="16" />
+            </div>
+            <div>
+              <p class="text-xs font-semibold text-slate-800 dark:text-slate-100">
+                附带课程开始时 DDL
+              </p>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                在课程开始时刻（{{ timeRange.split(' - ')[0] || '上课时' }}）设置截止提醒
+              </p>
+            </div>
+          </div>
+          <span class="rounded-lg bg-brand-500 px-2 py-1 text-[10.5px] font-semibold text-white shadow-xs">
+            添加
+          </span>
+        </button>
+
         <div class="mt-4 flex flex-wrap items-center gap-2">
-          <!-- 附带 DDL 功能：在课程开始时附带一个截止日期提醒（走默认 DDL 模式并预填时间，隐藏重复任务选项） -->
-          <button
-            type="button"
-            class="btn-secondary !text-brand-700 hover:!bg-brand-50 dark:!text-brand-300 dark:hover:!bg-brand-950/40 flex items-center gap-1 text-xs"
-            title="为这节课在开始时刻设置一项截止日期（DDL）提醒"
-            data-testid="class-detail-attach-ddl"
-            @click="attachClassStartDdl"
-          >
-            <Clock :size="14" />
-            <span>附带开始时 DDL</span>
-          </button>
           <button
             type="button"
             class="btn-ghost !text-amber-600 hover:!bg-amber-50 dark:!text-amber-400 dark:hover:!bg-amber-950/30 flex items-center gap-1 text-xs"
