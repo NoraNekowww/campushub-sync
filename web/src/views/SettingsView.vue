@@ -705,7 +705,7 @@
               type="button"
               class="btn-ghost !py-1.5 text-xs inline-flex items-center gap-1 text-slate-600 dark:text-slate-300"
               :disabled="checkingUpdate"
-              @click="checkAppUpdate(true)"
+              @click="manualCheckUpdate"
             >
               <RefreshCw :size="13" :class="checkingUpdate ? 'animate-spin' : ''" />
               {{ checkingUpdate ? '检查中…' : '检查新版本' }}
@@ -1614,67 +1614,6 @@ async function confirmDeleteUser(user) {
     storageBusy.value = false
   }
 }
-
-async function checkAppUpdate(manual = false) {
-  checkingUpdate.value = true
-  try {
-    let latestVer = ''
-    let dlUrl = ''
-    try {
-      const verRes = await api.appVersion()
-      if (verRes?.version) {
-        latestVer = verRes.version
-        dlUrl = verRes.download_url || verRes.github_download_url
-      }
-    } catch {
-      // 尝试 GitHub API
-      const resp = await fetch('https://api.github.com/repos/NoraNekowww/campushub-sync/releases/latest', {
-        headers: { Accept: 'application/vnd.github.v3+json' },
-      })
-      if (resp.ok) {
-        const data = await resp.json()
-        latestVer = (data.tag_name || '').replace(/^v/i, '')
-        const apkAsset = data.assets?.find((a) => a.name === 'CampusHub.apk')
-        dlUrl = apkAsset?.browser_download_url || 'https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk'
-      }
-    }
-
-    if (!latestVer) {
-      if (manual) notify('检查更新失败，请稍后重试', 'warn')
-      return
-    }
-
-    const current = '2.3.6'
-    const parse = (v) => String(v).replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0)
-    const l = parse(latestVer)
-    const c = parse(current)
-    let isNew = false
-    for (let i = 0; i < Math.max(l.length, c.length); i++) {
-      const lv = l[i] || 0
-      const cv = c[i] || 0
-      if (lv > cv) { isNew = true; break }
-      if (lv < cv) { break }
-    }
-
-    if (isNew) {
-      notify(`发现新版本 v${latestVer}，点击前往下载更新`, 'ok', {
-        action: {
-          label: '立即下载',
-          run: () => window.open(dlUrl || 'https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk', '_blank'),
-        },
-        duration: 9000,
-      })
-    } else if (manual) {
-      notify(`当前已是最新版本 (v${current})`, 'ok')
-    }
-  } catch (err) {
-    if (manual) notify('检查更新失败，网络异常', 'warn')
-  } finally {
-    checkingUpdate.value = false
-  }
-}
-
-/* ---------------------------------------------------------------- cache */
 
 async function clearCache() {
   if (!confirm('确定要清空本设备上的所有缓存、登录状态与离线数据吗？清空后将返回登录界面。')) {
