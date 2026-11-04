@@ -120,6 +120,28 @@
             </div>
           </div>
 
+          <!-- 自定义背景图本地上传与直链输入 -->
+          <div class="space-y-2 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+            <div class="flex items-center justify-between">
+              <span class="font-medium text-slate-700 dark:text-slate-300 text-[11px]">从相册/本地选择自定义背景图</span>
+              <button
+                              type="button"
+                              class="btn-secondary !h-7 !py-0 !px-2.5 text-[11px] gap-1 shadow-2xs"
+                              @click="triggerCustomBgUpload()"
+                            >
+                              <Upload :size="12" />
+                              <span>上传本地壁纸</span>
+                            </button>
+            </div>
+            <input
+              ref="customBgFileInput"
+              type="file"
+              accept="image/*"
+              class="hidden"
+              @change="onCustomBgFileSelected"
+            />
+          </div>
+
           <!-- 浅色模式背景图 URL -->
           <div class="space-y-1 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
             <div class="flex items-center justify-between">
@@ -581,7 +603,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.6.8 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.6.9 · 原生极速' }}
         </span>
       </header>
 
@@ -859,6 +881,7 @@ import {
   Square,
   Sun,
   Trash2,
+  Upload,
   UserRound,
   Users,
   Image as ImageIcon,
@@ -924,7 +947,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.6.8'
+  return '2.6.9'
 })
 
 const isAndroidClient = computed(() => {
@@ -1130,6 +1153,76 @@ async function sendCalendarEmail() {
 }
 
 /* ----------------------------------------------------------- background config */
+const customBgFileInput = ref(null)
+
+function triggerCustomBgUpload() {
+  if (customBgFileInput.value) {
+    customBgFileInput.value.click()
+  }
+}
+
+async function onCustomBgFileSelected(event) {
+  const file = event.target?.files?.[0]
+  if (!file) return
+
+  if (!file.type.startsWith('image/')) {
+    notify('请选择有效的图片文件（JPG/PNG/WebP）', 'warn')
+    return
+  }
+
+  try {
+    // 采用离屏 Canvas 对图片进行高质量下采样降维与高效压缩（最大宽度 1920，保证超清同时大幅压缩体积）
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const rawDataUrl = e.target.result
+      const img = new Image()
+      img.onload = () => {
+        const maxW = 1920
+        const maxH = 1920
+        let w = img.width
+        let h = img.height
+
+        if (w > maxW || h > maxH) {
+          if (w / h > maxW / maxH) {
+            h = Math.round((h * maxW) / w)
+            w = maxW
+          } else {
+            w = Math.round((w * maxH) / h)
+            h = maxH
+          }
+        }
+
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, w, h)
+
+        // 导出压缩后的 JPEG DataURL
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88)
+        bgForm.enabled = true
+        bgForm.category = 'custom'
+        bgForm.lightUrl = compressedDataUrl
+        bgForm.darkUrl = compressedDataUrl
+        bgForm.wallpaperTitle = file.name.replace(/\.[^/.]+$/, '') || '自定义本地壁纸'
+
+        updateBgConfig()
+        notify('已成功应用自定义本地壁纸！', 'ok')
+
+        // 重置 input 以便下次再次选择同一张图也能触发 change
+        if (customBgFileInput.value) customBgFileInput.value.value = ''
+      }
+      img.onerror = () => {
+        notify('图片解析失败，请尝试其他图片', 'danger')
+      }
+      img.src = rawDataUrl
+    }
+    reader.readAsDataURL(file)
+  } catch (err) {
+    console.error('上传自定义背景图失败:', err)
+    notify('读取图片失败，请检查文件权限', 'danger')
+  }
+}
 const wallpaperCategories = WALLPAPER_CATEGORIES
 
 const bgForm = reactive({
@@ -1203,6 +1296,7 @@ function resetBgConfig() {
   bgForm.wallpaperTitle = ''
   bgForm.opacity = 35
   bgForm.blur = 0
+  clearBlurredCache()
   updateBgConfig()
   notify('已重置并清空背景图', 'ok')
 }

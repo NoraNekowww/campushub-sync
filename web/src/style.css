@@ -181,6 +181,46 @@ html.has-custom-bg {
     0 14px 38px -6px rgba(0, 0, 0, 0.55);
 }
 
+/* 当预制高斯模糊图层就绪时 (has-preblurred-bg)：
+   玻璃卡片底色直接将 --preblurred-bg-url 作为固定附着背景（background-attachment: fixed），
+   只在卡片几何区域下采样预制好的模糊层，其他页面区域完全使用未模糊原图，
+   彻底规避每帧反复计算 CSS backdrop-filter 的巨大 GPU/CPU 算力消耗！ */
+html.has-preblurred-bg .card,
+html.has-preblurred-bg article[data-testid="event-card"],
+html.has-preblurred-bg [data-testid="class-block"]:not(.border-amber-300\/80):not(.is-important) {
+  background-image: var(--preblurred-bg-url) !important;
+  background-attachment: fixed !important;
+  background-size: cover !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* 浅色模式下预制磨砂图层之上的微漫透射与菲涅尔白高光微倒角 */
+html.has-preblurred-bg:not(.dark) .card,
+html.has-preblurred-bg:not(.dark) article[data-testid="event-card"] {
+  background-color: rgba(255, 255, 255, 0.65) !important;
+  background-blend-mode: overlay !important;
+}
+
+/* 深色模式下预制磨砂图层之上的微深色浸润与暗晶倒角 */
+html.has-preblurred-bg.dark .card,
+html.has-preblurred-bg.dark article[data-testid="event-card"] {
+  background-color: rgba(15, 23, 42, 0.70) !important;
+  background-blend-mode: multiply !important;
+}
+
+/* 课程表卡片叠加 30% 主题色透光漫射与预制模糊层融合 */
+html.has-preblurred-bg:not(.dark) [data-testid="class-block"]:not(.border-amber-300\/80):not(.is-important) {
+  background-color: rgba(var(--brand-500), 0.30) !important;
+  background-blend-mode: soft-light !important;
+}
+html.has-preblurred-bg.dark [data-testid="class-block"]:not(.border-amber-300\/80):not(.is-important) {
+  background-color: rgba(var(--brand-500), 0.35) !important;
+  background-blend-mode: multiply !important;
+}
+
 /* 顶栏物理磨砂通透悬浮梁 */
 html.frosted-glass-active header {
   background-color: var(--phys-glass-bg-light) !important;
