@@ -77,13 +77,13 @@
           </label>
         </div>
 
-        <!-- DDL 模式下：截止时间与开启重复任务并排于同一横行 -->
-        <div v-if="form.kind === 'deadline' && !isEdit" class="grid grid-cols-2 gap-2">
+        <!-- DDL 模式下：仅展示截止时间与开启重复（DDL 没有持续时长，彻底移除时长选择） -->
+        <div v-if="form.kind === 'deadline'" class="grid grid-cols-2 gap-2">
           <label class="block space-y-1 text-xs">
             <span class="text-slate-500 dark:text-slate-400">截止时间</span>
             <input v-model="form.start" type="time" class="input" required />
           </label>
-          <div class="flex flex-col justify-end">
+          <div v-if="!isEdit" class="flex flex-col justify-end">
             <label class="flex h-[38px] cursor-pointer items-center gap-2 rounded-lg border border-slate-200/80 bg-slate-50/70 px-2.5 text-xs font-medium dark:border-slate-800 dark:bg-slate-800/40">
               <input
                 v-model="form.recurring"
@@ -96,13 +96,13 @@
           </div>
         </div>
 
-        <!-- 课程/活动模式下（或编辑模式下）：开始时间与活动时长并排 -->
+        <!-- 课程/时间段活动模式下：开始时间与活动时长并排 -->
         <div v-else class="grid grid-cols-2 gap-2">
           <label class="block space-y-1 text-xs">
-            <span class="text-slate-500 dark:text-slate-400">{{ form.kind === 'deadline' ? '截止时间' : '开始时间' }}</span>
+            <span class="text-slate-500 dark:text-slate-400">开始时间</span>
             <input v-model="form.start" type="time" class="input" required />
           </label>
-          <label v-if="form.kind === 'class' || isEdit" class="block space-y-1 text-xs">
+          <label class="block space-y-1 text-xs">
             <span class="text-slate-500 dark:text-slate-400">活动时长</span>
             <select
               v-model.number="form.duration"

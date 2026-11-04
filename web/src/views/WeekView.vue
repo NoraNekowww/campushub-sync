@@ -9,9 +9,9 @@
       >
         <div class="flex flex-col min-w-fit">
           <!-- day header -->
-          <div class="grid border-b border-slate-100 dark:border-slate-800" :style="gridStyle">
+          <div class="grid border-b border-white/60 dark:border-white/10" :style="gridStyle">
             <div
-              class="sticky left-0 z-10 bg-white px-1 py-2 text-center text-[9px] text-slate-300 dark:bg-slate-900 dark:text-slate-600 select-none"
+              class="sticky left-0 z-10 bg-white/75 backdrop-blur-xl px-1 py-2 text-center text-[9px] text-slate-400 dark:bg-slate-900/75 dark:text-slate-500 select-none border-r border-white/60 dark:border-white/10"
             >
               时间
             </div>
@@ -38,7 +38,7 @@
           <div class="grid" :style="gridStyle">
             <!-- sticky so the hour labels stay visible while the week scrolls -->
             <div
-              class="sticky left-0 z-10 bg-white dark:bg-slate-900"
+              class="sticky left-0 z-10 bg-white/75 backdrop-blur-xl border-r border-white/60 dark:bg-slate-900/75 dark:border-white/10"
               :style="{ height: `${GRID_HEIGHT}px` }"
             >
               <div
@@ -186,31 +186,8 @@
     <!-- 格子里点击弹放大详情卡看全部（老师、周次、节次、备注、地点等） -->
     <ClassDetail :event="selected" @close="selected = null" />
 
-    <section v-if="deadlines.length" data-testid="week-deadlines-section" class="space-y-2">
-      <div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        <ListTodo :size="13" />
-        <span>7 天内日程</span>
-        <span
-          v-if="overdueCount > 0"
-          class="rounded bg-rose-100 px-1.5 py-0.2 text-[10px] font-semibold text-rose-600 dark:bg-rose-950/40 dark:text-rose-300"
-        >
-          含 {{ overdueCount }} 项延期
-        </span>
-        <span class="ml-auto text-[11px] font-normal normal-case text-slate-400">
-          共 {{ deadlines.length }} 条
-        </span>
-      </div>
-      <EventCard
-        v-for="event in deadlines"
-        :key="`ddl-${event.id}`"
-        :event="event"
-        @toggle="toggleCompleted"
-        @remove="removeEvent"
-      />
-    </section>
-
     <EmptyState
-      v-if="!loading && !classes.length && !deadlines.length"
+      v-if="!loading && !classes.length"
       message="这一周没有安排，切换到其他周看看。"
     />
   </div>

@@ -404,6 +404,14 @@ async def update_event(
     if owned is None or owned.user_id != user.id:
         raise HTTPException(status_code=404, detail="event not found")
 
+    # 客户端防倒流与 Last-Write-Wins 冲突裁决：若客户端传了旧版本时间戳且服务器已有更新记录，则拒绝被旧数据冲刷
+    if payload.client_updated_at and owned.updated_at:
+        client_ts = as_aware(payload.client_updated_at)
+        server_ts = as_aware(owned.updated_at)
+        # 若客户端修改时间比当前服务端的还旧（早于 1 秒以上），不接受旧改动覆盖
+        if client_ts < server_ts - timedelta(seconds=1):
+            return EventOut.from_event(owned, tz=get_tz())
+
     start = as_stored(payload.start_time, assume=get_tz()) if payload.start_time else None
     end = as_stored(payload.end_time, assume=get_tz()) if payload.end_time else None
     effective_start = start or as_aware(owned.start_time)

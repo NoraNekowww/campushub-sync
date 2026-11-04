@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-4 px-4">
-    <!-- 线性列表模式切换胶囊：仅 DDL vs 含课表（全部日程） -->
+    <!-- 线性列表模式切换胶囊：仅 DDL vs 仅日程（DDL+时间段日程） vs 含课表（全部） -->
     <div class="flex items-center justify-between pt-1">
       <div
         class="inline-flex rounded-xl p-0.5 bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 text-xs shadow-2xs backdrop-blur-md"
@@ -24,6 +24,20 @@
         <button
           type="button"
           role="tab"
+          :aria-selected="agendaMode === 'schedule'"
+          class="px-2.5 py-1 rounded-lg font-medium transition-all"
+          :class="
+            agendaMode === 'schedule'
+              ? 'bg-white text-brand-600 shadow-xs dark:bg-slate-700 dark:text-brand-300'
+              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+          "
+          @click="setAgendaMode('schedule')"
+        >
+          仅日程
+        </button>
+        <button
+          type="button"
+          role="tab"
           :aria-selected="agendaMode === 'all'"
           class="px-2.5 py-1 rounded-lg font-medium transition-all"
           :class="
@@ -38,7 +52,7 @@
       </div>
 
       <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-        {{ visible.length }} 条{{ agendaMode === 'ddl' ? '待办' : '日程' }}
+        {{ visible.length }} 条{{ agendaMode === 'ddl' ? '待办' : agendaMode === 'schedule' ? '日程' : '全部安排' }}
       </span>
     </div>
 
@@ -194,11 +208,15 @@ function isRangeTask(event) {
   return false
 }
 
-// 线性列表展示逻辑：支持仅 DDL 模式 vs 含课表全部日程模式
+// 线性列表展示逻辑：支持仅 DDL 模式 vs 仅日程模式（DDL+时间段日程，不含课表） vs 含课表全部模式
 const visible = computed(() => {
   const list = filterEvents()
   if (agendaMode.value === 'ddl') {
     return list.filter((event) => event.is_deadline && !isRangeTask(event))
+  }
+  if (agendaMode.value === 'schedule') {
+    // 仅日程：包含待办 DDL 以及用户自定义的时间段日程，过滤掉教务课表 (tju_schedule)
+    return list.filter((event) => event.source !== 'tju_schedule')
   }
   return list
 })

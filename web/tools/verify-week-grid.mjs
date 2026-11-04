@@ -406,13 +406,12 @@ async function main() {
   const lone = grid.filter((item) => item.text.includes('交英语作业'))
   check('不重叠的照旧占满整列', lone.length === 1 && lone[0].width > 50, JSON.stringify(lone))
 
-  // ---------------------------------------------------------- 课表下方「7 天内日程」
+  // ---------------------------------------------------------- 课表下方重复日程区彻底移除
   const ddlSectionText = await page.evaluate(() => {
     const section = document.querySelector('[data-testid="week-deadlines-section"]')
     return section ? section.textContent : ''
   })
-  check('课表下方日程标题为「7 天内日程」', ddlSectionText.includes('7 天内日程'))
-  check('课表下方不显示超过 7 天的远期 DDL', !ddlSectionText.includes('期末大作业(远期)'))
+  check('课表下方重复日程区已彻底移除', ddlSectionText === '')
 
   // 列只有 51px 宽，时间串（"10:20-12:00"）一不小心就被裁掉尾巴 —— 用 DOM 的
   // scrollWidth/clientWidth 客观判一次，别靠肉眼看截图。

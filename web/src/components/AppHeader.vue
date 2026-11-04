@@ -1,7 +1,7 @@
 <template>
   <header
-    class="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95
-           dark:border-slate-800/80 dark:bg-slate-950/95 [transform:translateZ(0)]"
+    class="sticky top-0 z-20 border-b border-white/60 bg-white/70 backdrop-blur-xl
+           dark:border-white/10 dark:bg-slate-950/70 [transform:translateZ(0)]"
   >
     <!-- 搜索模式：整条顶部栏让给搜索，标题 / 按钮一起让位 -->
     <div v-if="searching" class="mx-auto flex max-w-3xl items-center gap-2 px-4 py-1">

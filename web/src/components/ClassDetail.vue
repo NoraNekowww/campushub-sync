@@ -2,12 +2,14 @@
   <Teleport to="body">
     <div
       v-if="event"
-      class="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 backdrop-blur-sm sm:items-center sm:p-4"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md animate-fade-in"
       data-testid="class-detail"
       @click.self="close"
     >
       <div
-        class="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-4 shadow-2xl dark:bg-slate-900 sm:rounded-2xl"
+        class="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-3xl p-5 shadow-2xl transition-all
+               border border-white/60 bg-white/80 dark:border-white/10 dark:bg-slate-900/85
+               backdrop-blur-2xl [transform:translateZ(0)]"
       >
         <header class="flex items-start gap-2">
           <div class="min-w-0 flex-1">

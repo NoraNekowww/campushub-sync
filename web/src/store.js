@@ -627,9 +627,19 @@ export async function refresh({ silent = false } = {}) {
 
     // 1. 过滤掉本地已显式删除的事件（墓碑机制）
     // 2. 强保护：若本地有尚未被服务器覆盖确认的完成状态（如刚刚划掉的任务），坚决以本地操作为准，彻底杜绝回光返照
+    // 3. 冲突解决：客户端后改动优先 (Last-Write-Wins)，若本地事件的修改时间比服务器返回的更新，则保留本地最新数据
+    const localEventMap = new Map((state.events || []).map((e) => [e.id, e]))
     state.events = rawItems
       .filter((it) => !deletedMap[it.id])
       .map((it) => {
+        const local = localEventMap.get(it.id)
+        if (local && local.client_updated_at && it.updated_at) {
+          const localTs = new Date(local.client_updated_at).getTime()
+          const serverTs = new Date(it.updated_at).getTime()
+          if (localTs > serverTs + 1000) {
+            return local
+          }
+        }
         const override = completedOverrides[it.id]
         if (override && override.status) {
           return { ...it, status: override.status }
@@ -860,27 +870,31 @@ export function closeCustomEditor() {
 export async function saveCustomEvent(payload) {
   const existing = state.customEditor.event
   const isMobile = isMobileNativeApp()
+  const nowIso = new Date().toISOString()
+  const payloadWithMeta = { ...payload, client_updated_at: nowIso }
 
   // 1. 移动端秒存：纯本地立即生成或更新内存与闪存，无需等待服务器返回
   if (isMobile) {
     let localItem = null
     if (existing) {
-      localItem = { ...existing, ...payload, updated_at: new Date().toISOString() }
+      localItem = { ...existing, ...payload, updated_at: nowIso, client_updated_at: nowIso }
       const idx = state.events.findIndex((e) => e.id === existing.id)
       if (idx >= 0) state.events.splice(idx, 1, localItem)
-      appendSyncQueue({ type: 'patch', id: existing.id, payload })
+      appendSyncQueue({ type: 'patch', id: existing.id, payload: payloadWithMeta })
     } else {
       const tempId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
       localItem = {
         id: tempId,
         source: 'custom',
         status: 'pending',
-        created_at: new Date().toISOString(),
+        created_at: nowIso,
+        updated_at: nowIso,
+        client_updated_at: nowIso,
         ...payload,
       }
       state.events.unshift(localItem)
       state.total += 1
-      appendSyncQueue({ type: 'create', payload })
+      appendSyncQueue({ type: 'create', payload: payloadWithMeta })
     }
     // 立即写回本地永久缓存
     saveEventsCache(state.events, state.total)
@@ -897,8 +911,8 @@ export async function saveCustomEvent(payload) {
   // 2. 网页端维持向服务器即时请求
   try {
     const saved = existing
-      ? await api.patchEvent(existing.id, payload)
-      : await api.createEvent(payload)
+      ? await api.patchEvent(existing.id, payloadWithMeta)
+      : await api.createEvent(payloadWithMeta)
     closeCustomEditor()
     notify(existing ? '日程已更新' : '日程已添加', 'ok')
     await refresh({ silent: true })

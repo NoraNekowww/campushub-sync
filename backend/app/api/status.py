@@ -28,16 +28,19 @@ _STARTED_AT = time.time()
 @router.get("/version", summary="Version check for in-app update notification")
 async def app_version() -> dict:
     return {
-        "version": "2.7.2",
-        "tag": "v2.7.2",
-        "title": "CampusHub Android v2.7.2",
+        "version": "2.7.3",
+        "tag": "v2.7.3",
+        "title": "CampusHub Android v2.7.3",
         "download_url": "https://nzlab.online/schedule/CampusHub.apk",
         "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
         "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
         "features": [
-            "课表磨砂玻璃透明度再提升：白雾降至 0.08，模糊度升至 24px，消除塑料感呈现纯净通透磨砂",
-            "消除文字下方矩形底框：清除文字四周晕影与方框，文字干净锐利悬浮在玻璃卡片上",
-            "排查课表体适能等课程样式继承，统一全课程与自定义日程的高透微晶质感",
+            "日程后改动优先(Last-Write-Wins)：打上 client_updated_at 时间戳标签并本地强保护，防多次上传冲突与数据倒流",
+            "统一本地单数据源缓存：待办与日程无缝互通显示在课表网格",
+            "课表移除下方重复的 7 天内日程区，视图清爽紧凑",
+            "线性列表支持「仅 DDL / 仅日程 / 含课表」三段式模式自由切换",
+            "DDL 编辑表单彻底移除时长选择器，杜绝无意义时间段配置",
+            "全站页面视觉玻璃化统一：顶底栏高透折射、左侧时间轴玻璃化、课表详情改为大号居中水晶卡片",
         ],
     }
 

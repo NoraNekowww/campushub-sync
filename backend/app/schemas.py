@@ -205,6 +205,8 @@ class EventPatchIn(BaseModel):
     apply_scope: Optional[str] = "single"
     #: 云端附加文件列表（每个不大于 100MB）
     attachments: Optional[list[dict[str, Any]]] = None
+    #: 客户端修改时间戳标签（用于防数据倒流与 Last-Write-Wins 冲突裁决）
+    client_updated_at: Optional[datetime] = None
 
 
 class MsTaskIn(BaseModel):
