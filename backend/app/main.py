@@ -148,16 +148,16 @@ def create_app() -> FastAPI:
     @app.get("/api/version", summary="Version check for in-app update notification")
     async def app_version() -> dict:
         return {
-            "version": "2.7.1",
-            "tag": "v2.7.1",
-            "title": "CampusHub Android v2.7.1",
+            "version": "2.7.2",
+            "tag": "v2.7.2",
+            "title": "CampusHub Android v2.7.2",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
             "features": [
-                "高透微晶磨砂玻璃重构：恢复卡片高透光率与 20px 硬件高斯模糊，尽显通透物理磨砂质感",
-                "文字动态反色与立体微轮廓保护：高透底色下自动强化文字对比度与微投影，无论何种背景文字均清晰锐利",
-                "自定义日程全面支持高透磨砂与动态文字保护",
+                "课表磨砂玻璃透明度再提升：白雾降至 0.08，模糊度升至 24px，消除塑料感呈现纯净通透磨砂",
+                "消除文字下方矩形底框：清除文字四周晕影与方框，文字干净锐利悬浮在玻璃卡片上",
+                "排查课表体适能等课程样式继承，统一全课程与自定义日程的高透微晶质感",
             ],
         }
 
