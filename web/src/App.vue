@@ -16,18 +16,12 @@
           crossorigin="anonymous"
           loading="eager"
         />
-        <!-- 预制高斯模糊专属图层：仅在卡片磨砂玻璃采样通道中激活，全页面底图保持未模糊高精原图以节省算力 -->
-        <div
-          v-if="preblurredUrl"
-          class="preblurred-bg-store-element hidden"
-          :data-src="preblurredUrl"
-        />
         <!-- 物理微遮罩层：消除浅色过度泛白，保证深浅色模式下课表文字与排版的高对比度清晰度 -->
         <div
           class="absolute inset-0 transition-colors duration-500"
           :class="state.isDarkTheme ? 'bg-slate-950/35' : 'bg-slate-900/5'"
         />
-      </div>
+        </div>
 
     <AuthGate v-if="showGate" />
 
@@ -78,7 +72,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted } from 'vue'
 import AppHeader from './components/AppHeader.vue'
 import AuthGate from './components/AuthGate.vue'
 import BottomNav from './components/BottomNav.vue'
@@ -90,7 +84,6 @@ import EventEditor from './components/EventEditor.vue'
 import HistoryView from './views/HistoryView.vue'
 import SettingsView from './views/SettingsView.vue'
 import WeekView from './views/WeekView.vue'
-import { generatePreblurredImage } from './utils/backgroundBlur'
 import {
   applyBackgroundClass,
   autoRefreshTju,
@@ -116,25 +109,6 @@ const activeBgUrl = computed(() => {
   }
   return cfg.lightUrl || cfg.darkUrl || ''
 })
-
-const preblurredUrl = ref('')
-
-watch(
-  activeBgUrl,
-  async (newUrl) => {
-    if (!newUrl) {
-      preblurredUrl.value = ''
-      return
-    }
-    try {
-      const blurred = await generatePreblurredImage(newUrl, 24)
-      preblurredUrl.value = blurred
-    } catch (e) {
-      preblurredUrl.value = ''
-    }
-  },
-  { immediate: true },
-)
 
 const bgLayerStyle = computed(() => {
   const cfg = state.backgroundConfig || {}

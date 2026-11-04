@@ -154,9 +154,9 @@ html.has-custom-bg {
   /* 纯净高斯模糊核：全平台硬件加速，杜绝复合滤镜导致的 GPU 着色器崩溃丢弃 */
   --phys-glass-blur: blur(24px);
 
-  /* 物理漫透射亚克力雾化基底：清澈自然，彻底杜绝整体过度泛白 */
-  --phys-glass-bg-light: rgba(255, 255, 255, 0.44);
-  --phys-glass-bg-dark: rgba(15, 23, 42, 0.55);
+  /* 物理漫透射亚克力雾化基底：昼间大幅提升白色不透明度至 0.88，消灭过度泛白发虚，晶莹通透而文字对比度极高 */
+  --phys-glass-bg-light: rgba(255, 255, 255, 0.88);
+  --phys-glass-bg-dark: rgba(15, 23, 42, 0.78);
 
   /* 菲涅尔切线边界（Fresnel Rim）：微米级晶体高光边界 */
   --phys-glass-border-light: rgba(255, 255, 255, 0.50);
@@ -179,46 +179,6 @@ html.has-custom-bg {
     inset 0 0 20px 0 rgba(255, 255, 255, 0.03),
     0 1px 2px 0 rgba(0, 0, 0, 0.35),
     0 14px 38px -6px rgba(0, 0, 0, 0.55);
-}
-
-/* 当预制高斯模糊图层就绪时 (has-preblurred-bg)：
-   玻璃卡片底色直接将 --preblurred-bg-url 作为固定附着背景（background-attachment: fixed），
-   只在卡片几何区域下采样预制好的模糊层，其他页面区域完全使用未模糊原图，
-   彻底规避每帧反复计算 CSS backdrop-filter 的巨大 GPU/CPU 算力消耗！ */
-html.has-preblurred-bg .card,
-html.has-preblurred-bg article[data-testid="event-card"],
-html.has-preblurred-bg [data-testid="class-block"]:not(.border-amber-300\/80):not(.is-important) {
-  background-image: var(--preblurred-bg-url) !important;
-  background-attachment: fixed !important;
-  background-size: cover !important;
-  background-position: center center !important;
-  background-repeat: no-repeat !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
-/* 浅色模式下预制磨砂图层之上的微漫透射与菲涅尔白高光微倒角 */
-html.has-preblurred-bg:not(.dark) .card,
-html.has-preblurred-bg:not(.dark) article[data-testid="event-card"] {
-  background-color: rgba(255, 255, 255, 0.65) !important;
-  background-blend-mode: overlay !important;
-}
-
-/* 深色模式下预制磨砂图层之上的微深色浸润与暗晶倒角 */
-html.has-preblurred-bg.dark .card,
-html.has-preblurred-bg.dark article[data-testid="event-card"] {
-  background-color: rgba(15, 23, 42, 0.70) !important;
-  background-blend-mode: multiply !important;
-}
-
-/* 课程表卡片叠加 30% 主题色透光漫射与预制模糊层融合 */
-html.has-preblurred-bg:not(.dark) [data-testid="class-block"]:not(.border-amber-300\/80):not(.is-important) {
-  background-color: rgba(var(--brand-500), 0.30) !important;
-  background-blend-mode: soft-light !important;
-}
-html.has-preblurred-bg.dark [data-testid="class-block"]:not(.border-amber-300\/80):not(.is-important) {
-  background-color: rgba(var(--brand-500), 0.35) !important;
-  background-blend-mode: multiply !important;
 }
 
 /* 顶栏物理磨砂通透悬浮梁 */
@@ -278,15 +238,17 @@ html.has-custom-bg .swipe-pane {
   background-color: transparent !important;
 }
 
-/* 周课表课程卡片 (class-block) 纯物理光学高级磨砂玻璃材质：
-   1. 带 30% 主题色透光漫射 (30% Subsurface Transmission)，绝无深色黑框；
+/* 周课表普通课程卡片 (class-block) 纯物理光学高级磨砂玻璃材质：
+   1. 昼间增加温润白色不透明基底（rgba(255,255,255,0.78)）融合 30% 主题色透光漫射，与周围卡片质感严密统一，彻底消除过于透明泛白；
    2. 菲涅尔物理高光反射微倒角白边 (Fresnel Rim)；
    3. 顶部迎光面镜面反射 (Specular Rim)；
    4. 硬件高斯模糊 (Backdrop Blur)。无论任何背景，一律呈现水晶磨砂质感 */
 [data-testid="class-block"]:not(.border-amber-300\/80):not(.is-important) {
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
-  background: linear-gradient(135deg, rgba(var(--brand-400), 0.32) 0%, rgba(var(--brand-500), 0.25) 100%) !important;
+  background:
+    linear-gradient(135deg, rgba(var(--brand-400), 0.32) 0%, rgba(var(--brand-500), 0.25) 100%),
+    rgba(255, 255, 255, 0.78) !important;
   border: 1px solid rgba(255, 255, 255, 0.85) !important;
   box-shadow:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
@@ -300,7 +262,9 @@ html.has-custom-bg .swipe-pane {
     0 4px 16px -2px rgba(var(--brand-500), 0.35) !important;
 }
 html.dark [data-testid="class-block"]:not(.border-amber-300\/80):not(.is-important) {
-  background: linear-gradient(135deg, rgba(var(--brand-500), 0.32) 0%, rgba(var(--brand-600), 0.28) 100%) !important;
+  background:
+    linear-gradient(135deg, rgba(var(--brand-500), 0.32) 0%, rgba(var(--brand-600), 0.28) 100%),
+    rgba(15, 23, 42, 0.75) !important;
   border: 1px solid rgba(255, 255, 255, 0.16) !important;
   box-shadow:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.20),
@@ -311,6 +275,32 @@ html.dark [data-testid="class-block"]:not(.border-amber-300\/80):not(.is-importa
   box-shadow:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.28),
     0 4px 16px -2px rgba(var(--brand-500), 0.40) !important;
+}
+
+/* 课程表自定义日程 / 待办 / 实验等带时段卡片 (border-amber-300/80)：
+   同样应用完整的硬件高斯模糊 (Backdrop Blur: 16px) 与物理磨砂质感 */
+[data-testid="class-block"].border-amber-300\/80:not(.is-important) {
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  background:
+    linear-gradient(135deg, rgba(251, 191, 36, 0.28) 0%, rgba(245, 158, 11, 0.18) 100%),
+    rgba(255, 255, 255, 0.82) !important;
+  border: 1px solid rgba(245, 158, 11, 0.50) !important;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.90),
+    0 3px 12px -2px rgba(245, 158, 11, 0.12) !important;
+  color: #78350f !important;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
+}
+html.dark [data-testid="class-block"].border-amber-300\/80:not(.is-important) {
+  background:
+    linear-gradient(135deg, rgba(180, 83, 9, 0.30) 0%, rgba(146, 64, 14, 0.22) 100%),
+    rgba(24, 24, 27, 0.75) !important;
+  border: 1px solid rgba(245, 158, 11, 0.35) !important;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.15),
+    0 4px 14px -2px rgba(0, 0, 0, 0.35) !important;
+  color: #fef3c7 !important;
 }
 
 /* 重点课程 / 重点日程块 (is-important)：变色为高贵璀璨的琥珀暖金水晶玻璃卡片 */

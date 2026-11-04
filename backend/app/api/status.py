@@ -28,18 +28,18 @@ _STARTED_AT = time.time()
 @router.get("/version", summary="Version check for in-app update notification")
 async def app_version() -> dict:
     return {
-        "version": "2.6.9",
-        "tag": "v2.6.9",
-        "title": "CampusHub Android v2.6.9",
+        "version": "2.7.0",
+        "tag": "v2.7.0",
+        "title": "CampusHub Android v2.7.0",
         "download_url": "https://nzlab.online/schedule/CampusHub.apk",
         "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
         "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
         "features": [
+            "昼间模式课表卡片质感升级：提升温润白色不透明度（0.78~0.88），消除过度透光泛白，统一白透磨砂材质",
+            "自定义日程与待办全面应用硬件高斯模糊（16px）与晶体高光微倒角磨砂效果",
+            "修复动态滑动视差：回归原生动态视口采样，彻底解决滑动后卡片与背景脱节或固定卡顿的问题",
             "支持用户自定义背景图（本地相册上传智能压缩与直链配置）",
-            "离屏 Canvas 预制模糊图层：仅在磨砂玻璃卡片下采样预制层，全屏维持高清底图并大幅节省 GPU/CPU 算力",
             "课表课程卡片过去时态可视化：已过去与正在上一半的部分动态灰阶覆盖并加入 45° 优雅斜纹",
-            "课程表上的课程玻璃卡片带 30% 主题色透光漫射与无黑框物理高光边缘",
-            "维持左滑日程删除，新增右滑标记重点并在课程表与线性列表联动变色",
         ],
     }
 
