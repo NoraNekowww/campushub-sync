@@ -603,7 +603,7 @@
         <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
         <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.7.0 · 原生极速' }}
+          {{ isAndroidClient ? '已就绪' : 'v2.7.1 · 原生极速' }}
         </span>
       </header>
 
@@ -947,7 +947,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.7.0'
+  return '2.7.1'
 })
 
 const isAndroidClient = computed(() => {

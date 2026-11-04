@@ -120,18 +120,18 @@
                   :aria-pressed="selected?.id === item.event.id"
                   @click="selected = selected?.id === item.event.id ? null : item.event"
                 >
-                  <span class="font-semibold text-[9px] leading-[10px] line-clamp-2">
-                    <span v-if="isImportantEvent(item.event)" class="text-amber-500 font-bold mr-0.5">★</span>
+                  <span class="font-bold text-[9.5px] leading-[10.5px] line-clamp-2 select-none tracking-tight">
+                    <span v-if="isImportantEvent(item.event)" class="text-amber-500 font-extrabold mr-0.5">★</span>
                     {{ item.event.title }}
                   </span>
-                  <span class="block whitespace-nowrap text-[9px] leading-[11px] font-mono tracking-tighter opacity-80">
+                  <span class="block whitespace-nowrap text-[9px] leading-[11px] font-mono font-semibold tracking-tighter opacity-90">
                     {{ timeLabel(item.event.start_time) }}-{{ timeLabel(item.event.end_time) }}
                   </span>
                   <!-- 卡片上加上简短地点（用户要求：不加红色针头，省空间） -->
                   <span
                     v-if="item.event.location"
                     data-testid="class-block-location"
-                    class="block truncate text-[8.5px] leading-[10px] font-medium text-brand-700/90 dark:text-brand-300/90"
+                    class="block truncate text-[8.5px] leading-[10px] font-semibold text-brand-700 dark:text-brand-300"
                     :title="item.event.location"
                   >
                     {{ formatShortLocation(item.event.location) }}
