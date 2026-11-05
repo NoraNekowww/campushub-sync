@@ -144,33 +144,35 @@
                   />
                 </button>
 
-                <!-- 没有结束时间（DDL）：精准定位在时间轴上，优先对齐线，字绝不挤占线的高低 -->
+                <!-- 没有结束时间（DDL / 单时刻待办）：实线绝对精准对齐物理时间刻度线，文字作为浮动标签展示 -->
                 <button
                   v-else
                   data-testid="line-event"
                   :data-day="day.key"
-                  class="group absolute inset-x-0 z-10 -translate-y-1/2 px-0 py-1.5 text-left"
+                  class="group absolute inset-x-0 z-20 text-left pointer-events-auto h-0"
                   :class="item.hasConflict ? 'animate-breathe-alternate' : ''"
                   :style="lineStyle(item)"
                   :aria-pressed="selected?.id === item.event.id"
                   @click="selected = selected?.id === item.event.id ? null : item.event"
                 >
-                  <span
-                    class="absolute inset-x-0 top-1/2 -translate-y-1/2 block h-0 border-t-2 border-dashed pointer-events-none"
+                  <!-- 物理时间绝对精准对齐实线：高度 2px 实线，中心线 100% 居中在物理时间刻度上，分毫不差 -->
+                  <div
+                    class="pointer-events-none absolute inset-x-0 top-0 -translate-y-1/2 h-[2px] shadow-xs"
                     :class="
                       item.event.is_deadline
-                        ? 'border-amber-400 dark:border-amber-400/80'
-                        : 'border-sky-400 dark:border-sky-400/80'
+                        ? 'bg-amber-500 dark:bg-amber-400'
+                        : 'bg-sky-500 dark:bg-sky-400'
                     "
                   />
+                  <!-- 文字胶囊标签：贴在实线上方（靠顶时在下方），纯标签说明，绝不干扰或偏移实线的垂直时间对齐位置 -->
                   <span
-                    class="pointer-events-none absolute left-0 max-w-full truncate rounded-sm bg-white/95 px-0.5
-                           text-[9px] leading-[11px] font-medium shadow-2xs backdrop-blur-xs"
+                    class="pointer-events-none absolute left-0 max-w-full truncate rounded px-1
+                           text-[9px] leading-[13px] font-semibold shadow-xs backdrop-blur-md select-none"
                     :class="[
-                      item.start <= 8 * 60 + 15 ? 'top-1.5' : 'bottom-1.5',
+                      item.start <= 8 * 60 + 20 ? 'top-1' : '-top-4',
                       item.event.is_deadline
-                        ? 'text-amber-700 dark:bg-slate-900/90 dark:text-amber-300'
-                        : 'text-sky-700 dark:bg-slate-900/90 dark:text-sky-300'
+                        ? 'bg-amber-50/95 text-amber-900 border border-amber-300/80 dark:bg-slate-900/95 dark:text-amber-200 dark:border-amber-400/50'
+                        : 'bg-sky-50/95 text-sky-900 border border-sky-300/80 dark:bg-slate-900/95 dark:text-sky-200 dark:border-sky-400/50'
                     ]"
                   >
                     {{ item.event.title }}

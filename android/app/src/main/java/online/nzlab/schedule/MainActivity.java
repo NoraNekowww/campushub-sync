@@ -104,6 +104,8 @@ public class MainActivity extends AppCompatActivity {
         settings.setDatabaseEnabled(true);
         // 采用标准缓存策略（静态资源由本地 WebViewAssetLoader 闪存 0 延迟秒开，API 动态请求走网络并遵循 HTTP 缓存协议）
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        // 彻底清空过往旧版本残留的 WebView HTTP 磁盘脏缓存，确保动态 API 实时穿透
+        webView.clearCache(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         // 允许加载跨域网络图片和各种图床
         settings.setBlockNetworkImage(false);
@@ -410,7 +412,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
             } catch (Exception e) {
-                return "2.7.7";
+                return "2.7.8";
             }
         }
 
