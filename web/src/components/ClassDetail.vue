@@ -14,17 +14,27 @@
         <header class="flex items-start gap-2">
           <div class="min-w-0 flex-1">
             <!-- 格子里只能挤下一行标题，这里放开：点一下就是为了看清楚 -->
-            <p class="text-lg font-semibold leading-snug" data-testid="class-detail-title">
+            <p class="text-xl font-bold leading-snug text-slate-900 dark:text-white" data-testid="class-detail-title">
               {{ event.title }}
             </p>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400" data-testid="class-detail-time">
-              {{ timeRange }}
-            </p>
-            <p v-if="event.location" class="mt-0.5 text-xs text-slate-400">
-              {{ event.location }}
-            </p>
+
+            <!-- 时间展示：字号放大，清晰醒目 -->
+            <div class="mt-2.5 flex items-center gap-2 text-[15px] font-semibold text-slate-700 dark:text-slate-200" data-testid="class-detail-time">
+              <Clock :size="16" class="shrink-0 text-brand-600 dark:text-brand-400" />
+              <span>{{ timeRange }}</span>
+            </div>
+
+            <!-- 地点展示：更大字号并带高亮底衬，一眼看清教室与校区 -->
+            <div
+              v-if="event.location"
+              class="mt-2 flex items-center gap-2 rounded-xl bg-brand-50/80 px-3 py-2 text-sm font-semibold text-brand-800 dark:bg-brand-950/40 dark:text-brand-200 border border-brand-200/60 dark:border-brand-500/20"
+              data-testid="class-detail-location"
+            >
+              <MapPin :size="16" class="shrink-0 text-brand-600 dark:text-brand-400" />
+              <span class="break-words">{{ event.location }}</span>
+            </div>
           </div>
-          <button class="btn-ghost !px-2" title="关闭" data-testid="class-detail-close" @click="close">
+          <button class="btn-ghost !px-2 shrink-0" title="关闭" data-testid="class-detail-close" @click="close">
             <X :size="16" />
           </button>
         </header>
@@ -153,7 +163,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { Clock, FileText, Paperclip, Pencil, Star, X } from 'lucide-vue-next'
+import { Clock, FileText, MapPin, Paperclip, Pencil, Star, X } from 'lucide-vue-next'
 import { api } from '../api'
 import { isImportantEvent, openCustomEditor, removeEvent, toggleImportantEvent } from '../store'
 import { splitNoteMeta } from '../utils/note'

@@ -1010,7 +1010,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.7.5'
+  return '2.7.6'
 })
 
 const appVersionDisplay = clientAppVersion
@@ -1063,7 +1063,8 @@ async function manualCheckUpdate() {
     } catch (e) {}
 
     if (!version) {
-      const resp = await fetch('https://api.github.com/repos/NoraNekowww/campushub-sync/releases/latest', {
+      const resp = await fetch(`https://api.github.com/repos/NoraNekowww/campushub-sync/releases/latest?_t=${Date.now()}`, {
+        cache: 'no-store',
         headers: { Accept: 'application/vnd.github.v3+json' },
       })
       if (resp.ok) {

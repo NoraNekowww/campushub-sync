@@ -134,7 +134,7 @@ import { computed, onMounted, ref } from 'vue'
 import { BellOff, Download, Rocket, Sparkles, X } from 'lucide-vue-next'
 import { API_BASE, api } from '../api'
 
-const CURRENT_VERSION = '2.7.5'
+const CURRENT_VERSION = '2.7.6'
 const DISMISSED_KEY = 'campushub.dismissed_update'
 const POPUP_SEEN_KEY = 'campushub.popup_seen_version'
 
@@ -269,7 +269,8 @@ async function checkLatestVersion() {
 
     // 通道 2：GitHub API 兜底
     if (!version) {
-      const resp = await fetch('https://api.github.com/repos/NoraNekowww/campushub-sync/releases/latest', {
+      const resp = await fetch(`https://api.github.com/repos/NoraNekowww/campushub-sync/releases/latest?_t=${Date.now()}`, {
+        cache: 'no-store',
         headers: { Accept: 'application/vnd.github.v3+json' },
       })
       if (resp.ok) {

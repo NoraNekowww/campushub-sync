@@ -12,7 +12,14 @@ const DAY_MS = 86400000
 
 export function toDate(value) {
   if (!value) return null
-  const parsed = value instanceof Date ? value : new Date(value)
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
+  if (typeof value === 'string') {
+    // 兼容各类 Android WebView 对 "YYYY-MM-DD HH:mm:ss" 空格未加 T 导致解析 NaN 的缺陷
+    const standardStr = value.includes(' ') && !value.includes('T') ? value.replace(' ', 'T') : value
+    const parsed = new Date(standardStr)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+  const parsed = new Date(value)
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
@@ -93,6 +100,22 @@ export function dayDiff(keyA, keyB) {
 
 /** Minutes since midnight in Asia/Shanghai (device timezone independent). */
 export function minutesOfDay(value) {
+  if (!value) return null
+  if (typeof value === 'string') {
+    // 快速精确提取 HH:mm，杜绝任何 Intl 或格式兼容问题导致返回 null
+    const match = value.match(/[T\s](\d{1,2}):(\d{2})/)
+    if (match) {
+      const h = parseInt(match[1], 10)
+      const m = parseInt(match[2], 10)
+      if (!Number.isNaN(h) && !Number.isNaN(m)) {
+        return h * 60 + m
+      }
+    }
+    // 针对纯日期（全天日程/DDL 未指定具体分钟），兜底为网格 08:00 (480 分钟)，绝不静默丢失
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+      return 8 * 60
+    }
+  }
   const date = toDate(value)
   if (!date) return null
   const parts = dateFmt({ hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(date)

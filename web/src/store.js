@@ -579,7 +579,15 @@ export async function flushSyncQueue() {
   for (const item of queue) {
     try {
       if (item.type === 'create') {
-        await api.createEvent(item.payload)
+        const created = await api.createEvent(item.payload)
+        // 服务器确认创建成功，将本地临时 ID 替换为权威 ID 并更新持久化缓存
+        if (created && created.id && item.temp_id) {
+          const idx = state.events.findIndex((e) => e.id === item.temp_id)
+          if (idx >= 0) {
+            state.events.splice(idx, 1, created)
+            saveEventsCache(state.events, state.total)
+          }
+        }
       } else if (item.type === 'patch') {
         await api.patchEvent(item.id, item.payload)
         // 服务器确认成功写入后，移除本地覆盖保护
@@ -629,7 +637,8 @@ export async function refresh({ silent = false } = {}) {
     // 2. 强保护：若本地有尚未被服务器覆盖确认的完成状态（如刚刚划掉的任务），坚决以本地操作为准，彻底杜绝回光返照
     // 3. 冲突解决：客户端后改动优先 (Last-Write-Wins)，若本地事件的修改时间比服务器返回的更新，则保留本地最新数据
     const localEventMap = new Map((state.events || []).map((e) => [e.id, e]))
-    state.events = rawItems
+    const serverIdSet = new Set(rawItems.map((it) => it.id))
+    const mergedServerItems = rawItems
       .filter((it) => !deletedMap[it.id])
       .map((it) => {
         const local = localEventMap.get(it.id)
@@ -646,6 +655,30 @@ export async function refresh({ silent = false } = {}) {
         }
         return it
       })
+
+    // 4. 本地日程优先保留：云端没有返回但本地依然存在的未删除日程，优先保留绝不冲刷丢失
+    const localList = Array.isArray(state.events) ? state.events : []
+    const preservedLocalItems = localList.filter((local) => {
+      if (!local || !local.id) return false
+      if (deletedMap[local.id]) return false
+      if (serverIdSet.has(local.id)) return false
+      return true
+    })
+
+    state.events = [...preservedLocalItems, ...mergedServerItems]
+
+    // 对本地未同步至云端的自建/临时日程自动加入补推同步队列
+    for (const local of preservedLocalItems) {
+      if (local.id && String(local.id).startsWith('local_')) {
+        const q = getSyncQueue()
+        if (!q.some((item) => item.temp_id === local.id)) {
+          appendSyncQueue({ type: 'create', temp_id: local.id, payload: local })
+        }
+      }
+    }
+    if (preservedLocalItems.some((l) => l.id && String(l.id).startsWith('local_'))) {
+      setTimeout(() => flushSyncQueue().catch(() => {}), 500)
+    }
 
     state.total = payload.total ?? state.events.length
     state.error = ''
@@ -869,6 +902,7 @@ export function closeCustomEditor() {
 
 export async function saveCustomEvent(payload) {
   const existing = state.customEditor.event
+  const isExisting = Boolean(existing && !existing.is_draft && existing.id)
   const isMobile = isMobileNativeApp()
   const nowIso = new Date().toISOString()
   const payloadWithMeta = { ...payload, client_updated_at: nowIso }
@@ -876,7 +910,7 @@ export async function saveCustomEvent(payload) {
   // 1. 移动端秒存：纯本地立即生成或更新内存与闪存，无需等待服务器返回
   if (isMobile) {
     let localItem = null
-    if (existing) {
+    if (isExisting) {
       localItem = { ...existing, ...payload, updated_at: nowIso, client_updated_at: nowIso }
       const idx = state.events.findIndex((e) => e.id === existing.id)
       if (idx >= 0) state.events.splice(idx, 1, localItem)
@@ -894,12 +928,12 @@ export async function saveCustomEvent(payload) {
       }
       state.events.unshift(localItem)
       state.total += 1
-      appendSyncQueue({ type: 'create', payload: payloadWithMeta })
+      appendSyncQueue({ type: 'create', temp_id: tempId, payload: payloadWithMeta })
     }
     // 立即写回本地永久缓存
     saveEventsCache(state.events, state.total)
     closeCustomEditor()
-    notify(existing ? '日程已在本地更新' : '日程已在本地添加', 'ok')
+    notify(isExisting ? '日程已在本地更新' : '日程已在本地添加', 'ok')
 
     // 后台静默将变更回传服务器，用户无需等待
     setTimeout(() => {
@@ -910,11 +944,11 @@ export async function saveCustomEvent(payload) {
 
   // 2. 网页端维持向服务器即时请求
   try {
-    const saved = existing
+    const saved = isExisting
       ? await api.patchEvent(existing.id, payloadWithMeta)
       : await api.createEvent(payloadWithMeta)
     closeCustomEditor()
-    notify(existing ? '日程已更新' : '日程已添加', 'ok')
+    notify(isExisting ? '日程已更新' : '日程已添加', 'ok')
     await refresh({ silent: true })
     return saved
   } catch (error) {

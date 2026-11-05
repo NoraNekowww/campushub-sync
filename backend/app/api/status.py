@@ -6,6 +6,7 @@ import time
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
 from sqlmodel import Session
 
 from .. import __version__
@@ -26,22 +27,29 @@ _STARTED_AT = time.time()
 
 
 @router.get("/version", summary="Version check for in-app update notification")
-async def app_version() -> dict:
-    return {
-        "version": "2.7.5",
-        "tag": "v2.7.5",
-        "title": "CampusHub Android v2.7.5",
-        "download_url": "https://nzlab.online/schedule/CampusHub.apk",
-        "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
-        "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
-        "features": [
-            "课程详情大卡片增加专属「附带开始时 DDL」点击卡片，交互更直观",
-            "课表左侧时间轴优化为纯时钟小时展示（08..21），宽度自适应收窄更清爽紧凑",
-            "设置页新增在线检查更新与一键下载安装板块，打通 Android 原生 DownloadManager + FileProvider",
-            "修复 Android 移动端更新弹窗未能弹出的根因，确保新版本自动感知并提醒",
-            "重构 GitHub 首页与项目 README，全面适配天大教务直连与物理微晶磨砂架构，移除已废弃的 Microsoft To Do 描述",
-        ],
-    }
+async def app_version() -> JSONResponse:
+    return JSONResponse(
+        content={
+            "version": "2.7.6",
+            "tag": "v2.7.6",
+            "title": "CampusHub Android v2.7.6",
+            "download_url": "https://nzlab.online/schedule/CampusHub.apk",
+            "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
+            "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
+            "features": [
+                "根治安卓端版本检测与更新推送缓存问题，杜绝反复提示旧版本",
+                "新建日程同步保留机制强化：云端未划掉时本地日程绝对优先保留并自动向云端补推",
+                "全系统统一日程缓存架构，彻底消除线性表已显示日程在课表中概率未渲染的现象",
+                "修复课程详情卡片「附带开始时 DDL」功能无法成功生成新建 DDL 的缺陷",
+                "课程详情大卡片显著放大地点与时间字号并优化高亮对比度，关键信息一眼可辨",
+            ],
+        },
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 @router.get("/health", summary="Liveness probe (no auth, no secrets)")

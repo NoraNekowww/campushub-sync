@@ -82,7 +82,7 @@ export class ApiError extends Error {
 export const isAuthError = (error) =>
   error instanceof ApiError && (error.status === 401 || error.status === 403)
 
-async function request(path, { method = 'GET', body, headers = {}, raw = false, timeoutMs, retries = 1 } = {}) {
+async function request(path, { method = 'GET', body, headers = {}, raw = false, timeoutMs, retries = 1, cache } = {}) {
   const token = getToken()
   const sessionToken = getSessionToken()
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData
@@ -101,6 +101,7 @@ async function request(path, { method = 'GET', body, headers = {}, raw = false, 
         method,
         credentials: 'include',
         signal: controller?.signal,
+        cache: cache || undefined,
         headers: {
           ...(body && !isForm ? { 'Content-Type': 'application/json' } : {}),
           // 携带登录会话 Token，解决 Android 原生环境拦截导致的 Cookie 隔离问题
@@ -215,7 +216,14 @@ export const api = {
   deleteMyAccount: () => request('/auth/me', { method: 'DELETE' }),
   authStorage: () => request('/auth/storage'),
   optimizeStorage: () => request('/auth/storage/optimize', { method: 'POST' }),
-  appVersion: () => request('/version'),
+  appVersion: () =>
+    request(`/version?_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
+    }),
   /* ------------------------------------------------ attachments (cloud, max 100MB) */
   uploadAttachment: async (file) => {
     if (file.size > 100 * 1024 * 1024) {

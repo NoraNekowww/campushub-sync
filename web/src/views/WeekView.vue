@@ -565,7 +565,16 @@ async function loadWeek(force = false) {
     const start = list[0].key
     const end = list[list.length - 1].key
     const payload = await api.events({ start_date: start, end_date: end, limit: 1200 })
-    events.value = payload.items || []
+    const serverItems = payload.items || []
+    const serverMap = new Map(serverItems.map((it) => [it.id, it]))
+    const globalList = Array.isArray(state.events) ? state.events : []
+
+    // 严禁粗暴全量覆盖冲掉本地刚添加的日程；严格将服务器远期课程与本地真实日程双向合并
+    const merged = [
+      ...globalList.map((g) => serverMap.get(g.id) || g),
+      ...serverItems.filter((s) => !globalList.some((g) => g.id === s.id)),
+    ]
+    events.value = merged
     saveWeekCache(events.value)
   } catch (error) {
     if (!events.value || events.value.length === 0) {
@@ -589,7 +598,7 @@ watch(
     if (!Array.isArray(newGlobalEvents)) return
     const globalIds = new Set(newGlobalEvents.map((e) => e.id))
     const currentList = Array.isArray(events.value) ? events.value : []
-    
+
     // 只保留：当前全局列表中仍在的项目 + 属于非个人自定义课程（即天大教务自带课程，日程页可能未全量拉取）
     const merged = [
       ...newGlobalEvents,
@@ -598,7 +607,7 @@ watch(
     events.value = merged
     saveWeekCache(events.value)
   },
-  { deep: true },
+  { deep: true, immediate: true },
 )
 
 const handleGlobalFocusToday = () => focusToday('smooth')

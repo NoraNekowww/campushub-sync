@@ -102,8 +102,8 @@ public class MainActivity extends AppCompatActivity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
-        // 本地化与秒开体验：优先加载本地离线缓存（LOAD_CACHE_ELSE_NETWORK）
-        settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+        // 采用标准缓存策略（静态资源由本地 WebViewAssetLoader 闪存 0 延迟秒开，API 动态请求走网络并遵循 HTTP 缓存协议）
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         // 允许加载跨域网络图片和各种图床
         settings.setBlockNetworkImage(false);
@@ -410,7 +410,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
             } catch (Exception e) {
-                return "2.1.8";
+                return "2.7.6";
             }
         }
 
