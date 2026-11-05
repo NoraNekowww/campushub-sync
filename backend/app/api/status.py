@@ -30,13 +30,15 @@ _STARTED_AT = time.time()
 async def app_version() -> JSONResponse:
     return JSONResponse(
         content={
-            "version": "2.7.6",
-            "tag": "v2.7.6",
-            "title": "CampusHub Android v2.7.6",
+            "version": "2.7.7",
+            "tag": "v2.7.7",
+            "title": "CampusHub Android v2.7.7",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
             "features": [
+                "课表冲突日程保持物理时间绝对对齐，移除位置错开平移，完全依靠错位呼吸交替呈现",
+                "设置页精简架构：移除独立的客户端与桌面组件板块，功能全面收敛至检查更新卡片",
                 "根治安卓端版本检测与更新推送缓存问题，杜绝反复提示旧版本",
                 "新建日程同步保留机制强化：云端未划掉时本地日程绝对优先保留并自动向云端补推",
                 "全系统统一日程缓存架构，彻底消除线性表已显示日程在课表中概率未渲染的现象",

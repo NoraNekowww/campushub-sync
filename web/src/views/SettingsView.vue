@@ -333,6 +333,28 @@
             </button>
           </div>
         </div>
+
+        <!-- 客户端下载与 GitHub Release 快捷入口 -->
+        <div class="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-700/50">
+          <a
+            href="https://nzlab.online/schedule/CampusHub.apk"
+            download="CampusHub.apk"
+            class="btn-primary !h-7 !py-0 !px-2.5 text-[11px] gap-1 shadow-2xs inline-flex items-center"
+            data-testid="download-apk-btn"
+          >
+            <Download :size="12" />
+            <span>下载安装包 (APK)</span>
+          </a>
+          <a
+            href="https://github.com/NoraNekowww/campushub-sync/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-ghost !h-7 !py-0 !px-2 text-[11px] inline-flex items-center gap-1 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+          >
+            <ExternalLink :size="11" />
+            <span>查看 Release 记录</span>
+          </a>
+        </div>
       </div>
     </section>
 
@@ -657,76 +679,6 @@
       </div>
     </section>
 
-    <!-- ------------------------------------------------------------ access removed -->
-
-    <section class="card space-y-3 p-4">
-      <header class="flex items-center gap-2">
-        <Smartphone :size="15" class="text-brand-600 dark:text-brand-400" />
-        <h2 class="text-sm font-semibold">{{ isAndroidClient ? '桌面小部件' : '安卓客户端与桌面组件' }}</h2>
-        <span class="chip border-transparent bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-          {{ isAndroidClient ? '已就绪' : 'v2.7.5 · 原生极速' }}
-        </span>
-      </header>
-
-      <!-- 安卓客户端的人：不再显示安装方法，只显示小部件使用方法 -->
-      <template v-if="isAndroidClient">
-        <p class="text-xs text-slate-500 dark:text-slate-400">
-          客户端已连接。支持将「今日日程」放置在安卓手机桌面上，无需点进应用即可实时查看课程与待办。
-        </p>
-        <div class="space-y-2 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-800/60">
-          <p class="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
-            💡 <strong>桌面小组件添加方法</strong>：<br />
-            1. 返回手机主屏幕，<strong>长按桌面空白处</strong>；<br />
-            2. 选择「<strong>微件</strong>」或「<strong>小组件</strong>」；<br />
-            3. 找到 <strong>CampusHub 今日日程</strong> 拖动到桌面即可；<br />
-            4. 亦支持使用 Hermit / Web Widget 挂载
-            <a href="./widget.html" target="_blank" class="text-brand-600 dark:text-brand-400 underline">独立微型组件页</a>。
-          </p>
-        </div>
-      </template>
-
-      <!-- 非安卓客户端（普通网页访问/未安装）：显示客户端下载与安装说明 -->
-      <template v-else>
-        <p class="text-xs text-slate-500 dark:text-slate-400">
-          基于原生架构深度调优，毫秒级快速启动，低延迟无闪白；内置「今日日程」安卓桌面小组件 (AppWidget)，长按桌面即可添加。
-        </p>
-        <div class="space-y-2 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-800/60">
-          <div class="flex flex-wrap items-center gap-2">
-            <a
-              href="https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk"
-              target="_blank"
-              class="btn-primary !py-1.5 text-xs inline-flex items-center gap-1.5"
-              data-testid="download-apk-btn"
-            >
-              <Download :size="14" />
-              下载安卓客户端 (APK)
-            </a>
-            <button
-              type="button"
-              class="btn-ghost !py-1.5 text-xs inline-flex items-center gap-1 text-slate-600 dark:text-slate-300"
-              :disabled="checkingUpdate"
-              @click="manualCheckUpdate"
-            >
-              <RefreshCw :size="13" :class="checkingUpdate ? 'animate-spin' : ''" />
-              {{ checkingUpdate ? '检查中…' : '检查新版本' }}
-            </button>
-            <a
-              href="https://github.com/NoraNekowww/campushub-sync/releases/latest"
-              target="_blank"
-              class="btn-ghost !py-1.5 text-xs inline-flex items-center gap-1 text-slate-600 dark:text-slate-300"
-            >
-              <ExternalLink :size="13" />
-              在 GitHub 上查看 Release
-            </a>
-          </div>
-          <p class="pt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-            💡 <strong>桌面小组件用法</strong>：安装后长按手机桌面空白处 ->「微件/小组件」-> 找到 <strong>CampusHub 今日日程</strong> 即可放置在桌面；亦支持使用 Hermit / Web Widget 挂载
-            <a href="./widget.html" target="_blank" class="text-brand-600 dark:text-brand-400 underline">独立微型组件页</a>。
-          </p>
-        </div>
-      </template>
-    </section>
-
     <!-- ---------------------------------------------------------- calendar -->
     <section class="card space-y-3 p-4">
       <header class="flex items-center gap-2">
@@ -1010,7 +962,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.7.6'
+  return '2.7.7'
 })
 
 const appVersionDisplay = clientAppVersion

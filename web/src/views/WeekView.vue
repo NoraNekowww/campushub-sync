@@ -415,7 +415,6 @@ const pct = (minutes) => {
   return ((clamped - DAY_START) / (DAY_END - DAY_START)) * 100
 }
 
-const STACK_STEP_PX = 15
 const LINE_PAD_PX = 8
 
 function spansOverlap(a, b) {
@@ -426,65 +425,40 @@ function spansOverlap(a, b) {
 
 function layoutItems(items) {
   const sorted = [...items].sort((a, b) => a.start - b.start)
-  let cluster = []
-  let clusterEnd = -Infinity
-  const flush = () => {
-    if (!cluster.length) return
-    cluster.forEach((item, index) => {
-      const priors = cluster.slice(0, index).filter((other) => spansOverlap(other, item))
-      item.stack = priors.length ? Math.max(...priors.map((other) => other.stack)) + 1 : 0
-    })
-    cluster = []
-    clusterEnd = -Infinity
-  }
-  for (const item of sorted) {
-    if (cluster.length && item.start >= clusterEnd) flush()
-    cluster.push(item)
-    clusterEnd = Math.max(clusterEnd, item.end === null ? item.start + LINE_MINUTES : item.end)
-  }
-  flush()
 
-  // 针对 DDL 与其它 DDL、以及 DDL 与课程之间的空间重叠关系进行分组计算：
-  // 1. DDL 之间：时间在 ±15 分钟内视为重叠；
-  // 2. DDL 与课程之间：若 DDL 的截止时间落在某节课的 [start - 5, end + 5] 分钟区间内，
-  //    则该 DDL 与该课程共享呼吸交替周期，依次轮流呼吸亮灭。
-  const ddlItems = sorted.filter((it) => it.end === null)
-  const classItems = sorted.filter((it) => it.end !== null)
+  // 物理时间绝对对齐：彻底取消纵向像素错开平移，冲突时完全依靠错位呼吸交替呈现
+  // 找出所有相互重叠的冲突组（包含课与课重叠、课与 DDL 重叠、DDL 与 DDL 重叠）
+  const visited = new Set()
+  for (let i = 0; i < sorted.length; i++) {
+    const item = sorted[i]
+    if (visited.has(item)) continue
 
-  ddlItems.forEach((ddl) => {
-    // 找出与当前 DDL 时间重叠的其它 DDL
-    const overlapDdls = ddlItems.filter((other) => Math.abs(other.start - ddl.start) <= 15)
-    // 找出与当前 DDL 在时间轴上穿插的课程
-    const overlapClasses = classItems.filter((c) => {
-      const cStart = Math.max(c.start, DAY_START)
-      const cEnd = c.end !== null ? Math.min(c.end, DAY_END) : cStart + LINE_MINUTES
-      return ddl.start >= cStart - 8 && ddl.start <= cEnd + 8
-    })
-
-    // 构建该冲突区域内的全部轮换实体列表（优先排课程，再排各个 DDL）
-    const allColliding = [...new Set([...overlapClasses, ...overlapDdls])]
-    if (allColliding.length > 1) {
-      const groupSize = allColliding.length
-      const myIndex = allColliding.indexOf(ddl)
-      ddl.hasConflict = true
-      ddl.overlapCycleSize = groupSize
-      ddl.overlapCycleIndex = myIndex >= 0 ? myIndex : 0
-
-      // 同时给冲突的课程打上标记与轮换索引
-      overlapClasses.forEach((c) => {
-        const cIndex = allColliding.indexOf(c)
-        c.hasConflict = true
-        c.overlapCycleSize = Math.max(c.overlapCycleSize || 0, groupSize)
-        if (c.overlapCycleIndex === undefined) {
-          c.overlapCycleIndex = cIndex >= 0 ? cIndex : 0
+    const group = [item]
+    visited.add(item)
+    for (let j = 0; j < sorted.length; j++) {
+      if (i === j) continue
+      const other = sorted[j]
+      if (group.some((g) => spansOverlap(g, other))) {
+        if (!visited.has(other)) {
+          visited.add(other)
+          group.push(other)
         }
+      }
+    }
+
+    if (group.length > 1) {
+      const groupSize = group.length
+      group.forEach((member, idx) => {
+        member.hasConflict = true
+        member.overlapCycleSize = groupSize
+        member.overlapCycleIndex = idx
       })
     } else {
-      ddl.hasConflict = false
-      ddl.overlapCycleSize = 1
-      ddl.overlapCycleIndex = 0
+      item.hasConflict = false
+      item.overlapCycleSize = 1
+      item.overlapCycleIndex = 0
     }
-  })
+  }
 
   return sorted
 }
@@ -511,14 +485,14 @@ function blockStyle(item) {
     item.end === null ? startMin + LINE_MINUTES : Math.min(Math.max(item.end, DAY_START), DAY_END)
   if (endMin <= startMin) endMin = Math.min(startMin + LINE_MINUTES, DAY_END)
   const height = Math.max(3.4, ((endMin - startMin) / (DAY_END - DAY_START)) * 100)
-  const push = (item.stack || 0) * STACK_STEP_PX
 
+  // 严格和物理时间完全对齐，不再进行错开偏移
   const style = {
-    top: `calc(${pct(item.start)}% + ${push}px)`,
+    top: `${pct(item.start)}%`,
     height: `${height}%`,
   }
 
-  // 若与 DDL 冲突，参与轮流呼吸交替，计算对应的错位延迟
+  // 若与其它日程或 DDL 冲突，原地轮流呼吸交替，计算对应的错位延迟
   if (item.hasConflict && item.overlapCycleSize > 1) {
     const cycleDuration = 4.0
     const delaySec = ((item.overlapCycleIndex || 0) * (cycleDuration / item.overlapCycleSize)).toFixed(2)
