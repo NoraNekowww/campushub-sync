@@ -30,21 +30,20 @@ _STARTED_AT = time.time()
 async def app_version() -> JSONResponse:
     return JSONResponse(
         content={
-            "version": "2.7.8",
-            "tag": "v2.7.8",
-            "title": "CampusHub Android v2.7.8",
+            "version": "2.7.9",
+            "tag": "v2.7.9",
+            "title": "CampusHub Android v2.7.9",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
             "features": [
+                "预设调色板升级：默认橙色优化为温润浅橙（告别土黄色），粉色调整为浅浅桃粉红（告别深肉色）",
+                "设置页极致精简：彻底移除网格等过多的冗余说明文本，界面更通透现代",
+                "冲突呼吸阈值优化：交叉重叠不超过 10 分钟的日程（如课前 DDL）保持常态静止并存，不交替闪烁",
+                "本周课表全量加载展示：已结束或已上完的课不再隐去，完整保留显示与淡化进度标记",
+                "新增与编辑日程弹窗全面升级为物理微晶磨砂玻璃材质，全系统视觉规范高度统一",
                 "课表内 DDL 改为醒目实线绝对对齐物理时间刻度线，浮动胶囊标签不干扰对齐位置",
                 "Android 客户端启动自动清理旧版 WebView 磁盘脏缓存，彻底消除历史版本残留",
-                "课表冲突日程保持物理时间绝对对齐，移除位置错开平移，完全依靠错位呼吸交替呈现",
-                "设置页精简架构：移除独立的客户端与桌面组件板块，功能全面收敛至检查更新卡片",
-                "新建日程同步保留机制强化：云端未划掉时本地日程绝对优先保留并自动向云端补推",
-                "全系统统一日程缓存架构，彻底消除线性表已显示日程在课表中概率未渲染的现象",
-                "修复课程详情卡片「附带开始时 DDL」功能无法成功生成新建 DDL 的缺陷",
-                "课程详情大卡片显著放大地点与时间字号并优化高亮对比度，关键信息一眼可辨",
             ],
         },
         headers={

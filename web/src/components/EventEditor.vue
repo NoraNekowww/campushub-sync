@@ -2,20 +2,22 @@
   <Teleport to="body">
     <div
       v-if="state.customEditor.open"
-      class="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 backdrop-blur-sm sm:items-center sm:p-4"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md animate-fade-in"
       @click.self="close"
     >
       <form
-        class="max-h-[92vh] w-full max-w-md space-y-3 overflow-y-auto rounded-t-2xl bg-white p-4 shadow-2xl dark:bg-slate-900 sm:rounded-2xl"
+        class="max-h-[90vh] w-full max-w-lg space-y-3.5 overflow-y-auto rounded-3xl p-5 shadow-2xl transition-all
+               border border-white/60 bg-white/80 dark:border-white/10 dark:bg-slate-900/85
+               backdrop-blur-2xl [transform:translateZ(0)]"
         data-testid="custom-event-editor"
         @submit.prevent="submit"
       >
         <header class="flex items-center gap-2">
           <Pencil :size="15" class="text-brand-600 dark:text-brand-400" />
-          <h2 class="text-sm font-semibold">{{ editorTitle }}</h2>
+          <h2 class="text-base font-semibold text-slate-800 dark:text-slate-100">{{ editorTitle }}</h2>
           <span
             v-if="editingRecurrence"
-            class="rounded-md bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300"
+            class="rounded-md bg-indigo-50/80 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300"
           >
             第 {{ editingRecurrence.index }} / {{ editingRecurrence.total }} 次
           </span>
@@ -23,12 +25,12 @@
         </header>
 
         <!-- 自定义日程类型二选一：待办/DDL（带倒计时，划掉完成） vs 课程/活动（有起止时长，上完自动隐退） -->
-        <div v-if="isCustom || !isEdit" class="grid grid-cols-2 gap-2 p-1 bg-slate-100/80 dark:bg-slate-800/60 rounded-xl text-xs">
+        <div v-if="isCustom || !isEdit" class="grid grid-cols-2 gap-2 p-1 bg-slate-100/60 dark:bg-slate-800/40 rounded-2xl text-xs backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/40">
           <button
             type="button"
-            class="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-lg transition-all"
+            class="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl transition-all"
             :class="form.kind === 'deadline'
-              ? 'bg-white dark:bg-slate-900 shadow-sm text-brand-600 dark:text-brand-400 font-semibold border border-brand-200 dark:border-brand-700/60'
+              ? 'bg-white/90 dark:bg-slate-800/90 shadow-sm text-brand-600 dark:text-brand-400 font-semibold border border-brand-200/80 dark:border-brand-600/50 backdrop-blur-md'
               : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
             @click="setKind('deadline')"
           >
@@ -40,9 +42,9 @@
           </button>
           <button
             type="button"
-            class="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-lg transition-all"
+            class="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl transition-all"
             :class="form.kind === 'class'
-              ? 'bg-white dark:bg-slate-900 shadow-sm text-brand-600 dark:text-brand-400 font-semibold border border-brand-200 dark:border-brand-700/60'
+              ? 'bg-white/90 dark:bg-slate-800/90 shadow-sm text-brand-600 dark:text-brand-400 font-semibold border border-brand-200/80 dark:border-brand-600/50 backdrop-blur-md'
               : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
             @click="setKind('class')"
           >
@@ -125,7 +127,7 @@
         <!-- 重复任务详细参数：仅当开启重复时展开（若当前为课程附带 DDL 则隐藏） -->
         <div
           v-if="!isEdit && form.recurring && !hideRecurring"
-          class="space-y-2 rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5 text-xs dark:border-slate-800 dark:bg-slate-800/40 animate-fade-in"
+          class="space-y-2 rounded-2xl border border-white/60 bg-white/50 p-3 text-xs dark:border-white/10 dark:bg-slate-800/40 backdrop-blur-sm animate-fade-in"
         >
           <!-- 如果是 class 模式，保留重复标题；如果是 deadline 模式已在上方勾选 -->
           <label v-if="form.kind === 'class'" class="flex cursor-pointer items-center gap-2 font-medium">
@@ -173,7 +175,7 @@
         <!-- 课程/活动模式下未勾选重复时展示开启开关 -->
         <div
           v-else-if="!isEdit && form.kind === 'class' && !form.recurring"
-          class="rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5 text-xs dark:border-slate-800 dark:bg-slate-800/40"
+          class="rounded-2xl border border-white/60 bg-white/50 p-2.5 text-xs dark:border-white/10 dark:bg-slate-800/40 backdrop-blur-sm"
         >
           <label class="flex cursor-pointer items-center gap-2 font-medium">
             <input
@@ -192,7 +194,7 @@
         </label>
 
         <!-- 云端附加文件（每个不大于 100MB） -->
-        <div class="space-y-2 rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5 text-xs dark:border-slate-800 dark:bg-slate-800/40">
+        <div class="space-y-2 rounded-2xl border border-white/60 bg-white/50 p-3 text-xs dark:border-white/10 dark:bg-slate-800/40 backdrop-blur-sm">
           <div class="flex items-center justify-between">
             <span class="flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-200">
               <Paperclip :size="13" class="text-brand-600 dark:text-brand-400" />
@@ -216,7 +218,7 @@
             <div
               v-for="(att, idx) in form.attachments"
               :key="att.id || idx"
-              class="flex items-center justify-between gap-2 rounded-lg border border-slate-200/90 bg-white px-2.5 py-1.5 dark:border-slate-700 dark:bg-slate-900"
+              class="flex items-center justify-between gap-2 rounded-xl border border-white/80 bg-white/70 px-2.5 py-1.5 dark:border-white/10 dark:bg-slate-900/60 backdrop-blur-xs"
             >
               <div class="flex min-w-0 items-center gap-1.5">
                 <FileText :size="13" class="shrink-0 text-slate-400" />

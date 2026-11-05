@@ -252,9 +252,6 @@
             <span>空白底</span>
           </button>
         </div>
-        <p class="text-[11px] text-slate-400">
-          标准网格按小时划线；细分网格增加半小时参考虚线；空白底提供通透无干扰的视觉体验。
-        </p>
       </div>
 
       <!-- 主题模式切换 -->
@@ -962,7 +959,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.7.8'
+  return '2.7.9'
 })
 
 const appVersionDisplay = clientAppVersion

@@ -270,8 +270,8 @@ const days = computed(() => {
         (event) =>
           dayKey(event.start_time) === d.key &&
           matchesQuery(event) &&
-          // 划掉的（不管是待办DDL还是自定义时段活动）都不在课表网格中显示
-          event.status !== 'completed',
+          // 待办 DDL 划掉后不占课表，但课程即使上完了也全量加载渲染展示
+          !(event.is_deadline && event.status === 'completed'),
       )
       .map((event) => ({
         event,
@@ -419,17 +419,41 @@ const pct = (minutes) => {
 
 const LINE_PAD_PX = 8
 
-function spansOverlap(a, b) {
-  const aEnd = a.end === null ? a.start + LINE_MINUTES : a.end
-  const bEnd = b.end === null ? b.start + LINE_MINUTES : b.end
-  return a.start < bEnd && b.start < aEnd
+/**
+ * 判断两个日程是否存在实质遮挡冲突：
+ * 交叉重叠不超过 10 分钟（如课前 10 分钟内的 DDL、课边缘微小重叠）不触发交替闪烁，
+ * 只有重叠深度严格大于 10 分钟时，才视为冲突并触发错位交替呼吸。
+ */
+function hasSubstantialConflict(a, b) {
+  // 两者都是 DDL（单时刻实线）：只有当两条实线极其接近（相差小于 10 分钟）导致视觉重叠时才交替闪烁
+  if (a.end === null && b.end === null) {
+    return Math.abs(a.start - b.start) < 10
+  }
+
+  // 一个是课程，另一个是 DDL（单时刻实线）：
+  const course = a.end !== null ? a : b
+  const ddl = a.end === null ? a : b
+  if (course.end !== null && ddl.end === null) {
+    const cStart = course.start
+    const cEnd = course.end
+    // 课前 DDL（ddl.start <= cStart + 10）或下课后 DDL（ddl.start >= cEnd），交叉重叠不超过 10 分钟，绝不交替闪烁！
+    if (ddl.start <= cStart + 10 || ddl.start >= cEnd) {
+      return false
+    }
+    // 只有 DDL 落在课程内部核心区域（深度重叠超过 10 分钟）时才交替闪烁
+    return true
+  }
+
+  // 两者都是有起止时间的日程块：交叉重叠超过 10 分钟才触发交替闪烁
+  const overlap = Math.min(a.end, b.end) - Math.max(a.start, b.start)
+  return overlap > 10
 }
 
 function layoutItems(items) {
   const sorted = [...items].sort((a, b) => a.start - b.start)
 
   // 物理时间绝对对齐：彻底取消纵向像素错开平移，冲突时完全依靠错位呼吸交替呈现
-  // 找出所有相互重叠的冲突组（包含课与课重叠、课与 DDL 重叠、DDL 与 DDL 重叠）
+  // 找出所有相互重叠超过 10 分钟的冲突组（包含课与课重叠、课与 DDL 深度重叠、DDL 与 DDL 重叠）
   const visited = new Set()
   for (let i = 0; i < sorted.length; i++) {
     const item = sorted[i]
@@ -440,7 +464,7 @@ function layoutItems(items) {
     for (let j = 0; j < sorted.length; j++) {
       if (i === j) continue
       const other = sorted[j]
-      if (group.some((g) => spansOverlap(g, other))) {
+      if (group.some((g) => hasSubstantialConflict(g, other))) {
         if (!visited.has(other)) {
           visited.add(other)
           group.push(other)
