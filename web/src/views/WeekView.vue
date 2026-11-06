@@ -44,17 +44,17 @@
               <div
                 v-for="hour in hours"
                 :key="`tick-${hour}`"
-                class="absolute right-1 -translate-y-1/2 text-[10.5px] font-mono font-medium text-slate-400 dark:text-slate-500 select-none"
+                class="absolute inset-x-0 -translate-y-1/2 text-center text-[10px] font-mono font-medium text-slate-400 dark:text-slate-500 select-none"
                 :style="{ top: pct(hour * 60) + '%' }"
               >
                 {{ String(hour).padStart(2, '0') }}
               </div>
 
-              <!-- 当前时间指示（呼吸闪烁） -->
+              <!-- 当前时间指示（呼吸闪烁，inset-x 自适应居中，绝不向左/向右溢出截断） -->
               <div
                 v-if="isNowVisible && hasTodayInView"
                 data-testid="current-time-gutter"
-                class="pointer-events-none absolute right-1 z-10 -translate-y-1/2 rounded bg-rose-500 px-1 py-0.5 text-[9px] font-bold text-white shadow animate-pulse"
+                class="pointer-events-none absolute inset-x-0.5 z-10 -translate-y-1/2 rounded bg-rose-500 py-0.5 text-center text-[8.5px] font-mono font-bold text-white shadow-xs animate-pulse leading-tight"
                 :style="{ top: `${nowPct}%` }"
               >
                 {{ nowLabel }}
@@ -124,7 +124,7 @@
                     <span v-if="isImportantEvent(item.event)" class="text-amber-500 font-extrabold mr-0.5">★</span>
                     {{ item.event.title }}
                   </span>
-                  <span class="block whitespace-nowrap text-[9px] leading-[11px] font-mono font-semibold tracking-tighter opacity-90">
+                  <span class="block whitespace-nowrap text-[8px] leading-[10px] font-mono font-medium tracking-tight opacity-90">
                     {{ timeLabel(item.event.start_time) }}-{{ timeLabel(item.event.end_time) }}
                   </span>
                   <!-- 卡片上加上简短地点（用户要求：不加红色针头，省空间） -->
@@ -289,8 +289,8 @@ const days = computed(() => {
 
 const hasTodayInView = computed(() => days.value.some((d) => d.isToday))
 
-const GUTTER = 26
-const COL_WIDTH = 55
+const GUTTER = 34
+const COL_WIDTH = 58
 const gridStyle = computed(() => ({
   gridTemplateColumns: `${GUTTER}px repeat(${days.value.length}, ${COL_WIDTH}px)`,
 }))

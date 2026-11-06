@@ -959,7 +959,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.7.9'
+  return '2.8.0'
 })
 
 const appVersionDisplay = clientAppVersion
