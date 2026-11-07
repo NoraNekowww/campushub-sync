@@ -845,35 +845,32 @@ async def fetch_classes(
     # HTML 条），所以这一步几乎总是 None，只能靠调用方给的「第 N 周」反推。
     # 无论哪种都要在 meta 里如实标出来源，否则用户会把推算值当成教务的权威值。
     calendar_start = _find_date(calendar_raw)
-    start = calendar_start or _term_start_from_week(week)
-    if not start:
-        # 系统级学期兜底：如果教务未返回学期开始日期，且没有当前周反推，
-        # 则使用当前学年的统一校历开学日（秋季通常为 8 月最后一个周一，春季为 2 月下旬周一），
-        # 绝不直接退化为 today，避免新注册用户（如大二老生）将今天误判为第 1 周导致全学期单双周翻转！
-        from datetime import date, timedelta
-        now_date = date.today()
-        if now_date.month >= 8:
-            # 秋季学期（8月最后一个周一，2026年即 8月31日）
-            candidate = date(now_date.year, 8, 31)
-            candidate -= timedelta(days=candidate.weekday())
-        elif now_date.month <= 1:
-            # 跨年秋季学期
-            candidate = date(now_date.year - 1, 8, 31)
-            candidate -= timedelta(days=candidate.weekday())
-        else:
-            # 春季学期（通常 2 月底或 3 月初周一）
-            candidate = date(now_date.year, 2, 23)
-            candidate -= timedelta(days=candidate.weekday())
-        from datetime import datetime, timezone
-        tz_beijing = timezone(timedelta(hours=8))
-        start = int(datetime(candidate.year, candidate.month, candidate.day, tzinfo=tz_beijing).timestamp())
-        notes["term_start_source"] = f"校历系统级基准推算 ({candidate.isoformat()})"
+    # 核心校准：天津大学标准校历开学日（第 1 教学周周一）
+    # 秋季学期（8月/9月开学）标准教学周第 1 周周一为 8 月最后一个星期一（2026 年即 2026-08-31）
+    from datetime import date, timedelta
+    now_date = date.today()
+    if now_date.month >= 8:
+        candidate = date(now_date.year, 8, 31)
+        candidate -= timedelta(days=candidate.weekday())
+    elif now_date.month <= 1:
+        candidate = date(now_date.year - 1, 8, 31)
+        candidate -= timedelta(days=candidate.weekday())
     else:
-        notes["term_start_source"] = (
-            "教务返回的开学日期"
-            if calendar_start
-            else (f"按第 {week} 教学周 + 今天推算" if week else None)
-        )
+        candidate = date(now_date.year, 2, 23)
+        candidate -= timedelta(days=candidate.weekday())
+    from datetime import datetime, timezone
+    tz_beijing = timezone(timedelta(hours=8))
+    fallback_start = int(datetime(candidate.year, candidate.month, candidate.day, tzinfo=tz_beijing).timestamp())
+
+    # 优先使用官方教务明确返回的日历日期；若无，统一采用天津大学标准校历基准
+    # 绝不能轻信用户端误填的 week 参数（例如误把报到周或新生周算入反推出 2026-09-14），
+    # 否则整学期单双周及绝对日期将产生 2 周系统性漂移！
+    start = calendar_start or fallback_start
+    notes["term_start_source"] = (
+        "教务返回的开学日期"
+        if calendar_start
+        else f"校历系统级基准推算 ({candidate.isoformat()})"
+    )
     payload: dict[str, Any] = {
         "code": 200,
         "data": {"courses": {"major": courses, "minor": []}},

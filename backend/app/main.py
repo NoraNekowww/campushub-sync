@@ -149,19 +149,17 @@ def create_app() -> FastAPI:
     async def app_version() -> JSONResponse:
         return JSONResponse(
             content={
-                "version": "2.8.0",
-                "tag": "v2.8.0",
-                "title": "CampusHub Android v2.8.0",
+                "version": "2.8.1",
+                "tag": "v2.8.1",
+                "title": "CampusHub Android v2.8.1",
                 "download_url": "https://nzlab.online/schedule/CampusHub.apk",
                 "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
                 "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
                 "features": [
-                    "修复课表卡片内部起止时间向右溢出显示不全的问题（微调列宽与紧凑字号），确保完整展示",
-                    "修复左侧当前时间浮标向左溢出截断的问题（适度拓宽粘滞时间槽并改为自适应居中），端正美观",
+                    "修复教务开学日基准推算因导入时周次反推偏差导致的日期错位问题，严格对齐校历教学周，彻底解决特殊课程周次不显示bug",
+                    "优化周课表布局：紧凑等宽时间排版杜绝卡片右侧文字溢出，当前时间浮标自适应居中",
                     "预设调色板升级：默认橙色优化为温润浅橙（告别土黄色），粉色调整为浅浅桃粉红（告别深肉色）",
-                    "设置页极致精简：彻底移除网格等过多的冗余说明文本，界面更通透现代",
                     "冲突呼吸阈值优化：交叉重叠不超过 10 分钟的日程（如课前 DDL）保持常态静止并存，不交替闪烁",
-                    "本周课表全量加载展示：已结束或已上完的课不再隐去，完整保留显示与淡化进度标记",
                     "新增与编辑日程弹窗全面升级为物理微晶磨砂玻璃材质，全系统视觉规范高度统一",
                 ],
             },
