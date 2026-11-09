@@ -173,6 +173,21 @@ class EventListOut(BaseModel):
     sources: list[str] = Field(default_factory=list)
 
 
+class EventCreateResultOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    items: list[EventOut]
+    total: int
+
+    # 兼容直接把返回值当单一 EventOut 使用的旧调用方
+    @property
+    def id(self) -> str:
+        return self.items[0].id if self.items else ""
+
+    @property
+    def title(self) -> str:
+        return self.items[0].title if self.items else ""
+
+
 class EventCreateIn(BaseModel):
     title: str
     start_time: str  # ISO 8601; naive input is read as Asia/Shanghai

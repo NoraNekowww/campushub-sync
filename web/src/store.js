@@ -579,13 +579,35 @@ export async function flushSyncQueue() {
   for (const item of queue) {
     try {
       if (item.type === 'create') {
-        const created = await api.createEvent(item.payload)
-        // 服务器确认创建成功，将本地临时 ID 替换为权威 ID 并更新持久化缓存
-        if (created && created.id && item.temp_id) {
-          const idx = state.events.findIndex((e) => e.id === item.temp_id)
-          if (idx >= 0) {
-            state.events.splice(idx, 1, created)
+        const res = await api.createEvent(item.payload)
+        // 服务器确认创建成功：支持单事件与重复事件批量返回
+        if (res && item.temp_id) {
+          if (Array.isArray(res.items) && res.items.length > 0) {
+            // 批量重复事件返回：替换首个临时事件，并将其余事件按顺序更新/补充进本地缓存
+            const primary = res.items[0]
+            const idx = state.events.findIndex((e) => e.id === item.temp_id)
+            if (idx >= 0) {
+              state.events.splice(idx, 1, primary)
+            }
+            for (let i = 1; i < res.items.length; i++) {
+              const follower = res.items[i]
+              // 寻找本地可能预生成的对应临时项并替换，或直接入列
+              const followerTempIdx = state.events.findIndex(
+                (e) => String(e.id).startsWith('local_') && e.recurrence?.index === i + 1
+              )
+              if (followerTempIdx >= 0) {
+                state.events.splice(followerTempIdx, 1, follower)
+              } else if (!state.events.some((e) => e.id === follower.id)) {
+                state.events.push(follower)
+              }
+            }
             saveEventsCache(state.events, state.total)
+          } else if (res.id) {
+            const idx = state.events.findIndex((e) => e.id === item.temp_id)
+            if (idx >= 0) {
+              state.events.splice(idx, 1, res)
+              saveEventsCache(state.events, state.total)
+            }
           }
         }
       } else if (item.type === 'patch') {
@@ -916,19 +938,64 @@ export async function saveCustomEvent(payload) {
       if (idx >= 0) state.events.splice(idx, 1, localItem)
       appendSyncQueue({ type: 'patch', id: existing.id, payload: payloadWithMeta })
     } else {
-      const tempId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-      localItem = {
-        id: tempId,
-        source: 'custom',
-        status: 'pending',
-        created_at: nowIso,
-        updated_at: nowIso,
-        client_updated_at: nowIso,
-        ...payload,
+      const isRecurring = Boolean(
+        payload.repeat_frequency &&
+        ['day', 'week', 'month'].includes(payload.repeat_frequency) &&
+        payload.repeat_count > 1
+      )
+      const repeatFreq = payload.repeat_frequency
+      const repeatInterval = Math.max(1, payload.repeat_interval || 1)
+      const repeatCount = Math.max(1, Math.min(100, payload.repeat_count || 1))
+      const seriesGroupId = `rec_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+      const baseStart = new Date(payload.start_time)
+      const durationMs = payload.end_time ? new Date(payload.end_time).getTime() - baseStart.getTime() : null
+
+      const createdItems = []
+      const count = isRecurring ? repeatCount : 1
+
+      for (let i = 0; i < count; i++) {
+        const tempId = `local_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`
+        let curStart = new Date(baseStart.getTime())
+        if (isRecurring && i > 0) {
+          if (repeatFreq === 'day') {
+            curStart.setDate(curStart.getDate() + i * repeatInterval)
+          } else if (repeatFreq === 'week') {
+            curStart.setDate(curStart.getDate() + i * repeatInterval * 7)
+          } else if (repeatFreq === 'month') {
+            const expectedMonth = curStart.getMonth() + i * repeatInterval
+            curStart.setMonth(expectedMonth)
+          }
+        }
+        const curStartIso = curStart.toISOString()
+        const curEndIso = durationMs != null ? new Date(curStart.getTime() + durationMs).toISOString() : null
+
+        const item = {
+          id: tempId,
+          source: 'custom',
+          status: 'pending',
+          created_at: nowIso,
+          updated_at: nowIso,
+          client_updated_at: nowIso,
+          ...payload,
+          start_time: curStartIso,
+          end_time: curEndIso,
+          recurrence: isRecurring ? {
+            group_id: seriesGroupId,
+            freq: repeatFreq,
+            interval: repeatInterval,
+            index: i + 1,
+            total: repeatCount,
+          } : null,
+        }
+        createdItems.push(item)
       }
-      state.events.unshift(localItem)
-      state.total += 1
-      appendSyncQueue({ type: 'create', temp_id: tempId, payload: payloadWithMeta })
+
+      for (const it of createdItems) {
+        state.events.unshift(it)
+      }
+      state.total += createdItems.length
+      localItem = createdItems[0]
+      appendSyncQueue({ type: 'create', temp_id: localItem.id, payload: payloadWithMeta })
     }
     // 立即写回本地永久缓存
     saveEventsCache(state.events, state.total)

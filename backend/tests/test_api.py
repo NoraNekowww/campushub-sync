@@ -617,8 +617,8 @@ def test_create_custom_event_with_recurrence(client, admin_headers):
     resp = client.post("/api/events", json=payload_week, headers=admin_headers)
     assert resp.status_code == 201, resp.text
     created = resp.json()
-    assert created["title"] == "双周组会"
-    assert created["location"] == "55楼B204"
+    assert (created.get("title") == "双周组会") or (created.get("items") and created["items"][0]["title"] == "双周组会")
+    assert created.get("location") == "55楼B204" or (created.get("items") and created["items"][0]["location"] == "55楼B204")
 
     # 查询这批生成的事件
     query = client.get("/api/events?search=双周组会", headers=admin_headers)
@@ -645,6 +645,8 @@ def test_create_custom_event_with_recurrence(client, admin_headers):
     }
     resp_m = client.post("/api/events", json=payload_month, headers=admin_headers)
     assert resp_m.status_code == 201, resp_m.text
+    created_m = resp_m.json()
+    assert (created_m.get("title") == "月度汇报") or (created_m.get("items") and created_m["items"][0]["title"] == "月度汇报")
     query_m = client.get("/api/events?search=月度汇报", headers=admin_headers)
     items_m = sorted(query_m.json()["items"], key=lambda x: x["start_time"])
     assert len(items_m) == 4

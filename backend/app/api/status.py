@@ -30,14 +30,15 @@ _STARTED_AT = time.time()
 async def app_version() -> JSONResponse:
     return JSONResponse(
         content={
-            "version": "2.8.1",
-            "tag": "v2.8.1",
-            "title": "CampusHub Android v2.8.1",
+            "version": "2.8.2",
+            "tag": "v2.8.2",
+            "title": "CampusHub Android v2.8.2",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
             "features": [
-                "修复教务开学日基准推算因导入时周次反推偏差导致的日期错位问题，严格对齐校历教学周，彻底解决特殊课程周次不显示bug",
+                "修复重复日程创建 bug：移动端离线秒存与多端批量展开对齐，解决重复日程只生成 1 条或同步丢失的问题",
+                "修复教务开学日基准推算因导入时周次反推偏差导致的日期错位问题，严格对齐校历教学周",
                 "优化周课表布局：紧凑等宽时间排版杜绝卡片右侧文字溢出，当前时间浮标自适应居中",
                 "预设调色板升级：默认橙色优化为温润浅橙（告别土黄色），粉色调整为浅浅桃粉红（告别深肉色）",
                 "冲突呼吸阈值优化：交叉重叠不超过 10 分钟的日程（如课前 DDL）保持常态静止并存，不交替闪烁",

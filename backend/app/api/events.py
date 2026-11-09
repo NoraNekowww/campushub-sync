@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, Union
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -18,7 +18,7 @@ from ..connectors import build_connectors
 from ..connectors.ms_todo import note_with_meta
 from ..db import get_session
 from ..models import Event, EventStatus, Source, User, make_event_id
-from ..schemas import EventCreateIn, EventListOut, EventOut, EventPatchIn, MsTaskIn
+from ..schemas import EventCreateIn, EventCreateResultOut, EventListOut, EventOut, EventPatchIn, MsTaskIn
 from ..security import require_read, timeline_owner
 from ..services import events as event_service
 from ..services.sync_engine import upsert_events
@@ -119,14 +119,14 @@ def get_event(
 
 @router.post(
     "",
-    response_model=EventOut,
+    response_model=Union[EventOut, EventCreateResultOut],
     status_code=http_status.HTTP_201_CREATED,
 )
 def create_event(
     payload: EventCreateIn,
     session: Session = Depends(get_session),
     user: User = Depends(timeline_owner),
-) -> EventOut:
+) -> Union[EventOut, EventCreateResultOut]:
     start = _as_utc(payload.start_time)
     end = _as_utc(payload.end_time) if payload.end_time else None
     if end is not None and end < start:
@@ -213,9 +213,15 @@ def create_event(
         events_to_create.append(ev)
 
     session.commit()
-    first_event = events_to_create[0]
-    session.refresh(first_event)
-    return EventOut.from_event(first_event, tz=get_settings().timezone)
+    tz = get_settings().timezone
+    for ev in events_to_create:
+        session.refresh(ev)
+    if len(events_to_create) > 1:
+        return EventCreateResultOut(
+            items=[EventOut.from_event(ev, tz=tz) for ev in events_to_create],
+            total=len(events_to_create),
+        )
+    return EventOut.from_event(events_to_create[0], tz=tz)
 
 
 # --------------------------------------------------------- 微软待办（反向写入）
