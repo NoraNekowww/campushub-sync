@@ -18,19 +18,22 @@
               {{ event.title }}
             </p>
 
-            <!-- 时间展示：字号放大，清晰醒目 -->
-            <div class="mt-2.5 flex items-center gap-2 text-[15px] font-semibold text-slate-700 dark:text-slate-200" data-testid="class-detail-time">
-              <Clock :size="16" class="shrink-0 text-brand-600 dark:text-brand-400" />
-              <span>{{ timeRange }}</span>
+            <!-- 时间展示：字号加大加粗，配胶囊底色更清晰醒目 -->
+            <div
+              class="mt-3 flex items-center gap-2.5 rounded-2xl bg-slate-100/80 px-3.5 py-2.5 text-base font-bold text-slate-800 dark:bg-slate-800/60 dark:text-slate-100 border border-slate-200/60 dark:border-slate-700/40"
+              data-testid="class-detail-time"
+            >
+              <Clock :size="18" class="shrink-0 text-brand-600 dark:text-brand-400" />
+              <span class="tracking-tight font-mono">{{ timeRange }}</span>
             </div>
 
             <!-- 地点展示：更大字号并带高亮底衬，一眼看清教室与校区 -->
             <div
               v-if="event.location"
-              class="mt-2 flex items-center gap-2 rounded-xl bg-brand-50/80 px-3 py-2 text-sm font-semibold text-brand-800 dark:bg-brand-950/40 dark:text-brand-200 border border-brand-200/60 dark:border-brand-500/20"
+              class="mt-2.5 flex items-center gap-2.5 rounded-2xl bg-brand-50/90 px-3.5 py-2.5 text-[15px] font-bold text-brand-900 dark:bg-brand-950/50 dark:text-brand-200 border border-brand-200/80 dark:border-brand-500/30"
               data-testid="class-detail-location"
             >
-              <MapPin :size="16" class="shrink-0 text-brand-600 dark:text-brand-400" />
+              <MapPin :size="18" class="shrink-0 text-brand-600 dark:text-brand-400" />
               <span class="break-words">{{ event.location }}</span>
             </div>
           </div>
