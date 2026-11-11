@@ -149,19 +149,19 @@ def create_app() -> FastAPI:
     async def app_version() -> JSONResponse:
         return JSONResponse(
             content={
-                "version": "2.8.5",
-                "tag": "v2.8.5",
-                "title": "CampusHub Android v2.8.5",
+                "version": "2.8.6",
+                "tag": "v2.8.6",
+                "title": "CampusHub Android v2.8.6",
                 "download_url": "https://nzlab.online/schedule/CampusHub.apk",
                 "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
                 "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
                 "features": [
+                    "识别结果真正生效：点「自动识别」后回填的标题、日期、时间、时长、地点会原样建出来；识别过之后保存不再重复识别，手动微调不会被冲掉",
+                    "标题自动提炼：识别时从原文抽出真正的主题（如「电子技术实验」「开组会」「提交大作业」），并剥掉「记得 / 请 / 的得了」等口语残渣；实在抽不出就用「日程 / 待办事项」这类通用名称，不再把整段话塞进标题",
+                    "待办 DDL 表单优化：截止日期与截止时间并排一行，一屏就能填完；待办不显示地点、不提供重复设置",
                     "日程粘贴自动识别：在标题栏粘贴一段话（如「11月20日 09:00-11:00 在46楼A202 上电子技术实验」），下方即出现「自动识别」按钮，一键抽取出标题、日期、时间、时长、地点并回填表单",
                     "识别能力离线可用：日期支持'明天/下周三/11月20日/2026-11-20'，时间支持'下午3点到5点/14:00-15:35/9点半'，地点支持'在46楼A202/地点：图书馆三楼'，其余内容自动整理为标题与备注",
-                    "课程详情卡片视觉优化：时间与地点展示字号显著加大加粗，配合现代圆角底衬与等宽排版，一眼看清教室与起止时刻",
-                    "修复重复日程创建与同步：支持多端离线秒存预展开与后台批处理映射，确保按天/周/月重复任务完整生成",
-                    "优化课表与线性表缓存协同机制：确保离线新建/批量变更日程在周课表中即时双向联动呈现",
-                    "教务校历教学周绝对对齐：根治学期开学日基准漂移，杜绝单双周反转与特定周次课程丢失",
+                    "修复客户端安装失败（PackageInfoIsNull）：下载直链此前被兜底成网页，现由服务器单独指向真正的安装包",
                 ],
             },
             headers={

@@ -73,7 +73,7 @@
 
         <!-- 粘贴/输入长文本后出现的自动识别入口（仅活动日程；待办 DDL 用不着） -->
         <div
-          v-if="form.kind === 'class' && titleLength > DETECT_MIN_LEN"
+          v-if="form.kind === 'class' && !detectedFrom && titleLength > DETECT_MIN_LEN"
           class="flex items-center gap-2 rounded-2xl border border-brand-200/70 bg-brand-50/60 px-2.5 py-2 dark:border-brand-600/40 dark:bg-brand-950/30"
           data-testid="auto-detect-bar"
         >
@@ -100,30 +100,31 @@
           {{ detectHint }}
         </p>
 
-        <div class="grid grid-cols-2 gap-2">
+        <!-- 待办 DDL：截止日期 + 截止时间并排成一行；日程模式则是活动日期 + 地点 -->
+        <div v-if="form.kind === 'deadline'" class="grid grid-cols-2 gap-2">
           <label class="block space-y-1 text-xs">
-            <span class="text-slate-500 dark:text-slate-400">{{ form.kind === 'deadline' ? '截止日期' : '活动日期' }}</span>
+            <span class="text-slate-500 dark:text-slate-400">截止日期</span>
             <input v-model="form.date" type="date" class="input" required data-testid="custom-date" />
           </label>
-          <!-- 地点只属于活动日程：待办 DDL 是「到点交东西」，没有固定地点 -->
-          <label v-if="form.kind !== 'deadline'" class="block space-y-1 text-xs">
+          <label class="block space-y-1 text-xs">
+            <span class="text-slate-500 dark:text-slate-400">截止时间</span>
+            <input v-model="form.start" type="time" class="input" required data-testid="custom-deadline-time" />
+          </label>
+        </div>
+
+        <div v-else class="grid grid-cols-2 gap-2">
+          <label class="block space-y-1 text-xs">
+            <span class="text-slate-500 dark:text-slate-400">活动日期</span>
+            <input v-model="form.date" type="date" class="input" required data-testid="custom-date" />
+          </label>
+          <label class="block space-y-1 text-xs">
             <span class="text-slate-500 dark:text-slate-400">地点（可空）</span>
             <input v-model="form.location" class="input" maxlength="80" placeholder="45楼B203" />
           </label>
         </div>
 
-        <!-- DDL 模式下：仅展示截止时间与开启重复（DDL 没有持续时长，彻底移除时长选择） -->
-        <div v-if="form.kind === 'deadline'" class="grid grid-cols-2 gap-2">
-          <label class="block space-y-1 text-xs">
-            <span class="text-slate-500 dark:text-slate-400">截止时间</span>
-            <input v-model="form.start" type="time" class="input" required />
-          </label>
-          <!-- 待办 DDL 不提供重复：重复是「日程卡片」的能力 -->
-          <div></div>
-        </div>
-
-        <!-- 课程/时间段活动模式下：开始时间与活动时长并排 -->
-        <div v-else class="grid grid-cols-2 gap-2">
+        <!-- 课程/时间段活动模式下：开始时间与活动时长并排（待办 DDL 已在上面并排完，不重复出现） -->
+        <div v-if="form.kind !== 'deadline'" class="grid grid-cols-2 gap-2">
           <label class="block space-y-1 text-xs">
             <span class="text-slate-500 dark:text-slate-400">开始时间</span>
             <input v-model="form.start" type="time" class="input" required />
@@ -516,7 +517,12 @@ function onTitleInput() {
   if (detectHint.value) detectHint.value = ''
 }
 
-/** 一键识别并回填 */
+/**
+ * 一键识别并回填。识别过一次就记下「已识别到哪份原文」，
+ * 之后 submit 不再重复识别，避免保存前把用户手动微调过的字段又冲掉。
+ */
+const detectedFrom = ref('')
+
 async function applyDetect() {
   const raw = String(form.title || '').trim()
   if (!raw) return
@@ -531,6 +537,7 @@ async function applyDetect() {
   if (r.kind === 'class' && r.location) form.location = r.location
   // 完整原文留在备注里，识别漏掉的信息也不会丢
   if (r.description) form.description = r.description
+  detectedFrom.value = raw
 
   const bits = [
     r.kind === 'deadline' ? '待办 / DDL' : '活动日程',
@@ -540,7 +547,11 @@ async function applyDetect() {
   if (r.kind === 'class' && r.location) bits.push(`地点 ${r.location}`)
   detectHint.value = `已识别：${bits.join(' · ')}（原文存进备注，可在此基础上微调）`
   await nextTick()
-  titleInput.value?.blur()
+  // 不再自动 blur：失焦会让键盘收起、页面跳动，用户以为没生效
+  const el = titleInput.value
+  if (el && typeof el.setSelectionRange === 'function') {
+    el.setSelectionRange(el.value.length, el.value.length)
+  }
 }
 
 watch(
@@ -569,6 +580,7 @@ watch(
     form.repeatCount = 5
     form.applyScope = 'single'
     detectHint.value = ''
+    detectedFrom.value = ''
   },
   { immediate: true },
 )
@@ -579,8 +591,10 @@ function close() {
 
 async function submit() {
   error.value = ''
-  // 粘了一整段话没点识别就保存：先识别一遍再存，免得标题把整段话原封不动存进去
-  if (form.kind === 'class' && titleLength.value > DETECT_MIN_LEN) {
+  // 粘了一整段话却直接点保存：先识别一遍再存，免得整段话被原样存成标题。
+  // 但已经识别过（detectedFrom 有值）就不再重跑，否则会把用户微调过的字段冲掉。
+  const currentTitle = String(form.title || '').trim()
+  if (!detectedFrom.value && form.kind === 'class' && currentTitle.length > DETECT_MIN_LEN) {
     await applyDetect()
   }
   busy.value = true

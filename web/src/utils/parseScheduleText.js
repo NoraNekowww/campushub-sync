@@ -281,7 +281,7 @@ function parseLocation(text) {
 
 /** 从剩余文本里提炼标题：优先用顿号/逗号切出的最短有意义的片段 */
 const FILLER_RE =
-  /^(记得|记得要|别忘了|别忘|请|麻烦|需要|要|关于|内容|课程|讲座|主题|备注|事项|通知|另外|还有|安排|然后|就是|那|这个|那个)+/
+  /^(记得|记得要|别忘了|别忘|请|麻烦|需要|关于|内容|备注|事项|通知|另外|还有|然后|就是|那|这个|那个)+/
 
 function parseTitle(remainder, original) {
   const tidy = (s) =>
@@ -289,20 +289,36 @@ function parseTitle(remainder, original) {
       .replace(/[，,。;；!！?？:：]+/g, ' ')
       .replace(/\s+/g, ' ')
       .replace(FILLER_RE, '')
-      .replace(/^[的得了上下去来一边啦吧呀]+/, '')
       .trim()
 
-  let text = tidy(remainder)
-  if (!text || text.length < 2) text = tidy(original)
-  // 标题被切剩下的只有动词引导词（「在」「于」「上」…）时，交给原文兜底
-  const stripLead = (s) => s.replace(/^[在于上下去来把被对给和跟向从有是]+/, '').trim()
-  text = stripLead(text)
-  if (!text || text.length < 2) text = stripLead(tidy(original))
-  if (!text) return '未命名日程'
+  // 日期/时间被切走后常留下「前」「之前」「以前」「截止」「前提交」这类残渣，
+  // 以及「记得」「在」「上」这种没有信息量的引导词。逐层剥掉，剥到没变化为止。
+  const scrub = (s) => {
+    let prev
+    let cur = s
+    do {
+      prev = cur
+      cur = cur
+        .replace(/^[\s，,。;；:：]+/, '')
+        .replace(/^(?:截止时间|截止日期|截止|最晚|之前|以前|前|后|起|止|从|至|到)\s*/, '')
+        .replace(FILLER_RE, '')
+        .replace(/^[的得了上下去来一边啦吧呀在于把被对给和跟向从有是及与和]+/, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+    } while (cur !== prev)
+    // 结尾的「交了 / 提交了 / 办了」是口语尾巴，留着不像标题
+    return cur.replace(/(?:交了|办完|搞定|弄完|交|提交|完成|做完)$/, '').trim() || cur
+  }
+
+  let text = scrub(tidy(remainder))
+  if (!text || text.length < 2) text = scrub(tidy(original))
+  if (!text || text.length < 2) text = scrub(original.replace(/[，,。;；!！?？:：]+/g, ' '))
+  if (!text || text.length < 2) return ''
+
   // 优先取第一个短语；太短（<2 字）就退回到整段前 24 字
   const first = text.split(/[，,。;；!！?？·、]/)[0].trim()
   const title = (first.length >= 2 ? first : text).slice(0, 24).trim()
-  return title || '未命名日程'
+  return title.length >= 2 ? title : ''
 }
 
 /** 主入口：把一段文本解析成日程字段 */
@@ -371,8 +387,9 @@ export function parseScheduleText(raw, now = new Date()) {
     if (activity) result.duration = 1.5
   }
 
-  // 5. 标题
-  result.title = parseTitle(working, text)
+  // 5. 标题：识别不出有意义的短语时，按类型给一个通用名称（而不是拿整段话当标题）
+  const parsedTitle = parseTitle(working, text)
+  result.title = parsedTitle || (result.kind === 'deadline' ? '待办事项' : '日程')
   result.description = text.trim()
   return result
 }
