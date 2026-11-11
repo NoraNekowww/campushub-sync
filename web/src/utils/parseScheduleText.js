@@ -121,20 +121,30 @@ function cnNum(str) {
 }
 
 /** 给 12 小时制补上下午：下午/晚上 +12（同时把时段词一起吃掉，避免污染标题） */
-const MERIDIEM_RE = /(凌晨|早上|早晨|上午|中午|下午|傍晚|晚上|夜里|夜间|今早|明早|今晚|明晚)$/
+/* 午别词：「晚上 8 点半」也会被写成「晚8点半」「今晚八点半」，单字「晚/早」必须一起认。
+   放在最后按长度倒序匹配，避免「晚上」被「晚」抢先吃掉。 */
+const MERIDIEM_TAIL_RE = /(凌晨|早上|早晨|上午|中午|下午|傍晚|晚上|夜里|夜间|今早|明早|今晚|明晚|晚|早)$/
+
+/** 从 idx 往前找最近的午别词（窗口放宽到 6 字，覆盖「明天晚上」这种复合写法） */
+function meridiemBefore(text, idx) {
+  const before = text.slice(Math.max(0, idx - 6), idx)
+  const m = before.match(MERIDIEM_TAIL_RE)
+  return m ? m[0] : ''
+}
 
 function applyMeridiem(hour, text, matchedStart) {
-  const before = text.slice(Math.max(0, matchedStart - 4), matchedStart)
+  const word = meridiemBefore(text, matchedStart)
   // 明早/今早 属于上午，不 +12
-  if (/(?<!明|今|早)(上午|早上|早晨)$/.test(before)) {
+  if (word && /^(上午|早上|早晨|早)$/.test(word)) {
     if (hour === 12) return 0
     return hour
   }
-  if (/下午|傍晚|晚上|夜里|夜间|今晚|明晚/.test(before)) {
+  if (word && /^(下午|傍晚|晚上|夜里|夜间|今晚|明晚|晚)$/.test(word)) {
     if (hour < 12) return hour + 12
+    return hour
   }
-  if (/中午/.test(before) && hour < 11) return hour + 12
-  if (/凌晨/.test(before) && hour === 12) return 0
+  if (word === '中午' && hour < 11) return hour + 12
+  if (word === '凌晨' && hour === 12) return 0
   return hour
 }
 
@@ -142,9 +152,8 @@ function applyMeridiem(hour, text, matchedStart) {
 function expandWithMeridiem(text, matched) {
   const idx = text.indexOf(matched)
   if (idx <= 0) return matched
-  const before = text.slice(Math.max(0, idx - 4), idx)
-  const m = before.match(MERIDIEM_RE)
-  return m ? m[0] + matched : matched
+  const word = meridiemBefore(text, idx)
+  return word ? word + matched : matched
 }
 
 /** 解析时间范围 / 单点时间，返回 { start, end, matched } 或 null */
@@ -169,25 +178,35 @@ function parseTimeRaw(text) {
       matched: m[0],
     }
   }
-  // 下午2点到4点 / 14:00 到 15:00 / 2点-4点
+  // 下午2点到4点 / 14:00 到 15:00 / 2点-4点 / 八点半到十点
   m = text.match(
-    /(\d{1,2}|[一二两三四五六七八九十]{1,3})\s*[点時时]\s*(?:半|\d{1,2}\s*分)?\s*(?:-|~|～|—|至|到)\s*(\d{1,2}|[一二两三四五六七八九十]{1,3})\s*[点時时]/,
+    /(\d{1,2}|[一二两三四五六七八九十]{1,3})\s*[点時时]\s*(半|\d{1,2}\s*分)?\s*(?:-|~|～|—|至|到)\s*(\d{1,2}|[一二两三四五六七八九十]{1,3})\s*[点時时]\s*(半|\d{1,2}\s*分)?/,
   )
   if (m) {
     let h1 = cnNum(m[1])
-    let h2 = cnNum(m[2])
+    let h2 = cnNum(m[3])
     const idx = text.indexOf(m[0])
     h1 = applyMeridiem(h1, text, idx)
     h2 = applyMeridiem(h2, text, idx)
-    if (h2 < h1) h2 += 12
-    return { start: fmtTime(h1, 0), end: fmtTime(h2, 0), matched: m[0] }
+    const minuteOf = (g) => {
+      if (!g) return 0
+      if (g === '半') return 30
+      return Number(g.replace(/[^\d]/g, '')) || 0
+    }
+    let m1 = minuteOf(m[2])
+    let m2 = minuteOf(m[4])
+    // 晚上八点半到十点：结束点没写午别，跟着开始点走，别掉回早上
+    if (h2 < h1 || (h2 === h1 && m2 < m1)) h2 += 12
+    return { start: fmtTime(h1, m1), end: fmtTime(h2, m2), matched: m[0] }
   }
-  // 14:00 / 14：00
+  // 14:00 / 14：00（前面带「晚/晚上/下午」时要补成 20:30）
   m = text.match(/(\d{1,2})\s*[:：]\s*(\d{2})/)
   if (m) {
-    const h = Number(m[1])
+    let h = Number(m[1])
     const mi = Number(m[2])
     if (h <= 23 && mi <= 59) {
+      h = applyMeridiem(h, text, text.indexOf(m[0]))
+      if (h > 23) h -= 12
       return { start: fmtTime(h, mi), end: '', matched: m[0] }
     }
   }
@@ -283,6 +302,44 @@ function parseLocation(text) {
 const FILLER_RE =
   /^(记得|记得要|别忘了|别忘|请|麻烦|需要|关于|内容|备注|事项|通知|另外|还有|然后|就是|那|这个|那个)+/
 
+/** 标题里不该出现的残渣：时间切走后剩的单字、口语连词、纯语气词 */
+const TITLE_JUNK_RE =
+  /^(?:半|点|分|时|晚|早|号|日|月|年|点整|左右|前后|之间|开始|结束|的|了|就|要|在|于|和|跟|把|被|对|给|有|是|及|与)+$/
+
+/**
+ * 判断「这条标题其实什么都没提炼出来」：
+ * 只剩时间/日期本身、只剩碎片、或干脆是整段原文照抄。
+ */
+function isTitleHopeless(title, original, rawNow) {
+  const t = title.replace(/\s+/g, '')
+  if (!t) return true
+  if (TITLE_JUNK_RE.test(title)) return true
+  // 标题里几乎全是数字与时间单位 → 只写了个时间点，没给事由
+  const timeish = t.replace(
+    /[\d年月日号点分时半至到\-~～—:：上午早上早晨中午下午傍晚晚上夜里凌晨明今早晚前后左右]/g,
+    '',
+  )
+  if (timeish.length <= 1) return true
+  // 纯语气词/口头禅（啊那个就是那个啥来着）→ 没有任何事由信息。
+  // 反向判断更稳：剥掉语气词后还剩实义汉字才算提炼成功，白名单永远不够全。
+  const CHATTER_WORDS = [
+    '那个啥来着', '那个啥', '差不多', '唉呀', '什么', '怎么', '样子', '大概', '好像', '可能',
+    '应该', '其实', '反正', '总之', '所以', '但是', '不过', '或者', '以及', '然后', '还有',
+    '那个', '这个', '就是', '那啥', '来着', '嗯', '哦', '噢', '哎', '诶', '欸', '呃', '额',
+    '啊', '呀', '吧', '呢', '嘛', '哈', '了', '的', '是', '在', '和', '跟', '要', '想',
+    '说', '啥', '呗', '啦', '咯', '哟', '喂', '唉', '就',
+  ].sort((a, b) => b.length - a.length)
+  const chatterRe = new RegExp(CHATTER_WORDS.join('|'), 'g')
+  const stripped = t.replace(chatterRe, '').replace(/[\s\p{P}]/gu, '')
+  if (stripped.length <= 1) return true
+  // 剥完只剩标点/数字 → 也算没提炼出来
+  if (!/[\u4e00-\u9fa5a-zA-Z]/.test(stripped)) return true
+  // 整段原文照抄：长的算失败，短得像名字（开组会）才留
+  const o = String(original || '').replace(/\s+/g, '')
+  if (t === o && t.length > 10) return true
+  return false
+}
+
 function parseTitle(remainder, original) {
   const tidy = (s) =>
     s
@@ -302,7 +359,18 @@ function parseTitle(remainder, original) {
         .replace(/^[\s，,。;；:：]+/, '')
         .replace(/^(?:截止时间|截止日期|截止|最晚|之前|以前|前|后|起|止|从|至|到)\s*/, '')
         .replace(FILLER_RE, '')
-        .replace(/^[的得了上下去来一边啦吧呀在于把被对给和跟向从有是及与和]+/, '')
+        .replace(/^[的得了上下去来一边啦吧呀在于把被对给和跟向从有是及与要]+/, '')
+        // 时间被切走后残留的「半」「点半」「点钟」之类单字碎片
+        .replace(/^[半点钟分時时]\s*/, '')
+        // 日期/时间没被主流程切干净时残留的前缀（周三下午两点 / 11月20日）
+        .replace(
+          /^(?:今天|明天|后天|大后天|昨天|前天|本周|这周|这周末|周末|下周末|下周|下下周|周[一二三四五六日天]|星期[一二三四五六日天]|礼拜[一二三四五六日天])\s*/,
+          '',
+        )
+        .replace(/^(?:上午|早上|早晨|中午|下午|傍晚|晚上|夜里|凌晨|明早|今早|明晚|今晚|早晚?)\s*/, '')
+        .replace(/^\d{1,2}\s*月\s*\d{1,2}\s*[日号]\s*/, '')
+        .replace(/^\d{1,2}\s*月\s*/, '')
+        .replace(/^[\d一二两三四五六七八九十]{1,3}\s*[点時时]\s*(?:半|\d{1,2}\s*分)?\s*/, '')
         .replace(/\s+/g, ' ')
         .trim()
     } while (cur !== prev)
@@ -315,10 +383,34 @@ function parseTitle(remainder, original) {
   if (!text || text.length < 2) text = scrub(original.replace(/[，,。;；!！?？:：]+/g, ' '))
   if (!text || text.length < 2) return ''
 
-  // 优先取第一个短语；太短（<2 字）就退回到整段前 24 字
-  const first = text.split(/[，,。;；!！?？·、]/)[0].trim()
-  const title = (first.length >= 2 ? first : text).slice(0, 24).trim()
-  return title.length >= 2 ? title : ''
+  // 优先取第一个短语；一段话里第一个短句通常是事由，后面都是补充说明
+  const clauses = text
+    .split(/[，,。;；!！?？·、]|\s{2,}/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  let title = clauses.find((c) => c.length >= 2) || text
+  // 还是太长（一整个长句）就按空格再切一刀
+  if (title.length > 16) {
+    const cut = title.split(/\s+/)[0]
+    if (cut.length >= 2 && cut.length < title.length) title = cut
+  }
+  title = title.slice(0, 24).trim()
+
+  // 提炼失败就返回空串，由主流程换成「日程 / 待办事项」这类通用名称，
+  // 绝不把一整段话原样塞成标题。
+  if (title.length < 2) return ''
+  if (isTitleHopeless(title, original)) return ''
+  return title
+}
+
+/** 标题是否只是地点（「45楼B203」），那就等于没提炼出什么事由 */
+function titleIsJustLocation(title, location) {
+  if (!title || !location) return false
+  const norm = (s) => String(s).replace(/[\s，,。;；:：·、-]/g, '').toLowerCase()
+  const t = norm(title)
+  const l = norm(location)
+  if (!t || !l) return false
+  return t === l || l.includes(t) || t.includes(l)
 }
 
 /** 主入口：把一段文本解析成日程字段 */
@@ -389,7 +481,8 @@ export function parseScheduleText(raw, now = new Date()) {
 
   // 5. 标题：识别不出有意义的短语时，按类型给一个通用名称（而不是拿整段话当标题）
   const parsedTitle = parseTitle(working, text)
-  result.title = parsedTitle || (result.kind === 'deadline' ? '待办事项' : '日程')
+  const generic = result.kind === 'deadline' ? '待办事项' : '日程'
+  result.title = parsedTitle && !titleIsJustLocation(parsedTitle, result.location) ? parsedTitle : generic
   result.description = text.trim()
   return result
 }

@@ -65,5 +65,43 @@ check('r9.location', r9.location, '一教101')
 // 原文必须完整保存进备注
 check('r1.desc', r1.description, '周一 14:00-15:35 在 45楼B203 上高数课，记得带教材')
 
+// ─── 午别词：单字「晚/早」也必须补成 12 小时制（v2.8.7）
+const n1 = parseScheduleText('晚上八点半开会', NOW)
+check('n1.start', n1.start, '20:30')
+check('n1.title', n1.title, '开会')
+
+const n2 = parseScheduleText('周三晚8点半 交实验报告', NOW)
+check('n2.start', n2.start, '20:30')
+
+const n3 = parseScheduleText('11.20 晚8:30 开会', NOW)
+check('n3.start', n3.start, '20:30')
+
+const n4 = parseScheduleText('明晚8点半 开会', NOW)
+check('n4.start', n4.start, '20:30')
+
+const n5 = parseScheduleText('早8点 跑操', NOW)
+check('n5.start', n5.start, '08:00')
+
+// 范围里分钟不能丢：「八点半到十点半」
+const n6 = parseScheduleText('11月20日晚上八点半到十点半 在46楼A202 上电子技术实验', NOW)
+check('n6.start', n6.start, '20:30')
+check('n6.end', n6.end, '22:30')
+check('n6.title', n6.title, '电子技术实验')
+check('n6.location', n6.location, '46楼A202')
+
+// ─── 标题提炼失败 → 通用名称，绝不把整段话塞进标题
+check('g1', parseScheduleText('晚上八点半', NOW).title, '待办事项')
+check('g2', parseScheduleText('明天晚上8点半', NOW).title, '待办事项')
+check('g3', parseScheduleText('11月20日 20:30', NOW).title, '待办事项')
+check('g4', parseScheduleText('啊那个就是那个啥来着', NOW).title, '待办事项')
+check('g5', parseScheduleText('下周三下午两点 45楼B203', NOW).title, '日程')
+
+// 长句要截在第一个短句，不能原样搬运
+check('g6', parseScheduleText('明晚8点半 和导师讨论毕设选题，记得带上开题报告和上周的实验数据', NOW).title, '导师讨论毕设选题')
+check('g7', parseScheduleText('这个周末要把论文写完', NOW).title, '论文写完')
+// 提炼成功时不能被通用名称顶掉
+check('g8', parseScheduleText('记得11月25号之前把实验报告交了', NOW).title, '实验报告')
+check('g9', parseScheduleText('今晚八点半 宿舍楼下取外卖', NOW).title, '宿舍楼下取外卖')
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
