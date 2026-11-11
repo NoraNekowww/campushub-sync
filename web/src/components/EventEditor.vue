@@ -64,47 +64,32 @@
             class="input"
             required
             maxlength="500"
-            :placeholder="form.kind === 'deadline' ? '例如：交大作业 / 实验报告（可粘贴一整段话，自动识别时间与地点）' : '例如：临时加课 / 组会 / 自习（可粘贴一整段话，自动识别时间与地点）'"
+            :placeholder="titlePlaceholder"
             data-testid="custom-title"
-            @input="onTitleInput"
             @paste="onTitlePaste"
+            @input="onTitleInput"
           />
         </label>
 
-        <!-- 粘贴长文本后出现的自动识别入口 -->
-        <transition
-          enter-active-class="transition-all duration-200"
-          enter-from-class="opacity-0 -translate-y-1"
-          leave-active-class="transition-all duration-150"
-          leave-to-class="opacity-0 -translate-y-1"
+        <!-- 粘贴/输入长文本后出现的自动识别入口（仅活动日程；待办 DDL 用不着） -->
+        <div
+          v-if="form.kind === 'class' && titleLength > DETECT_MIN_LEN"
+          class="flex items-center gap-2 rounded-2xl border border-brand-200/70 bg-brand-50/60 px-2.5 py-2 dark:border-brand-600/40 dark:bg-brand-950/30"
+          data-testid="auto-detect-bar"
         >
-          <div
-            v-if="showDetect"
-            class="flex items-center gap-2 rounded-2xl border border-brand-200/70 bg-brand-50/60 px-2.5 py-2 backdrop-blur-sm dark:border-brand-600/40 dark:bg-brand-950/30"
-            data-testid="auto-detect-bar"
+          <Sparkles :size="14" class="shrink-0 text-brand-600 dark:text-brand-400" />
+          <span class="min-w-0 flex-1 truncate text-[11px] text-slate-500 dark:text-slate-400">
+            检测到 {{ titleLength }} 字长文本，可自动拆分标题、日期、时间与地点
+          </span>
+          <button
+            type="button"
+            class="btn-primary shrink-0 !px-2.5 !py-1 text-[11px]"
+            data-testid="auto-detect-apply"
+            @click="applyDetect"
           >
-            <Sparkles :size="14" class="shrink-0 text-brand-600 dark:text-brand-400" />
-            <span class="min-w-0 flex-1 truncate text-[11px] text-slate-500 dark:text-slate-400">
-              检测到 {{ pastedLength }} 字长文本，可自动拆分标题、日期、时间与地点
-            </span>
-            <button
-              type="button"
-              class="btn-primary shrink-0 !px-2.5 !py-1 text-[11px]"
-              data-testid="auto-detect-apply"
-              @click="applyDetect"
-            >
-              自动识别
-            </button>
-            <button
-              type="button"
-              class="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              title="忽略"
-              @click="dismissDetect"
-            >
-              <X :size="13" />
-            </button>
-          </div>
-        </transition>
+            自动识别
+          </button>
+        </div>
 
         <!-- 识别结果预览，允许用户在保存前确认 -->
         <p
@@ -120,7 +105,8 @@
             <span class="text-slate-500 dark:text-slate-400">{{ form.kind === 'deadline' ? '截止日期' : '活动日期' }}</span>
             <input v-model="form.date" type="date" class="input" required data-testid="custom-date" />
           </label>
-          <label class="block space-y-1 text-xs">
+          <!-- 地点只属于活动日程：待办 DDL 是「到点交东西」，没有固定地点 -->
+          <label v-if="form.kind !== 'deadline'" class="block space-y-1 text-xs">
             <span class="text-slate-500 dark:text-slate-400">地点（可空）</span>
             <input v-model="form.location" class="input" maxlength="80" placeholder="45楼B203" />
           </label>
@@ -132,17 +118,8 @@
             <span class="text-slate-500 dark:text-slate-400">截止时间</span>
             <input v-model="form.start" type="time" class="input" required />
           </label>
-          <div v-if="!isEdit && !hideRecurring" class="flex flex-col justify-end">
-            <label class="flex h-[38px] cursor-pointer items-center gap-2 rounded-lg border border-slate-200/80 bg-slate-50/70 px-2.5 text-xs font-medium dark:border-slate-800 dark:bg-slate-800/40">
-              <input
-                v-model="form.recurring"
-                type="checkbox"
-                data-testid="custom-recurring-toggle"
-                class="accent-brand-600"
-              />
-              <span class="truncate">开启重复任务</span>
-            </label>
-          </div>
+          <!-- 待办 DDL 不提供重复：重复是「日程卡片」的能力 -->
+          <div></div>
         </div>
 
         <!-- 课程/时间段活动模式下：开始时间与活动时长并排 -->
@@ -171,20 +148,20 @@
           </label>
         </div>
 
-        <!-- 重复任务详细参数：仅当开启重复时展开（若当前为课程附带 DDL 则隐藏） -->
+        <!-- 重复日程：只有「课程 / 活动日程」才有，待办 DDL 不提供 -->
         <div
-          v-if="!isEdit && form.recurring && !hideRecurring"
+          v-if="!isEdit && form.kind === 'class' && form.recurring && !hideRecurring"
           class="space-y-2 rounded-2xl border border-white/60 bg-white/50 p-3 text-xs dark:border-white/10 dark:bg-slate-800/40 backdrop-blur-sm animate-fade-in"
+          data-testid="recurring-panel"
         >
-          <!-- 如果是 class 模式，保留重复标题；如果是 deadline 模式已在上方勾选 -->
-          <label v-if="form.kind === 'class'" class="flex cursor-pointer items-center gap-2 font-medium">
+          <label class="flex cursor-pointer items-center gap-2 font-medium">
             <input
               v-model="form.recurring"
               type="checkbox"
               data-testid="custom-recurring-toggle"
               class="accent-brand-600"
             />
-            <span>开启重复任务（按周期自动生成）</span>
+            <span>开启重复日程（按周期自动生成）</span>
           </label>
           <div class="space-y-2 pt-0.5">
             <div class="flex flex-wrap items-center gap-2">
@@ -214,12 +191,12 @@
                 class="input w-16 !py-1 text-center text-slate-900 dark:text-slate-100"
                 data-testid="custom-repeat-count"
               />
-              <span>次（包含本次共 {{ form.repeatCount }} 个任务）</span>
+              <span>次（包含本次共 {{ form.repeatCount }} 个日程）</span>
             </div>
           </div>
         </div>
 
-        <!-- 课程/活动模式下未勾选重复时展示开启开关 -->
+        <!-- 活动日程未勾选重复时展示开启开关（待办 DDL 不展示） -->
         <div
           v-else-if="!isEdit && form.kind === 'class' && !form.recurring"
           class="rounded-2xl border border-white/60 bg-white/50 p-2.5 text-xs dark:border-white/10 dark:bg-slate-800/40 backdrop-blur-sm"
@@ -231,7 +208,7 @@
               data-testid="custom-recurring-toggle"
               class="accent-brand-600"
             />
-            <span>开启重复任务（按周期自动生成）</span>
+            <span>开启重复日程（按周期自动生成）</span>
           </label>
         </div>
 
@@ -379,10 +356,18 @@ const uploadingFile = ref(false)
 const error = ref('')
 /* 粘贴自动识别：长文本（>10 字）时露出「自动识别」按钮 */
 const titleInput = ref(null)
-const showDetect = ref(false)
-const pastedLength = ref(0)
 const detectHint = ref('')
+/* 超过这个字数就认为「这是一整段话」，露出识别入口 */
 const DETECT_MIN_LEN = 10
+
+/* 标题长度直接由输入内容算 —— 不依赖 paste 事件（安卓 WebView / 剪贴板菜单粘贴时
+   paste 事件可能不触发，之前那版就是因此按钮一直不出现） */
+const titleLength = computed(() => String(form.title || '').trim().length)
+const titlePlaceholder = computed(() =>
+  form.kind === 'deadline'
+    ? '例如：交大作业 / 实验报告'
+    : '例如：临时加课 / 组会（可粘贴一整段话，自动识别时间与地点）',
+)
 
 const form = reactive({
   title: '',
@@ -412,6 +397,9 @@ function setKind(k) {
   if (k === 'deadline') {
     form.duration = 0
     form.start = '21:00'
+    // 待办 DDL 没有固定地点，也不提供重复
+    form.location = ''
+    form.recurring = false
   } else {
     form.allDay = false
     form.start = '09:00'
@@ -512,69 +500,45 @@ function removeAttachment(idx) {
   form.attachments.splice(idx, 1)
 }
 
-/* ---------------- 粘贴自动识别 ---------------- */
-
-function overThreshold(text) {
-  return String(text || '').trim().length > DETECT_MIN_LEN
-}
+/* ------ 粘贴自动识别 ------ */
 
 /**
- * 粘贴时拦截一次：拿到剪贴板纯文本自己写进标题，
- * 这样能精确判断「粘进来的是不是长文本」，而不是只看输入框总长度。
+ * 粘贴本身不做任何拦截 —— 让浏览器照常把文本写进输入框。
+ * 识别入口由 `titleLength`（输入框实际内容长度）驱动，无论用户是 Ctrl+V、
+ * 长按粘贴还是用剪贴板菜单，只要文本进了框，按钮就会出现。
  */
-function onTitlePaste(e) {
-  const text = e.clipboardData?.getData('text/plain')
-  if (text == null) return
-  e.preventDefault()
-  const el = e.target
-  const start = el?.selectionStart ?? form.title.length
-  const end = el?.selectionEnd ?? form.title.length
-  const merged = `${form.title.slice(0, start)}${text}${form.title.slice(end)}`
-  form.title = merged.slice(0, 500)
-  pastedLength.value = merged.trim().length
-  showDetect.value = overThreshold(merged)
-  if (showDetect.value) detectHint.value = ''
+function onTitlePaste() {
+  detectHint.value = ''
 }
 
-/* 手动输入也能触发（粘贴被拦截后 value 变化不会走 paste，这里兜底） */
+/* 文本改动后清掉上一轮的识别提示，免得跟当前内容对不上 */
 function onTitleInput() {
-  const len = form.title.trim().length
-  pastedLength.value = len
-  if (showDetect.value && !overThreshold(form.title)) showDetect.value = false
-}
-
-function dismissDetect() {
-  showDetect.value = false
+  if (detectHint.value) detectHint.value = ''
 }
 
 /** 一键识别并回填 */
 async function applyDetect() {
-  const raw = form.title.trim()
+  const raw = String(form.title || '').trim()
   if (!raw) return
   const r = parseScheduleText(raw)
-  const previousKind = form.kind
 
   form.title = r.title
   form.date = r.date || form.date
   form.kind = r.kind
   form.start = r.start || form.start
   form.duration = r.kind === 'class' ? (r.duration || 1.5) : 0
-  if (r.location) form.location = r.location
+  // 待办 DDL 没有固定地点，只有活动日程才回填地点
+  if (r.kind === 'class' && r.location) form.location = r.location
   // 完整原文留在备注里，识别漏掉的信息也不会丢
   if (r.description) form.description = r.description
-
-  // 由「待办」切到「课程/活动」时补一个合理时长
-  if (previousKind === 'deadline' && r.kind === 'class' && !form.duration) form.duration = 1.5
 
   const bits = [
     r.kind === 'deadline' ? '待办 / DDL' : '活动日程',
     form.date,
     r.end ? `${r.start} – ${r.end}` : form.start,
   ]
-  if (r.location) bits.push(`地点 ${r.location}`)
+  if (r.kind === 'class' && r.location) bits.push(`地点 ${r.location}`)
   detectHint.value = `已识别：${bits.join(' · ')}（原文存进备注，可在此基础上微调）`
-  showDetect.value = false
-  pastedLength.value = 0
   await nextTick()
   titleInput.value?.blur()
 }
@@ -604,9 +568,7 @@ watch(
     form.repeatUnit = 'week'
     form.repeatCount = 5
     form.applyScope = 'single'
-    showDetect.value = false
     detectHint.value = ''
-    pastedLength.value = 0
   },
   { immediate: true },
 )
@@ -617,8 +579,8 @@ function close() {
 
 async function submit() {
   error.value = ''
-  // 直接粘一大段话没点识别就保存时，先自动识别一遍再存
-  if (overThreshold(form.title) && showDetect.value) {
+  // 粘了一整段话没点识别就保存：先识别一遍再存，免得标题把整段话原封不动存进去
+  if (form.kind === 'class' && titleLength.value > DETECT_MIN_LEN) {
     await applyDetect()
   }
   busy.value = true
@@ -635,7 +597,8 @@ async function submit() {
     clear_end_time: !endTime,
     duration_hours: isDdl ? 0 : form.duration,
     // 空串 = 清空（null 会被后端当成「这一项不动」，地点和备注就删不掉了）
-    location: form.location.trim(),
+    // 待办 DDL 没有地点：一律发空串，顺带清掉历史遗留的地点
+    location: isDdl ? '' : form.location.trim(),
     description: form.description.trim(),
     attachments: form.attachments,
   }

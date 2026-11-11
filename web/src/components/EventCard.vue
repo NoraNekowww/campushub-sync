@@ -194,7 +194,8 @@ function releaseSwipe(closer) {
               <Clock :size="12" class="text-slate-500 dark:text-slate-400 font-sans" />{{ timeLabel(event.start_time) }}-{{ endLabel }}
               <span v-if="durationText" class="text-slate-600 dark:text-slate-400 font-sans">· {{ durationText }}</span>
             </span>
-            <span v-if="noteLocation" class="inline-flex items-center gap-1">
+            <!-- 地点只属于活动日程：待办 DDL 没有固定地点，卡片上不显示 -->
+            <span v-if="noteLocation && !event.is_deadline" class="inline-flex items-center gap-1">
               <MapPin :size="12" class="text-slate-500 dark:text-slate-400" />{{ noteLocation }}
             </span>
             <!-- 仅单点非时间段任务显示剩几天/倒计时，且颜色与中高低标签保持严格一致（历史归档页关闭紧迫徽章） -->

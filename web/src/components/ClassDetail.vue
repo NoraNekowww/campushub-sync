@@ -27,7 +27,7 @@
               <span class="tracking-tight font-mono">{{ timeRange }}</span>
             </div>
 
-            <!-- 地点展示：更大字号并带高亮底衬，一眼看清教室与校区 -->
+            <!-- 地点展示：更大字号并带高亮底衬，一眼看清教室与校区（待办 DDL 无地点，不显示） -->
             <div
               v-if="event.location"
               class="mt-2.5 flex items-center gap-2.5 rounded-2xl bg-brand-50/90 px-3.5 py-2.5 text-[15px] font-bold text-brand-900 dark:bg-brand-950/50 dark:text-brand-200 border border-brand-200/80 dark:border-brand-500/30"

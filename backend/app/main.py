@@ -149,9 +149,9 @@ def create_app() -> FastAPI:
     async def app_version() -> JSONResponse:
         return JSONResponse(
             content={
-                "version": "2.8.4",
-                "tag": "v2.8.4",
-                "title": "CampusHub Android v2.8.4",
+                "version": "2.8.5",
+                "tag": "v2.8.5",
+                "title": "CampusHub Android v2.8.5",
                 "download_url": "https://nzlab.online/schedule/CampusHub.apk",
                 "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
                 "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
