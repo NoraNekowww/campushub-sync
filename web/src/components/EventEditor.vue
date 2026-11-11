@@ -59,14 +59,61 @@
         <label class="block space-y-1 text-xs">
           <span class="text-slate-500 dark:text-slate-400">标题</span>
           <input
+            ref="titleInput"
             v-model="form.title"
             class="input"
             required
-            maxlength="120"
-            :placeholder="form.kind === 'deadline' ? '例如：交大作业 / 实验报告' : '例如：临时加课 / 组会 / 自习'"
+            maxlength="500"
+            :placeholder="form.kind === 'deadline' ? '例如：交大作业 / 实验报告（可粘贴一整段话，自动识别时间与地点）' : '例如：临时加课 / 组会 / 自习（可粘贴一整段话，自动识别时间与地点）'"
             data-testid="custom-title"
+            @input="onTitleInput"
+            @paste="onTitlePaste"
           />
         </label>
+
+        <!-- 粘贴长文本后出现的自动识别入口 -->
+        <transition
+          enter-active-class="transition-all duration-200"
+          enter-from-class="opacity-0 -translate-y-1"
+          leave-active-class="transition-all duration-150"
+          leave-to-class="opacity-0 -translate-y-1"
+        >
+          <div
+            v-if="showDetect"
+            class="flex items-center gap-2 rounded-2xl border border-brand-200/70 bg-brand-50/60 px-2.5 py-2 backdrop-blur-sm dark:border-brand-600/40 dark:bg-brand-950/30"
+            data-testid="auto-detect-bar"
+          >
+            <Sparkles :size="14" class="shrink-0 text-brand-600 dark:text-brand-400" />
+            <span class="min-w-0 flex-1 truncate text-[11px] text-slate-500 dark:text-slate-400">
+              检测到 {{ pastedLength }} 字长文本，可自动拆分标题、日期、时间与地点
+            </span>
+            <button
+              type="button"
+              class="btn-primary shrink-0 !px-2.5 !py-1 text-[11px]"
+              data-testid="auto-detect-apply"
+              @click="applyDetect"
+            >
+              自动识别
+            </button>
+            <button
+              type="button"
+              class="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              title="忽略"
+              @click="dismissDetect"
+            >
+              <X :size="13" />
+            </button>
+          </div>
+        </transition>
+
+        <!-- 识别结果预览，允许用户在保存前确认 -->
+        <p
+          v-if="detectHint"
+          class="rounded-xl bg-emerald-50/70 px-2.5 py-1.5 text-[11px] leading-relaxed text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
+          data-testid="auto-detect-hint"
+        >
+          {{ detectHint }}
+        </p>
 
         <div class="grid grid-cols-2 gap-2">
           <label class="block space-y-1 text-xs">
@@ -321,14 +368,22 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
-import { Clock, FileText, GraduationCap, Paperclip, Pencil, RotateCcw, Upload, X } from 'lucide-vue-next'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { Clock, FileText, GraduationCap, Paperclip, Pencil, RotateCcw, Sparkles, Upload, X } from 'lucide-vue-next'
 import { api } from '../api'
 import { closeCustomEditor, removeCustomEvent, saveCustomEvent, state } from '../store'
+import { parseScheduleText } from '../utils/parseScheduleText'
 
 const busy = ref(false)
 const uploadingFile = ref(false)
 const error = ref('')
+/* 粘贴自动识别：长文本（>10 字）时露出「自动识别」按钮 */
+const titleInput = ref(null)
+const showDetect = ref(false)
+const pastedLength = ref(0)
+const detectHint = ref('')
+const DETECT_MIN_LEN = 10
+
 const form = reactive({
   title: '',
   date: '',
@@ -457,6 +512,73 @@ function removeAttachment(idx) {
   form.attachments.splice(idx, 1)
 }
 
+/* ---------------- 粘贴自动识别 ---------------- */
+
+function overThreshold(text) {
+  return String(text || '').trim().length > DETECT_MIN_LEN
+}
+
+/**
+ * 粘贴时拦截一次：拿到剪贴板纯文本自己写进标题，
+ * 这样能精确判断「粘进来的是不是长文本」，而不是只看输入框总长度。
+ */
+function onTitlePaste(e) {
+  const text = e.clipboardData?.getData('text/plain')
+  if (text == null) return
+  e.preventDefault()
+  const el = e.target
+  const start = el?.selectionStart ?? form.title.length
+  const end = el?.selectionEnd ?? form.title.length
+  const merged = `${form.title.slice(0, start)}${text}${form.title.slice(end)}`
+  form.title = merged.slice(0, 500)
+  pastedLength.value = merged.trim().length
+  showDetect.value = overThreshold(merged)
+  if (showDetect.value) detectHint.value = ''
+}
+
+/* 手动输入也能触发（粘贴被拦截后 value 变化不会走 paste，这里兜底） */
+function onTitleInput() {
+  const len = form.title.trim().length
+  pastedLength.value = len
+  if (showDetect.value && !overThreshold(form.title)) showDetect.value = false
+}
+
+function dismissDetect() {
+  showDetect.value = false
+}
+
+/** 一键识别并回填 */
+async function applyDetect() {
+  const raw = form.title.trim()
+  if (!raw) return
+  const r = parseScheduleText(raw)
+  const previousKind = form.kind
+
+  form.title = r.title
+  form.date = r.date || form.date
+  form.kind = r.kind
+  form.start = r.start || form.start
+  form.duration = r.kind === 'class' ? (r.duration || 1.5) : 0
+  if (r.location) form.location = r.location
+  // 完整原文留在备注里，识别漏掉的信息也不会丢
+  if (r.description) form.description = r.description
+
+  // 由「待办」切到「课程/活动」时补一个合理时长
+  if (previousKind === 'deadline' && r.kind === 'class' && !form.duration) form.duration = 1.5
+
+  const bits = [
+    r.kind === 'deadline' ? '待办 / DDL' : '活动日程',
+    form.date,
+    r.end ? `${r.start} – ${r.end}` : form.start,
+  ]
+  if (r.location) bits.push(`地点 ${r.location}`)
+  detectHint.value = `已识别：${bits.join(' · ')}（原文存进备注，可在此基础上微调）`
+  showDetect.value = false
+  pastedLength.value = 0
+  await nextTick()
+  titleInput.value?.blur()
+}
+
 watch(
   () => [state.customEditor.open, state.customEditor.event],
   async () => {
@@ -482,6 +604,9 @@ watch(
     form.repeatUnit = 'week'
     form.repeatCount = 5
     form.applyScope = 'single'
+    showDetect.value = false
+    detectHint.value = ''
+    pastedLength.value = 0
   },
   { immediate: true },
 )
@@ -492,6 +617,10 @@ function close() {
 
 async function submit() {
   error.value = ''
+  // 直接粘一大段话没点识别就保存时，先自动识别一遍再存
+  if (overThreshold(form.title) && showDetect.value) {
+    await applyDetect()
+  }
   busy.value = true
   const isDdl = form.kind === 'deadline' || form.allDay
   // 时长换算成结束时刻；活动型日程自动算结束时间，上完自动隐退

@@ -149,18 +149,19 @@ def create_app() -> FastAPI:
     async def app_version() -> JSONResponse:
         return JSONResponse(
             content={
-                "version": "2.8.3",
-                "tag": "v2.8.3",
-                "title": "CampusHub Android v2.8.3",
+                "version": "2.8.4",
+                "tag": "v2.8.4",
+                "title": "CampusHub Android v2.8.4",
                 "download_url": "https://nzlab.online/schedule/CampusHub.apk",
                 "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
                 "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
                 "features": [
+                    "日程粘贴自动识别：在标题栏粘贴一段话（如「11月20日 09:00-11:00 在46楼A202 上电子技术实验」），下方即出现「自动识别」按钮，一键抽取出标题、日期、时间、时长、地点并回填表单",
+                    "识别能力离线可用：日期支持'明天/下周三/11月20日/2026-11-20'，时间支持'下午3点到5点/14:00-15:35/9点半'，地点支持'在46楼A202/地点：图书馆三楼'，其余内容自动整理为标题与备注",
                     "课程详情卡片视觉优化：时间与地点展示字号显著加大加粗，配合现代圆角底衬与等宽排版，一眼看清教室与起止时刻",
                     "修复重复日程创建与同步：支持多端离线秒存预展开与后台批处理映射，确保按天/周/月重复任务完整生成",
                     "优化课表与线性表缓存协同机制：确保离线新建/批量变更日程在周课表中即时双向联动呈现",
                     "教务校历教学周绝对对齐：根治学期开学日基准漂移，杜绝单双周反转与特定周次课程丢失",
-                    "周课表布局优化：等宽排版杜绝时间截断，当前时间红点轴标居中，冲突日程保持物理对齐",
                 ],
             },
             headers={
