@@ -103,8 +103,9 @@ const currentSectionTitle = computed(() => {
       return '日程'
     case 'week':
       return state.weekLabel || '第 1 周'
+    case 'todo':
     case 'history':
-      return '历史归档'
+      return '可办事项'
     case 'settings':
       return '系统设置'
     default:

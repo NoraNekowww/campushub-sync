@@ -63,6 +63,7 @@ def query_events(
     offset: int = 0,
     user_id: Optional[int] = None,
     include_hidden: bool = False,
+    undated_only: bool = False,
 ) -> tuple[list[Event], int]:
     """时间线/订阅日历的查询入口。
 
@@ -84,6 +85,8 @@ def query_events(
         conditions.append(Event.status == status)
     if is_deadline is not None:
         conditions.append(Event.is_deadline == is_deadline)
+    # 无截止时间待办默认不出现在任何时间线/日历查询里，只有「可办事项」显式要
+    conditions.append(col(Event.is_undated) == (True if undated_only else False))
     if search:
         needle = f"%{search.strip()}%"
         conditions.append(col(Event.title).ilike(needle))
@@ -113,6 +116,7 @@ def patch_event(
     end_time: Optional[datetime] = None,
     clear_end_time: bool = False,
     attachments: Optional[str] = None,
+    is_undated: Optional[bool] = None,
 ) -> Optional[Event]:
     """User edits are sticky: ``local_override`` stops the next sync clobbering them.
 
@@ -157,6 +161,9 @@ def patch_event(
     if attachments is not None:
         event.attachments = attachments
         changed = True
+    if is_undated is not None and bool(is_undated) != bool(event.is_undated):
+        event.is_undated = bool(is_undated)
+        changed = True
     if changed:
         event.local_override = True
         event.updated_at = utcnow()
@@ -177,7 +184,7 @@ def set_hidden(session: Session, event_id: str, hidden: bool = True) -> Optional
 
 def event_counts(session: Session, user_id: Optional[int] = None) -> dict[str, int]:
     now = utcnow()
-    scope = [col(Event.hidden) == False]  # noqa: E712  # 软删除的不计入任何统计
+    scope = [col(Event.hidden) == False, col(Event.is_undated) == False]  # noqa: E712  # 软删除/无截止待办不计入统计
     if user_id is not None:
         scope.append(col(Event.user_id) == user_id)
     horizon = now + timedelta(days=7)

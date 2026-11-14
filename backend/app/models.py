@@ -52,6 +52,9 @@ class Event(SQLModel, table=True):
     start_time: datetime = Field(index=True)  # naive UTC
     end_time: Optional[datetime] = Field(default=None, index=True)
     is_deadline: bool = Field(default=False, index=True)
+    #: 无截止时间待办：只活在「可办事项」里 —— 不进 DDL 列表、不进课表、不进订阅日历。
+    #: 它的 ``start_time`` 只是建立时刻（占位，让老查询/排序不至于炸），不当作截止时间用。
+    is_undated: bool = Field(default=False, index=True)
     location: Optional[str] = None
     status: str = Field(default=EventStatus.pending.value, index=True)
     priority: int = Field(default=5)  # RFC 5545: 1 (high) .. 9 (low)
@@ -63,6 +66,8 @@ class Event(SQLModel, table=True):
     hidden: bool = Field(default=False, index=True)
 
     updated_at: datetime
+    #: 建立时间（可办事项列表按它倒序，并显示「建立于 …」）
+    created_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     attachments: Optional[str] = None  # compact JSON list of attachment metadata
     raw: Optional[str] = None  # compact JSON of the source payload

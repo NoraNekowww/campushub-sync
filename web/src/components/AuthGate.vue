@@ -160,12 +160,29 @@
         第一个注册的账号将成为管理员
       </p>
     </form>
+
+    <!-- 离线模式：不登录、不联网，数据只保存在本机 -->
+    <div
+      class="w-full max-w-sm rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-center dark:border-slate-700"
+    >
+      <button
+        type="button"
+        data-testid="auth-offline"
+        class="text-sm font-medium text-slate-700 underline-offset-4 hover:underline dark:text-slate-200"
+        @click="startOffline"
+      >
+        离线使用（不使用云同步）
+      </button>
+      <p class="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+        课表、日程、待办只保存在这台设备上，不上传服务器；账号栏显示为「本地账号」。
+      </p>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { login, loadCaptcha, register, saveToken, state } from '../store'
+import { enableOfflineMode, login, loadCaptcha, register, saveToken, state } from '../store'
 
 const mode = ref('login')
 const username = ref('')
@@ -308,5 +325,12 @@ function useToken() {
   }
   saveToken(tokenInput.value.trim())
   tokenInput.value = ''
+}
+
+/** 离线模式：不登录，所有数据只留在本机；之后可在设置里退出并恢复云同步。 */
+function startOffline() {
+  localError.value = ''
+  state.authError = ''
+  enableOfflineMode()
 }
 </script>

@@ -270,6 +270,8 @@ const days = computed(() => {
         (event) =>
           dayKey(event.start_time) === d.key &&
           matchesQuery(event) &&
+          // 无截止时间待办不属于任何一天，绝不上课表
+          !event.is_undated &&
           // 待办 DDL 划掉后不占课表，但课程即使上完了也全量加载渲染展示
           !(event.is_deadline && event.status === 'completed'),
       )
@@ -372,7 +374,7 @@ function focusToday(behavior = 'smooth') {
 
 const classes = computed(() => {
   return events.value.filter(
-    (event) => !event.is_deadline && event.status !== 'completed' && matchesQuery(event),
+    (event) => !event.is_deadline && !event.is_undated && event.status !== 'completed' && matchesQuery(event),
   )
 })
 
@@ -383,7 +385,7 @@ const deadlines = computed(() => {
 
   return events.value
     .filter((event) => {
-      if (!event.is_deadline || event.status === 'completed') return false
+      if (!event.is_deadline || event.is_undated || event.status === 'completed') return false
       if (!matchesQuery(event)) return false
       const k = dayKey(event.start_time)
       // 包含过去所有延期的 (k < todayKey) 以及未来 7 天内截止的 (k <= horizonKey)

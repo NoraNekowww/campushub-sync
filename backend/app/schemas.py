@@ -53,6 +53,10 @@ class EventOut(BaseModel):
     attachments: Optional[list[dict[str, Any]]] = None
     #: 「划掉」有没有成功推回微软待办：``{"ok": bool, "error": str | None}``
     ms_sync: Optional[dict[str, Any]] = None
+    #: 无截止时间待办（只在「可办事项」里出现，不进 DDL 列表 / 课表）
+    is_undated: bool = False
+    #: 建立时间（可办事项列表展示与排序用）
+    created_at: Optional[datetime] = None
 
     @classmethod
     def from_event(cls, event: Event, tz: str = "Asia/Shanghai") -> "EventOut":
@@ -85,6 +89,8 @@ class EventOut(BaseModel):
             week=_int_from_raw(event.raw_dict(), "week"),
             recurrence=_recurrence_from_raw(event.raw_dict(), event.source_id),
             attachments=_attachments_from_event(event),
+            is_undated=bool(event.is_undated),
+            created_at=local(event.created_at) or local(event.updated_at),
         )
 
 
@@ -195,6 +201,8 @@ class EventCreateIn(BaseModel):
     description: Optional[str] = None
     location: Optional[str] = None
     is_deadline: bool = False
+    #: 无截止时间待办：``start_time`` 传建立时刻即可，服务端按占位处理
+    is_undated: bool = False
     reminder_minutes: Optional[int] = None
     priority: int = 5
     repeat_frequency: Optional[str] = None  # None | "day" | "week" | "month"
@@ -222,6 +230,8 @@ class EventPatchIn(BaseModel):
     attachments: Optional[list[dict[str, Any]]] = None
     #: 客户端修改时间戳标签（用于防数据倒流与 Last-Write-Wins 冲突裁决）
     client_updated_at: Optional[datetime] = None
+    #: 无截止时间待办开关：``true`` = 收进「可办事项」，``false`` = 恢复成带截止的待办
+    is_undated: Optional[bool] = None
 
 
 class MsTaskIn(BaseModel):

@@ -27,12 +27,12 @@
 </template>
 
 <script setup>
-import { CalendarRange, History, LayoutGrid } from 'lucide-vue-next'
+import { CalendarRange, LayoutGrid, ListTodo } from 'lucide-vue-next'
 import { state } from '../store'
 
 const tabs = [
   { value: 'agenda', label: '日程', icon: CalendarRange },
   { value: 'week', label: '课表', icon: LayoutGrid },
-  { value: 'history', label: '历史', icon: History },
+  { value: 'todo', label: '可办', icon: ListTodo },
 ]
 </script>

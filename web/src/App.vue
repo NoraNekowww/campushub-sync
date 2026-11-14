@@ -34,7 +34,7 @@
       <main class="relative z-10 mx-auto max-w-3xl pb-28 pt-3">
         <AgendaView v-show="state.view === 'agenda'" />
         <WeekView v-show="state.view === 'week'" />
-        <HistoryView v-show="state.view === 'history'" />
+        <TodoView v-show="state.view === 'todo' || state.view === 'history'" />
         <SettingsView v-show="state.view === 'settings'" />
       </main>
 
@@ -81,7 +81,7 @@ import FloatingAdd from './components/FloatingAdd.vue'
 import UpdateNotification from './components/UpdateNotification.vue'
 import AgendaView from './views/AgendaView.vue'
 import EventEditor from './components/EventEditor.vue'
-import HistoryView from './views/HistoryView.vue'
+import TodoView from './views/TodoView.vue'
 import SettingsView from './views/SettingsView.vue'
 import WeekView from './views/WeekView.vue'
 import {

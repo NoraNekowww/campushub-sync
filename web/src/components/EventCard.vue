@@ -187,7 +187,10 @@ function releaseSwipe(closer) {
             v-else
             class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-700 font-medium dark:text-slate-300"
           >
-            <span v-if="event.is_deadline" class="inline-flex items-center gap-1">
+            <span v-if="event.is_undated" class="inline-flex items-center gap-1">
+              <Clock :size="12" class="text-slate-500 dark:text-slate-400" />{{ undatedLabel }}
+            </span>
+            <span v-else-if="event.is_deadline" class="inline-flex items-center gap-1">
               <Clock :size="12" class="text-slate-500 dark:text-slate-400" />{{ deadlineLabel }}
             </span>
             <span v-else class="inline-flex items-center gap-1 font-mono tracking-tight">
@@ -560,7 +563,23 @@ const isRangeTask = computed(() => {
 })
 
 // 仅真正的单点截止任务才计算紧迫性及倒计时（时间段任务是定期发生的，不显示剩几天和紧迫性）
-const isPointDeadline = computed(() => Boolean(props.event.is_deadline) && !isRangeTask.value)
+const isPointDeadline = computed(() => Boolean(props.event.is_deadline) && !isRangeTask.value && !props.event.is_undated)
+
+/* 无截止时间待办：没有「什么时候要交」，卡片上改成显示它是哪天记下来的 */
+const undatedLabel = computed(() => {
+  const raw = props.event.created_at || props.event.start_time
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return '无截止时间'
+  const text = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date)
+  return `无截止 · 建立于 ${text}`
+})
 
 const priority = computed(() => {
   if (!isPointDeadline.value) return null

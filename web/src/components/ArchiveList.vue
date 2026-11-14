@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-4 px-4 pb-12 pt-1">
+  <div class="space-y-4">
     <!-- 骨架屏加载 -->
     <SkeletonList v-if="state.loading && !completedEvents.length" :rows="4" />
 
@@ -58,13 +58,13 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { CheckCircle2, History } from 'lucide-vue-next'
-import EventCard from '../components/EventCard.vue'
-import SkeletonList from '../components/SkeletonList.vue'
+import { CheckCircle2 } from 'lucide-vue-next'
+import EventCard from './EventCard.vue'
+import SkeletonList from './SkeletonList.vue'
 import { fetchHistoryEvents, removeEvent, state, toggleCompleted } from '../store'
 import { dayDiff, dayLabel, isEventEnded, todayKey } from '../utils/datetime'
 
-// 进入历史归档页面时主动从服务器全量拉取已完成归档记录，确保换设备/清缓存后 100% 留存不丢失
+// 进入历史归档视图时主动从服务器全量拉取已完成归档记录，确保换设备/清缓存后 100% 留存不丢失
 onMounted(() => {
   fetchHistoryEvents()
 })
@@ -73,7 +73,8 @@ onMounted(() => {
  * 历史完成过的所有日程：
  * 1. 彻底排除天大课表自带课程（event.source === 'tju_schedule'），只归档个人待办与自定义日程；
  * 2. 状态为 completed 的日程 / 待办，或者已经自然结束的个人自定义活动；
- * 3. 严格按从近到久排序（今天、明天、后天、更远）。
+ * 3. 无截止时间待办没有「结束」这一说，它只有被划掉才算完成（否则会一到建立时刻就误判为结束）；
+ * 4. 严格按从近到久排序（今天、明天、后天、更远）。
  */
 const completedEvents = computed(() => {
   const nowTs = Date.now()
@@ -83,7 +84,7 @@ const completedEvents = computed(() => {
       if (event.source === 'tju_schedule') return false
 
       const isTicked = event.status === 'completed'
-      const isEnded = isEventEnded(event, nowTs)
+      const isEnded = !event.is_undated && isEventEnded(event, nowTs)
       return isTicked || isEnded
     })
     .sort((a, b) => {
@@ -129,7 +130,7 @@ const groups = computed(() => {
         diff,
         rank: getGroupSortRank(diff),
         label: getHistoryGroupLabel(when, refTime, diff),
-        events: []
+        events: [],
       })
     }
     buckets.get(when).events.push(event)
@@ -149,7 +150,7 @@ const groups = computed(() => {
     }))
 })
 
-/* ----------------------------------------------------------- 动态按需渲染逻辑 */
+/* ------ 动态按需渲染逻辑 */
 const renderedGroupLimit = ref(8)
 const displayedGroups = computed(() => groups.value.slice(0, renderedGroupLimit.value))
 const hasMoreGroups = computed(() => displayedGroups.value.length < groups.value.length)

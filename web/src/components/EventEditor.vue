@@ -100,15 +100,34 @@
           {{ detectHint }}
         </p>
 
-        <!-- 待办 DDL：截止日期 + 截止时间并排成一行；日程模式则是活动日期 + 地点 -->
-        <div v-if="form.kind === 'deadline'" class="grid grid-cols-2 gap-2">
-          <label class="block space-y-1 text-xs">
-            <span class="text-slate-500 dark:text-slate-400">截止日期</span>
-            <input v-model="form.date" type="date" class="input" required data-testid="custom-date" />
-          </label>
-          <label class="block space-y-1 text-xs">
-            <span class="text-slate-500 dark:text-slate-400">截止时间</span>
-            <input v-model="form.start" type="time" class="input" required data-testid="custom-deadline-time" />
+        <!-- 待办 DDL：截止日期 + 截止时间并排成一行；勾了「无截止时间」就整块收起（日程模式则是活动日期 + 地点） -->
+        <div v-if="form.kind === 'deadline'" class="space-y-2">
+          <div v-if="!form.undated" class="grid grid-cols-2 gap-2">
+            <label class="block space-y-1 text-xs">
+              <span class="text-slate-500 dark:text-slate-400">截止日期</span>
+              <input v-model="form.date" type="date" class="input" required data-testid="custom-date" />
+            </label>
+            <label class="block space-y-1 text-xs">
+              <span class="text-slate-500 dark:text-slate-400">截止时间</span>
+              <input v-model="form.start" type="time" class="input" required data-testid="custom-deadline-time" />
+            </label>
+          </div>
+
+          <label
+            class="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200/70 bg-slate-50/70 px-2.5 py-2 text-[11px] leading-relaxed text-slate-600 dark:border-slate-700/60 dark:bg-slate-800/50 dark:text-slate-300"
+          >
+            <input
+              v-model="form.undated"
+              type="checkbox"
+              data-testid="custom-undated-toggle"
+              class="mt-0.5 accent-brand-600"
+            />
+            <span>
+              无截止时间
+              <span class="block text-[10px] text-slate-400 dark:text-slate-500">
+                只收进「可办」列表，不占 DDL 列表、也不上课表
+              </span>
+            </span>
           </label>
         </div>
 
@@ -377,6 +396,8 @@ const form = reactive({
   start: '21:00',
   /* kind: 'deadline'（带倒计时待办） | 'class'（活动日程，上完自动隐退） */
   kind: 'deadline',
+  /* 无截止时间待办：不收进 DDL 列表 / 课表，只进「可办」 */
+  undated: false,
   /* 结束时间由「时长」推算：0h = 无结束时间 */
   duration: 0,
   allDay: false,
@@ -402,6 +423,7 @@ function setKind(k) {
     form.location = ''
     form.recurring = false
   } else {
+    form.undated = false
     form.allDay = false
     form.start = '09:00'
     if (!form.duration || form.duration <= 0) form.duration = 1.5
@@ -579,6 +601,8 @@ watch(
     form.repeatUnit = 'week'
     form.repeatCount = 5
     form.applyScope = 'single'
+    // 无截止时间待办：编辑时保留原样，不能因为一次编辑就丢进 DDL 列表
+    form.undated = Boolean(event?.is_undated)
     detectHint.value = ''
     detectedFrom.value = ''
   },
@@ -599,12 +623,14 @@ async function submit() {
   }
   busy.value = true
   const isDdl = form.kind === 'deadline' || form.allDay
+  const isUndated = form.kind === 'deadline' && form.undated
   // 时长换算成结束时刻；活动型日程自动算结束时间，上完自动隐退
   const endTime =
     !isDdl && form.duration > 0 ? addHours(form.date, form.start, form.duration) : null
 
   const payload = {
     title: form.title.trim(),
+    // 无截止待办只需要一个「落库时刻」占位；编辑时沿用原来的，别把顺序刷到最前
     start_time: `${form.date}T${form.allDay ? '00:00' : form.start}:00`,
     // end_time 传 null 表示「不改」，所以想清空结束时间得靠 clear_end_time
     end_time: endTime,
@@ -615,6 +641,7 @@ async function submit() {
     location: isDdl ? '' : form.location.trim(),
     description: form.description.trim(),
     attachments: form.attachments,
+    is_undated: isUndated,
   }
   if (!isEdit.value && form.recurring) {
     payload.repeat_frequency = form.repeatUnit

@@ -356,6 +356,27 @@
     </section>
 
     <!-- ------------------------------------------------------------ account -->
+    <section v-if="state.offlineMode" class="card space-y-2 p-4" data-testid="offline-account">
+      <header class="flex items-center gap-2">
+        <UserRound :size="15" class="text-brand-600 dark:text-brand-400" />
+        <h2 class="text-sm font-semibold">账号</h2>
+        <span class="chip border-transparent bg-slate-100 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300">
+          本地账号
+        </span>
+      </header>
+      <p class="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+        离线模式：课表、日程与待办只保存在这台设备上，不上传服务器，也不做云端同步。
+      </p>
+      <button
+        type="button"
+        class="btn-ghost !py-1.5 text-xs"
+        data-testid="offline-exit"
+        @click="exitOffline"
+      >
+        退出离线模式（连接云端）
+      </button>
+    </section>
+
     <section v-if="accountsEnabled" class="card space-y-3 p-4" data-testid="account-section">
       <header class="flex items-center gap-2">
         <UserRound :size="15" class="text-brand-600 dark:text-brand-400" />
@@ -908,6 +929,7 @@ import {
   changePassword,
   clearAllLocalData,
   deleteMyAccount,
+  disableOfflineMode,
   listUsers,
   loadRegistrationSettings,
   loadStatus,
@@ -959,7 +981,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.8.0'
+  return '2.8.8'
 })
 
 const appVersionDisplay = clientAppVersion
@@ -1454,6 +1476,11 @@ async function signOut() {
   await logout()
   showPasswordForm.value = false
   members.value = []
+}
+
+/** 退出离线模式：恢复联网与云同步（数据仍在，只是重新跟随账号）。 */
+async function exitOffline() {
+  await disableOfflineMode()
 }
 
 async function confirmDeleteAccount() {

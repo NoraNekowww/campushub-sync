@@ -216,6 +216,10 @@ def ensure_columns(settings: Optional[Settings] = None) -> list[str]:
         ("events", "hidden", "BOOLEAN NOT NULL DEFAULT 0"),
         # 云端附件元数据列表 JSON 字符串
         ("events", "attachments", "TEXT"),
+        # 无截止时间待办（只在「可办事项」里出现）
+        ("events", "is_undated", "BOOLEAN NOT NULL DEFAULT 0"),
+        # 建立时间（可办事项按它倒序）
+        ("events", "created_at", "DATETIME"),
     )
     applied: list[str] = []
     with engine.begin() as conn:

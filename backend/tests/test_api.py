@@ -98,6 +98,44 @@ def test_patch_completion_is_sticky_across_sync(client, admin_headers):
     assert after["status"] == "completed"
 
 
+def test_undated_todo_stays_out_of_timeline(client, admin_headers):
+    """无截止时间待办只在「可办」列表里出现：普通时间线 / DDL / 课表 / 订阅日历都不该有它。"""
+    created = client.post(
+        "/api/events",
+        json={
+            "title": "整理读书笔记",
+            "start_time": "2026-10-15T19:00:00",
+            "is_deadline": True,
+            "is_undated": True,
+        },
+        headers=admin_headers,
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["is_undated"] is True
+    assert body["end_time"] is None
+    assert body["created_at"], "建立时间必须回填，可办列表靠它排序"
+    assert not body["location"]
+
+    timeline = client.get("/api/events", headers=admin_headers).json()["items"]
+    assert all(item["id"] != body["id"] for item in timeline)
+
+    ddl = client.get("/api/events?is_deadline=true", headers=admin_headers).json()["items"]
+    assert all(item["id"] != body["id"] for item in ddl)
+
+    pool = client.get("/api/events?undated=true", headers=admin_headers).json()["items"]
+    assert [item["id"] for item in pool] == [body["id"]]
+
+    # 改回带截止的普通待办后，重新回到时间线
+    patched = client.patch(
+        f"/api/events/{body['id']}", json={"is_undated": False}, headers=admin_headers
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["is_undated"] is False
+    timeline = client.get("/api/events", headers=admin_headers).json()["items"]
+    assert any(item["id"] == body["id"] for item in timeline)
+
+
 def test_custom_event_lifecycle(client, admin_headers):
     created = client.post(
         "/api/events",

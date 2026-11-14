@@ -63,6 +63,7 @@ def list_events(
     source: Optional[list[str]] = Query(default=None, description="repeatable: microsoft_todo, tju_schedule, custom"),
     status: Optional[str] = Query(default=None, pattern="^(pending|completed)$"),
     is_deadline: Optional[bool] = Query(default=None),
+    undated: bool = Query(default=False, description="true = 只取「无截止时间待办」（可办事项）"),
     search: Optional[str] = Query(default=None, max_length=120),
     limit: int = Query(default=500, ge=1, le=2000),
     offset: int = Query(default=0, ge=0),
@@ -82,6 +83,10 @@ def list_events(
         start, end = event_service.normalize_range(start_date, end_date)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=f"invalid date: {exc}") from exc
+    if undated:
+        # 无截止时间待办没有时间窗口概念：不受默认 30 天窗口限制
+        start = None
+        end = None
 
     rows, total = event_service.query_events(
         session,
@@ -94,6 +99,7 @@ def list_events(
         limit=limit,
         offset=offset,
         user_id=user.id,
+        undated_only=undated,
     )
     tz = settings.timezone
     return EventListOut(
@@ -128,11 +134,11 @@ def create_event(
     user: User = Depends(timeline_owner),
 ) -> Union[EventOut, EventCreateResultOut]:
     start = _as_utc(payload.start_time)
-    end = _as_utc(payload.end_time) if payload.end_time else None
+    end = _as_utc(payload.end_time) if (payload.end_time and not payload.is_undated) else None
     if end is not None and end < start:
         raise HTTPException(status_code=422, detail="end_time must be after start_time")
 
-    repeat_freq = payload.repeat_frequency
+    repeat_freq = payload.repeat_frequency if not payload.is_undated else None
     repeat_interval = max(1, payload.repeat_interval or 1)
     repeat_count = max(1, min(100, payload.repeat_count or 1))
 
@@ -164,6 +170,7 @@ def create_event(
                 start_time=cur_start,
                 end_time=cur_end,
                 is_deadline=payload.is_deadline,
+                is_undated=payload.is_undated,
                 location=payload.location,
                 status=EventStatus.pending.value,
                 priority=max(1, min(9, payload.priority)),
@@ -171,6 +178,7 @@ def create_event(
                 local_override=True,  # locally authored — sync must never touch it
                 attachments=json.dumps(payload.attachments, ensure_ascii=False) if payload.attachments else None,
                 updated_at=utcnow(),
+                created_at=utcnow(),
                 raw=json.dumps(
                     {
                         "origin": "api",
@@ -200,6 +208,7 @@ def create_event(
             start_time=start,
             end_time=end,
             is_deadline=payload.is_deadline,
+            is_undated=payload.is_undated,
             location=payload.location,
             status=EventStatus.pending.value,
             priority=max(1, min(9, payload.priority)),
@@ -207,6 +216,7 @@ def create_event(
             local_override=True,  # locally authored — sync must never touch it
             attachments=json.dumps(payload.attachments, ensure_ascii=False) if payload.attachments else None,
             updated_at=utcnow(),
+            created_at=utcnow(),
             raw=json.dumps({"origin": "api"}, ensure_ascii=False),
         )
         session.add(ev)
@@ -486,6 +496,7 @@ async def update_event(
         end_time=end,
         clear_end_time=payload.clear_end_time,
         attachments=json.dumps(payload.attachments, ensure_ascii=False) if payload.attachments is not None else None,
+        is_undated=payload.is_undated,
     )
     if event is None:
         raise HTTPException(status_code=404, detail="event not found")

@@ -8,6 +8,28 @@
  */
 const TOKEN_KEY = 'campushub.adminToken'
 const USER_SESSION_TOKEN_KEY = 'campushub.userSessionToken'
+/* 离线模式：不登录、不联网、数据只存在本机（隐私优先）。 */
+const OFFLINE_KEY = 'campushub.offlineMode'
+
+export function isOfflineMode() {
+  try {
+    return localStorage.getItem(OFFLINE_KEY) === '1'
+  } catch (error) {
+    return false
+  }
+}
+
+export function setOfflineMode(value) {
+  try {
+    if (value) localStorage.setItem(OFFLINE_KEY, '1')
+    else localStorage.removeItem(OFFLINE_KEY)
+  } catch (error) {
+    /* private mode */
+  }
+}
+
+/* 离线模式下仍要联网的少数几个只读接口：版本检查（更新提示）与健康探针。 */
+const OFFLINE_ALLOWED = ['/version', '/health']
 
 export function getSessionToken() {
   try {
@@ -83,6 +105,10 @@ export const isAuthError = (error) =>
   error instanceof ApiError && (error.status === 401 || error.status === 403)
 
 async function request(path, { method = 'GET', body, headers = {}, raw = false, timeoutMs, retries = 1, cache } = {}) {
+  // 离线模式：除版本检查外一律不发请求，保证「数据只在本机」
+  if (isOfflineMode() && !OFFLINE_ALLOWED.some((p) => path.startsWith(p))) {
+    throw new ApiError('离线模式：数据只保存在本机，未连接云端', 0)
+  }
   const token = getToken()
   const sessionToken = getSessionToken()
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData

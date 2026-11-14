@@ -3,7 +3,7 @@
  * app state is small: one event list, one status blob, a few UI flags.
  */
 import { reactive } from 'vue'
-import { api, ApiError, getSessionToken, getToken, isAuthError, setSessionToken, setToken } from './api'
+import { api, ApiError, getSessionToken, getToken, isAuthError, isOfflineMode, setOfflineMode as persistOfflineMode, setSessionToken, setToken } from './api'
 import { dayKey, isEventEnded, todayKey } from './utils/datetime'
 import { applyThemeColor, getSavedThemeColor } from './utils/themeColors'
 
@@ -175,6 +175,8 @@ export const state = reactive({
   /* accounts (see accounts.py): the session cookie is HttpOnly, so the app
      learns who it is by asking /api/auth/session, never by reading a cookie. */
   user: readInitialUser(),
+  /* 离线模式：不登录、不联网，数据只在本机（本地账号） */
+  offlineMode: isOfflineMode(),
   accounts: { enabled: true, registration_open: true, invite_required: false, captcha_required: true, password_min_length: 8 },
   accountsReady: Boolean(readInitialUser()),
   viewerAdmin: false,
@@ -350,6 +352,7 @@ function fetchParams() {
  * 确保换设备、清缓存后历史归档 100% 留存于服务器数据库且能随时拉回
  */
 export async function fetchHistoryEvents() {
+  if (state.offlineMode) return
   try {
     const res = await api.events({ status: 'completed', limit: 800 })
     const historyItems = res.items || []
@@ -374,8 +377,8 @@ export function autoExpireEndedCustomTasks() {
   const nowTs = Date.now()
   const toPatch = []
   ;(state.events || []).forEach((ev) => {
-    // 排除教务课表原生课程，仅针对个人安排的自定义日程与任务
-    if (ev.source !== 'tju_schedule' && ev.status !== 'completed') {
+    // 排除教务课表原生课程，仅针对个人安排的自定义日程与任务；无截止待办没有「结束」概念
+    if (ev.source !== 'tju_schedule' && ev.status !== 'completed' && !ev.is_undated) {
       if (isEventEnded(ev, nowTs)) {
         ev.status = 'completed'
         recordCompletedOverride(ev.id, 'completed')
@@ -387,7 +390,7 @@ export function autoExpireEndedCustomTasks() {
     saveEventsCache(state.events, state.total)
     toPatch.forEach((id) => {
       appendSyncQueue({ type: 'patch', id, payload: { status: 'completed' } })
-      api.patchEvent(id, { status: 'completed' }).catch(() => {})
+      if (!state.offlineMode) api.patchEvent(id, { status: 'completed' }).catch(() => {})
     })
   }
 }
@@ -573,6 +576,8 @@ function clearSyncQueue() {
 
 /** 异步向服务器回写离线操作队列（仅在手动或后台同步时触发） */
 export async function flushSyncQueue() {
+  // 离线模式：永不回传服务器
+  if (state.offlineMode) return
   const queue = getSyncQueue()
   if (!queue.length) return
   const remaining = []
@@ -645,6 +650,8 @@ function saveUserCache(user) {
 }
 
 export async function refresh({ silent = false } = {}) {
+  // 离线模式：不联网，直接以本机数据渲染
+  if (state.offlineMode) return
   // 如果本地有缓存的课表数据，则无需展示全屏 loading 转圈，实现视觉无感秒出
   if (!silent && (!state.events || state.events.length === 0)) {
     state.loading = true
@@ -726,6 +733,7 @@ export async function refresh({ silent = false } = {}) {
 }
 
 export async function loadStatus() {
+  if (state.offlineMode) return
   try {
     state.status = await api.status()
     state.statusLocked = false
@@ -739,6 +747,7 @@ export async function loadStatus() {
 }
 
 export async function loadConfig() {
+  if (state.offlineMode) return
   try {
     state.config = await api.config()
     state.viewerAdmin = Boolean(state.config?.viewer?.admin)
@@ -764,6 +773,13 @@ export async function bootstrap() {
     window.__autoExpireTimer = setInterval(autoExpireEndedCustomTasks, 60000)
   }
 
+  // 离线模式：只吃本机闪存，绝不联网（隐私优先）
+  if (state.offlineMode) {
+    state.accountsReady = true
+    state.online = false
+    return
+  }
+
   // 3. 移动端强本地化策略：如果本地已有缓存数据，则首屏完全不阻塞等待网络请求
   const isMobile = isMobileNativeApp()
   const hasLocalData = state.events && state.events.length > 0
@@ -782,8 +798,45 @@ export async function bootstrap() {
 
 /* --------------------------------------------------------------- accounts */
 
+/**
+ * 离线模式（本地账号）：不登录、不联网，所有数据只写在本机 localStorage。
+ * 账号栏显示「本地账号」，云同步 / 教务抓取 / 微软待办全部停用。
+ */
+export function enableOfflineMode() {
+  persistOfflineMode(true)
+  state.offlineMode = true
+  state.online = false
+  state.authRequired = false
+  state.forceAuth = false
+  state.authError = ''
+  state.authNotice = ''
+  state.accountsReady = true
+  state.loading = false
+  closeCustomEditor()
+  saveEventsCache(state.events, state.total)
+  notify('已进入离线模式：数据只保存在本机', 'ok')
+}
+
+/** 退出离线模式，重新连接云端（需要登录才能同步）。 */
+export async function disableOfflineMode() {
+  persistOfflineMode(false)
+  state.offlineMode = false
+  state.accountsReady = false
+  notify('已退出离线模式，正在连接云端', 'info')
+  try {
+    await fetchSession()
+    await Promise.all([refresh({ silent: true }), loadStatus(), loadConfig()])
+  } catch (error) {
+    /* 离线队列会兜底，不打断用户 */
+  }
+}
+
 /** Ask the backend who we are; safe to call when signed out. */
 export async function fetchSession() {
+  if (state.offlineMode) {
+    state.accountsReady = true
+    return state.user
+  }
   const isMobile = isMobileNativeApp()
   // 无论移动端还是网页端，如果启动前已从 LocalStorage 恢复了用户，保持 accountsReady 为 true，杜绝开屏闪现登录框
   if (state.user) {
@@ -812,6 +865,8 @@ export async function fetchSession() {
 }
 
 export const signInRequired = () => {
+  // 0. 离线模式（本地账号）永不弹登录框
+  if (state.offlineMode) return false
   // 1. 如果用户主动点击了登录、或收到了明确的 401/403 认证拒绝
   if (state.authRequired || state.forceAuth) return true
 
@@ -925,18 +980,18 @@ export function closeCustomEditor() {
 export async function saveCustomEvent(payload) {
   const existing = state.customEditor.event
   const isExisting = Boolean(existing && !existing.is_draft && existing.id)
-  const isMobile = isMobileNativeApp()
+  const isMobile = isMobileNativeApp() || state.offlineMode
   const nowIso = new Date().toISOString()
   const payloadWithMeta = { ...payload, client_updated_at: nowIso }
 
-  // 1. 移动端秒存：纯本地立即生成或更新内存与闪存，无需等待服务器返回
+  // 1. 移动端 / 离线模式秒存：纯本地立即生成或更新内存与闪存，无需等待服务器返回
   if (isMobile) {
     let localItem = null
     if (isExisting) {
       localItem = { ...existing, ...payload, updated_at: nowIso, client_updated_at: nowIso }
       const idx = state.events.findIndex((e) => e.id === existing.id)
       if (idx >= 0) state.events.splice(idx, 1, localItem)
-      appendSyncQueue({ type: 'patch', id: existing.id, payload: payloadWithMeta })
+      if (!state.offlineMode) appendSyncQueue({ type: 'patch', id: existing.id, payload: payloadWithMeta })
     } else {
       const isRecurring = Boolean(
         payload.repeat_frequency &&
@@ -995,17 +1050,19 @@ export async function saveCustomEvent(payload) {
       }
       state.total += createdItems.length
       localItem = createdItems[0]
-      appendSyncQueue({ type: 'create', temp_id: localItem.id, payload: payloadWithMeta })
+      if (!state.offlineMode) appendSyncQueue({ type: 'create', temp_id: localItem.id, payload: payloadWithMeta })
     }
     // 立即写回本地永久缓存
     saveEventsCache(state.events, state.total)
     closeCustomEditor()
-    notify(isExisting ? '日程已在本地更新' : '日程已在本地添加', 'ok')
+    notify(isExisting ? '已在本机更新' : '已保存在本机', 'ok')
 
-    // 后台静默将变更回传服务器，用户无需等待
-    setTimeout(() => {
-      flushSyncQueue().catch(() => {})
-    }, 500)
+    // 后台静默将变更回传服务器，用户无需等待（离线模式不回传）
+    if (!state.offlineMode) {
+      setTimeout(() => {
+        flushSyncQueue().catch(() => {})
+      }, 500)
+    }
     return localItem
   }
 
@@ -1027,10 +1084,10 @@ export async function saveCustomEvent(payload) {
 export async function removeCustomEvent(id, options = {}) {
   const target = state.events.find((item) => item.id === id)
   const applyScope = options.apply_scope || 'single'
-  const isMobile = isMobileNativeApp()
+  const isMobile = isMobileNativeApp() || state.offlineMode
 
   if (isMobile) {
-    // 移动端：直接从本地状态剔除并存入同步队列
+    // 移动端 / 离线模式：直接从本地状态剔除并存入同步队列
     const index = state.events.findIndex((e) => e.id === id)
     if (index >= 0) {
       state.events.splice(index, 1)
@@ -1038,9 +1095,11 @@ export async function removeCustomEvent(id, options = {}) {
       saveEventsCache(state.events, state.total)
     }
     closeCustomEditor()
-    appendSyncQueue({ type: 'delete', id, options })
+    if (!state.offlineMode) {
+      appendSyncQueue({ type: 'delete', id, options })
+      setTimeout(() => flushSyncQueue().catch(() => {}), 500)
+    }
     notify(`已在本地移除${target ? `「${target.title}」` : '这条日程'}`, 'info')
-    setTimeout(() => flushSyncQueue().catch(() => {}), 500)
     return true
   }
 
@@ -1123,14 +1182,16 @@ export async function removeEvent(event) {
     }
   } catch (e) {}
 
-  const isMobile = isMobileNativeApp()
+  const isMobile = isMobileNativeApp() || state.offlineMode
   if (isMobile) {
-    appendSyncQueue({ type: 'delete', id: event.id, options: {} })
+    if (!state.offlineMode) {
+      appendSyncQueue({ type: 'delete', id: event.id, options: {} })
+      setTimeout(() => flushSyncQueue().catch(() => {}), 500)
+    }
     notify(removedText(event), 'info', {
       action: { label: '撤销', run: () => restoreEvent(event.id, event.title) },
       duration: 6000,
     })
-    setTimeout(() => flushSyncQueue().catch(() => {}), 500)
     return true
   }
 
@@ -1159,6 +1220,16 @@ function removedText(event) {
 
 /** 撤销删除：恢复回时间线与订阅日历。 */
 export async function restoreEvent(id, title = '') {
+  if (state.offlineMode) {
+    const target = state.events.find((item) => item.id === id)
+    if (target) {
+      target.hidden = false
+      unrecordDeletedEventId(id)
+      saveEventsCache(state.events, state.total)
+    }
+    notify(title ? `已恢复「${title}」` : '已恢复', 'info')
+    return true
+  }
   try {
     await api.patchEvent(id, { hidden: false })
     notify(title ? `已恢复「${title}」` : '已恢复', 'info')
@@ -1276,6 +1347,9 @@ export async function toggleCompleted(event) {
   // 2. 强保护：写入本地完成态覆盖记录与闪存缓存，彻底杜绝被服务器旧数据冲刷导致「回光返照」
   recordCompletedOverride(event.id, next)
   saveEventsCache(state.events, state.total)
+
+  // 离线模式：完成态只记在本机，不回传服务器
+  if (state.offlineMode) return
 
   // 3. 打入离线同步队列双重保险
   appendSyncQueue({ type: 'patch', id: event.id, payload: { status: next } })
@@ -1425,10 +1499,18 @@ export function matchesQuery(event, query = state.query) {
     .includes(needle)
 }
 
-export function filterEvents(events = state.events) {
+export function filterEvents(events = state.events, options = {}) {
+  // include_undated：只在「无截止 / 可办事项」这类视图里打开，其余视图一律看不到
+  const includeUndated = Boolean(options.include_undated)
   const today = todayKey()
   const nowTs = Date.now()
   return events.filter((event) => {
+    // 无截止时间待办只在「可办事项」里出现：不进 DDL 列表、不进课表、不进日程时间线
+    if (event.is_undated) {
+      if (!includeUndated) return false
+      if (event.status === 'completed') return false
+      return matchesQuery(event)
+    }
     if (state.filter === 'class' && event.is_deadline) return false
     if (state.filter === 'deadline' && !event.is_deadline) return false
     // 划掉的 DDL 一律不占课表（用户原话「划掉的 ddl 就不要显示在里面了」）。

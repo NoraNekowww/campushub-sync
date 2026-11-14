@@ -1,63 +1,40 @@
 <template>
   <div class="space-y-4 px-4">
-    <!-- 线性列表模式切换胶囊：仅 DDL vs 仅日程（DDL+时间段日程） vs 含课表（全部） -->
-    <div class="flex items-center justify-between pt-1">
+    <!-- 列表模式切换：仅 DDL / 仅日程 / 含课表 / 无截止 / 历史归档（窄屏可横向滑动） -->
+    <div class="space-y-1 pt-1">
       <div
-        class="inline-flex rounded-xl p-0.5 bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 text-xs shadow-2xs backdrop-blur-md"
+        class="no-scrollbar flex items-center gap-0.5 overflow-x-auto rounded-xl border border-slate-200/60 bg-slate-100/90 p-0.5 text-xs shadow-2xs backdrop-blur-md dark:border-slate-700/60 dark:bg-slate-800/80"
         role="tablist"
         aria-label="日程展示模式"
       >
         <button
+          v-for="tab in AGENDA_TABS"
+          :key="tab.key"
           type="button"
           role="tab"
-          :aria-selected="agendaMode === 'ddl'"
-          class="px-2.5 py-1 rounded-lg font-medium transition-all"
+          :aria-selected="agendaMode === tab.key"
+          class="shrink-0 rounded-lg px-2.5 py-1 font-medium transition-all"
           :class="
-            agendaMode === 'ddl'
+            agendaMode === tab.key
               ? 'bg-white text-brand-600 shadow-xs dark:bg-slate-700 dark:text-brand-300'
               : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
           "
-          @click="setAgendaMode('ddl')"
+          @click="setAgendaMode(tab.key)"
         >
-          仅 DDL
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="agendaMode === 'schedule'"
-          class="px-2.5 py-1 rounded-lg font-medium transition-all"
-          :class="
-            agendaMode === 'schedule'
-              ? 'bg-white text-brand-600 shadow-xs dark:bg-slate-700 dark:text-brand-300'
-              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
-          "
-          @click="setAgendaMode('schedule')"
-        >
-          仅日程
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="agendaMode === 'all'"
-          class="px-2.5 py-1 rounded-lg font-medium transition-all"
-          :class="
-            agendaMode === 'all'
-              ? 'bg-white text-brand-600 shadow-xs dark:bg-slate-700 dark:text-brand-300'
-              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
-          "
-          @click="setAgendaMode('all')"
-        >
-          含课表
+          {{ tab.label }}
         </button>
       </div>
 
-      <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-        {{ visible.length }} 条{{ agendaMode === 'ddl' ? '待办' : agendaMode === 'schedule' ? '日程' : '全部安排' }}
-      </span>
+      <p class="text-right text-[11px] font-medium text-slate-500 dark:text-slate-400">
+        {{ countLabel }}
+      </p>
     </div>
 
+    <!-- 历史归档：从底部导航挪进日程栏，与「仅 DDL」这些筛选并列 -->
+    <ArchiveList v-if="agendaMode === 'archive'" />
+
     <!-- overdue deadlines stay pinned at the top, whatever the day grouping says -->
-    <section v-if="overdue.length" class="space-y-2">
+    <section v-if="overdue.length && agendaMode !== 'archive'" class="space-y-2">
       <header class="flex items-center gap-2 pt-1 text-xs font-semibold uppercase tracking-wide text-rose-500">
         <AlertTriangle :size="13" /> 已逾期
         <span class="chip border-transparent bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300">
@@ -73,10 +50,10 @@
       />
     </section>
 
-    <SkeletonList v-if="state.loading && !groups.length" :rows="5" />
+    <SkeletonList v-if="state.loading && !groups.length && agendaMode !== 'archive'" :rows="5" />
 
     <section
-      v-for="group in displayedGroups"
+      v-for="group in renderedGroups"
       :key="group.key"
       class="space-y-2"
       data-testid="day-group"
@@ -104,7 +81,7 @@
 
     <!-- 动态按需加载：滚动触底自动追加后续日程批次，避免数百张卡片同时进入 DOM 造成卡顿 -->
     <div
-      v-if="hasMoreGroups"
+      v-if="hasMoreGroups && agendaMode !== 'archive'"
       ref="sentinelEl"
       class="flex justify-center py-3 text-xs text-slate-500 dark:text-slate-400"
     >
@@ -115,7 +92,7 @@
 
     <!-- 无日程且未接入时：显示接入卡片 -->
     <section
-      v-if="!state.loading && !groups.length && !overdue.length && !hasConnected && !state.authRequired"
+      v-if="!state.loading && !groups.length && !overdue.length && !hasConnected && !state.authRequired && agendaMode !== 'archive'"
       class="card space-y-4 p-5 animate-fade-up"
       data-testid="onboarding-card-in-agenda"
     >
@@ -156,7 +133,7 @@
 
     <!-- 已接入但当前无日程时：显示常规空状态 -->
     <EmptyState
-      v-else-if="!state.loading && !groups.length && !overdue.length"
+      v-else-if="!state.loading && !groups.length && !overdue.length && agendaMode !== 'archive'"
       :kind="emptyKind"
       :message="emptyMessage"
     >
@@ -176,6 +153,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { AlertTriangle, GraduationCap, KeyRound, Plus, RefreshCw, Sparkles } from 'lucide-vue-next'
 import EmptyState from '../components/EmptyState.vue'
+import ArchiveList from '../components/ArchiveList.vue'
 import EventCard from '../components/EventCard.vue'
 import SkeletonList from '../components/SkeletonList.vue'
 import { filterEvents, notify, openCustomEditor, refresh, removeEvent, state, toggleCompleted } from '../store'
@@ -208,9 +186,17 @@ function isRangeTask(event) {
   return false
 }
 
-// 线性列表展示逻辑：支持仅 DDL 模式 vs 仅日程模式（DDL+时间段日程，不含课表） vs 含课表全部模式
+// 线性列表展示逻辑：仅 DDL / 仅日程 / 含课表 / 无截止待办 / 历史归档
+const AGENDA_TABS = [
+  { key: 'ddl', label: '仅 DDL' },
+  { key: 'schedule', label: '仅日程' },
+  { key: 'all', label: '含课表' },
+  { key: 'undated', label: '无截止' },
+  { key: 'archive', label: '历史归档' },
+]
+
 const visible = computed(() => {
-  const list = filterEvents()
+  const list = filterEvents(undefined, { include_undated: agendaMode.value === 'undated' })
   if (agendaMode.value === 'ddl') {
     return list.filter((event) => event.is_deadline && !isRangeTask(event))
   }
@@ -218,19 +204,39 @@ const visible = computed(() => {
     // 仅日程：包含待办 DDL 以及用户自定义的时间段日程，过滤掉教务课表 (tju_schedule)
     return list.filter((event) => event.source !== 'tju_schedule')
   }
+  if (agendaMode.value === 'undated') {
+    // 无截止待办：没有日期，按「记下来的时间」从新到旧排列
+    return [...list].sort(
+      (a, b) => new Date(b.created_at || b.start_time).getTime() - new Date(a.created_at || a.start_time).getTime(),
+    )
+  }
   return list
+})
+
+const countLabel = computed(() => {
+  if (agendaMode.value === 'archive') {
+    return '按完成时间倒序，从近到久'
+  }
+  const unit = agendaMode.value === 'ddl' ? '待办' : agendaMode.value === 'schedule' ? '日程' : agendaMode.value === 'undated' ? '可办事项' : '全部安排'
+  return `${visible.value.length} 条${unit}`
 })
 
 const overdue = computed(() =>
   visible.value.filter(
     (event) =>
       event.is_deadline &&
+      !event.is_undated &&
       event.status !== 'completed' &&
       dayKey(event.start_time) < today,
   ),
 )
 
 const groups = computed(() => {
+  // 无截止待办没有日期，硬按天分组会把它们打散成「建立那天」的一堆碎组，直接一整段列出
+  if (agendaMode.value === 'undated') {
+    if (!visible.value.length) return []
+    return [{ key: 'undated', label: '可办事项 · 无截止时间', events: visible.value }]
+  }
   const overdueIds = new Set(overdue.value.map((event) => event.id))
   return groupByDay(visible.value.filter((event) => !overdueIds.has(event.id)))
 })
@@ -238,6 +244,7 @@ const groups = computed(() => {
 /* ----------------------------------------------------------- 动态按需渲染逻辑 */
 const renderedGroupLimit = ref(10)
 const displayedGroups = computed(() => groups.value.slice(0, renderedGroupLimit.value))
+const renderedGroups = computed(() => (agendaMode.value === 'archive' ? [] : displayedGroups.value))
 const hasMoreGroups = computed(() => displayedGroups.value.length < groups.value.length)
 
 function loadMoreGroups() {
