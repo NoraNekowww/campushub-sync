@@ -1,9 +1,9 @@
 <template>
   <div class="space-y-4 px-4">
-    <!-- 列表模式切换：仅 DDL / 仅日程 / 含课表 / 历史归档（窄屏可横向滑动） -->
-    <div class="space-y-1 pt-1">
+    <!-- 列表模式切换：仅 DDL / 仅日程 / 含课表 / 历史归档（四等分铺满整行） -->
+    <div class="pt-1">
       <div
-        class="no-scrollbar flex items-center gap-0.5 overflow-x-auto rounded-xl border border-slate-200/60 bg-slate-100/90 p-0.5 text-xs shadow-2xs backdrop-blur-md dark:border-slate-700/60 dark:bg-slate-800/80"
+        class="flex items-center gap-0.5 rounded-xl border border-slate-200/60 bg-slate-100/90 p-0.5 text-xs shadow-2xs backdrop-blur-md dark:border-slate-700/60 dark:bg-slate-800/80"
         role="tablist"
         aria-label="日程展示模式"
       >
@@ -13,7 +13,7 @@
           type="button"
           role="tab"
           :aria-selected="agendaMode === tab.key"
-          class="shrink-0 rounded-lg px-2.5 py-1 font-medium transition-all"
+          class="min-w-0 flex-1 rounded-lg px-2.5 py-1 text-center font-medium transition-all"
           :class="
             agendaMode === tab.key
               ? 'bg-white text-brand-600 shadow-xs dark:bg-slate-700 dark:text-brand-300'
@@ -24,10 +24,6 @@
           {{ tab.label }}
         </button>
       </div>
-
-      <p class="text-right text-[11px] font-medium text-slate-500 dark:text-slate-400">
-        {{ countLabel }}
-      </p>
     </div>
 
     <!-- 历史归档：从底部导航挪进日程栏，与「仅 DDL」这些筛选并列 -->
@@ -209,14 +205,6 @@ const visible = computed(() => {
     return list.filter((event) => event.source !== 'tju_schedule')
   }
   return list
-})
-
-const countLabel = computed(() => {
-  if (agendaMode.value === 'archive') {
-    return '按完成时间倒序，从近到久'
-  }
-  const unit = agendaMode.value === 'ddl' ? '待办' : agendaMode.value === 'schedule' ? '日程' : '全部安排'
-  return `${visible.value.length} 条${unit}`
 })
 
 const overdue = computed(() =>
