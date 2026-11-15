@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-4 px-4">
-    <!-- 列表模式切换：仅 DDL / 仅日程 / 含课表 / 无截止 / 历史归档（窄屏可横向滑动） -->
+    <!-- 列表模式切换：仅 DDL / 仅日程 / 含课表 / 历史归档（窄屏可横向滑动） -->
     <div class="space-y-1 pt-1">
       <div
         class="no-scrollbar flex items-center gap-0.5 overflow-x-auto rounded-xl border border-slate-200/60 bg-slate-100/90 p-0.5 text-xs shadow-2xs backdrop-blur-md dark:border-slate-700/60 dark:bg-slate-800/80"
@@ -162,10 +162,13 @@ import { groupByDay, todayKey, dayKey } from '../utils/datetime'
 const today = todayKey()
 
 const AGENDA_MODE_KEY = 'campushub.agenda_mode'
+const AGENDA_MODES = ['ddl', 'schedule', 'all', 'archive']
 const agendaMode = ref(
   (function () {
     try {
-      return localStorage.getItem(AGENDA_MODE_KEY) || 'ddl'
+      const saved = localStorage.getItem(AGENDA_MODE_KEY)
+      // 旧版本存过「无截止」这一类，现在归「可办事项」页，这里回落到默认值
+      return AGENDA_MODES.includes(saved) ? saved : 'ddl'
     } catch (e) {
       return 'ddl'
     }
@@ -186,29 +189,23 @@ function isRangeTask(event) {
   return false
 }
 
-// 线性列表展示逻辑：仅 DDL / 仅日程 / 含课表 / 无截止待办 / 历史归档
+// 线性列表展示逻辑：仅 DDL / 仅日程 / 含课表 / 历史归档
+// （无截止待办不在日程栏出现——它归「可办事项」页，两种逻辑彻底分开）
 const AGENDA_TABS = [
   { key: 'ddl', label: '仅 DDL' },
   { key: 'schedule', label: '仅日程' },
   { key: 'all', label: '含课表' },
-  { key: 'undated', label: '无截止' },
   { key: 'archive', label: '历史归档' },
 ]
 
 const visible = computed(() => {
-  const list = filterEvents(undefined, { include_undated: agendaMode.value === 'undated' })
+  const list = filterEvents(undefined, { include_undated: false })
   if (agendaMode.value === 'ddl') {
     return list.filter((event) => event.is_deadline && !isRangeTask(event))
   }
   if (agendaMode.value === 'schedule') {
     // 仅日程：包含待办 DDL 以及用户自定义的时间段日程，过滤掉教务课表 (tju_schedule)
     return list.filter((event) => event.source !== 'tju_schedule')
-  }
-  if (agendaMode.value === 'undated') {
-    // 无截止待办：没有日期，按「记下来的时间」从新到旧排列
-    return [...list].sort(
-      (a, b) => new Date(b.created_at || b.start_time).getTime() - new Date(a.created_at || a.start_time).getTime(),
-    )
   }
   return list
 })
@@ -217,7 +214,7 @@ const countLabel = computed(() => {
   if (agendaMode.value === 'archive') {
     return '按完成时间倒序，从近到久'
   }
-  const unit = agendaMode.value === 'ddl' ? '待办' : agendaMode.value === 'schedule' ? '日程' : agendaMode.value === 'undated' ? '可办事项' : '全部安排'
+  const unit = agendaMode.value === 'ddl' ? '待办' : agendaMode.value === 'schedule' ? '日程' : '全部安排'
   return `${visible.value.length} 条${unit}`
 })
 
@@ -232,11 +229,6 @@ const overdue = computed(() =>
 )
 
 const groups = computed(() => {
-  // 无截止待办没有日期，硬按天分组会把它们打散成「建立那天」的一堆碎组，直接一整段列出
-  if (agendaMode.value === 'undated') {
-    if (!visible.value.length) return []
-    return [{ key: 'undated', label: '可办事项 · 无截止时间', events: visible.value }]
-  }
   const overdueIds = new Set(overdue.value.map((event) => event.id))
   return groupByDay(visible.value.filter((event) => !overdueIds.has(event.id)))
 })

@@ -21,14 +21,15 @@
       </div>
       <p class="text-sm font-medium text-slate-700 dark:text-slate-200">暂时没有可办事项</p>
       <p class="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-        新建待办时打开「无截止时间」，它就只会出现在这里 —— 不占 DDL 列表，也不上课表。
+        想到什么先记下来，这里不设截止时间，也不占 DDL 列表和课表。
       </p>
       <button
         type="button"
         class="btn-primary mx-auto inline-flex items-center gap-1.5 px-4 py-2 text-xs"
-        @click="openCustomEditor()"
+        data-testid="todo-empty-add"
+        @click="openTodoQuickAdd()"
       >
-        <Plus :size="14" /> 新建待办
+        <Plus :size="14" /> 记一条
       </button>
     </div>
 
@@ -49,7 +50,7 @@ import { computed } from 'vue'
 import { ListTodo, Plus } from 'lucide-vue-next'
 import EventCard from '../components/EventCard.vue'
 import SkeletonList from '../components/SkeletonList.vue'
-import { openCustomEditor, removeEvent, state, toggleCompleted } from '../store'
+import { openTodoQuickAdd, removeEvent, state, toggleCompleted } from '../store'
 
 /* 可办事项 = 无截止时间、还没划掉的待办；不按天分组，直接按建立时间倒序 */
 const items = computed(() => {

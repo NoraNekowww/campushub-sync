@@ -407,3 +407,34 @@ def test_api_clear_import_removes_state(client, admin_headers):
     status = client.get("/api/tju/status", headers=admin_headers).json()["detail"]
     assert status["import_meta"] == {}
     assert KVStore().get(CLASSTABLE_KEY) is None
+
+
+def test_local_import_returns_events_without_touching_the_database(client, monkeypatch):
+    """离线模式（没有账号）的课表换算：走真实的解析链，事件以数组返回本机，
+    服务器端不落库里那条课表（KV 里不该多出 classtable）。"""
+    from app.api import tju as tju_api
+    from app.db import KVStore
+    from app.connectors.tju_schedule import CLASSTABLE_KEY
+
+    # 课表按「本学期」拉开，不然 2018 年的课早被 past_days 过滤光了
+    term_start = date.today() - timedelta(days=date.today().weekday(), weeks=6)
+
+    async def fake_fetch(username, password, **kwargs):  # noqa: ARG001
+        return SAMPLE, {"term_start": term_start}
+
+    monkeypatch.setattr(tju_api, "cas_fetch_classes", fake_fetch)
+    resp = client.post(
+        "/api/tju/jw/local/import",
+        json={"username": "3025000000", "password": "x", "via": "cas", "week": 3, "total_weeks": 16},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()["detail"]
+    assert body["courses"] == 2
+    assert body["semester"]["start_date"].startswith(term_start.isoformat())
+    events = body["events"]
+    assert events and {e["source"] for e in events} == {"tju_schedule"}
+    # 事件带着周次与节次，前端周视图不用再猜
+    assert any(e["periods"] for e in events)
+    assert all(e["is_deadline"] is False for e in events)
+    # 关键：导出本机，不写服务器
+    assert KVStore().get(CLASSTABLE_KEY) is None

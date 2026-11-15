@@ -187,6 +187,8 @@ export const state = reactive({
   captchaError: '',
   forceAuth: false,
   customEditor: { open: false, event: null },
+  /* 「可办」页的极简新建：只有标题 + 备注，跟日程编辑器彻底分开 */
+  todoQuickAdd: { open: false },
 })
 
 let toastTimer = null
@@ -977,6 +979,41 @@ export function closeCustomEditor() {
   state.customEditor.event = null
 }
 
+/* ------ 「可办」页极简新建（标题 + 备注，仅此而已） */
+
+export function openTodoQuickAdd() {
+  state.todoQuickAdd.open = true
+}
+
+export function closeTodoQuickAdd() {
+  state.todoQuickAdd.open = false
+}
+
+/** 保存一条可办事项：本机补齐「无截止、非日程」的字段，用户只填标题和备注。 */
+export async function saveQuickTodo({ title, description = '' } = {}) {
+  const name = String(title || '').trim()
+  if (!name) return null
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  const localStamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:00`
+  // 极简新建永远新建一条，别被上一次编辑的对象带偏
+  state.customEditor.event = null
+  const saved = await saveCustomEvent({
+    title: name,
+    description: String(description || '').trim(),
+    start_time: localStamp,
+    end_time: null,
+    clear_end_time: true,
+    duration_hours: 0,
+    location: '',
+    attachments: [],
+    is_deadline: true,
+    is_undated: true,
+  })
+  if (saved) state.todoQuickAdd.open = false
+  return saved
+}
+
 export async function saveCustomEvent(payload) {
   const existing = state.customEditor.event
   const isExisting = Boolean(existing && !existing.is_draft && existing.id)
@@ -1469,6 +1506,54 @@ export async function jwImport(payload) {
   writeStamp(TJU_TRY_KEY)
   await Promise.all([loadConfig(), refresh({ silent: true })])
   return result
+}
+
+/**
+ * 离线模式导入课表：服务器只负责「登录教务 + 抓课表 + 换算成事件」，
+ * 解析结果原样回到本机、由本机自己存 —— 云端不建账号、不落库、不保存密码。
+ */
+export async function jwImportLocal(payload) {
+  const result = await api.jwLocalImport(payload)
+  const detail = result?.detail || {}
+  const fresh = Array.isArray(detail.events) ? detail.events : []
+  const keep = (state.events || []).filter((event) => event.source !== 'tju_schedule')
+  state.events = [...keep, ...fresh]
+  state.total = state.events.length
+
+  const semester = detail.semester || {}
+  state.config = {
+    ...(state.config || {}),
+    tju_schedule: {
+      ...(state.config?.tju_schedule || {}),
+      semester: { ...semester, start_date: semester.start_date || detail.term_start || '' },
+      import_meta: {
+        courses: detail.courses || 0,
+        imported_at: new Date().toISOString(),
+        source: 'local',
+      },
+    },
+  }
+
+  saveConfigCache(state.config)
+  saveEventsCache(state.events, state.total)
+  notify(`课表已存入本机：${detail.courses || 0} 门课`, 'ok')
+  return result
+}
+
+/** 清掉本机导入的课表（离线模式没有服务器可删）。 */
+export function clearLocalTimetable() {
+  const before = (state.events || []).length
+  state.events = (state.events || []).filter((event) => event.source !== 'tju_schedule')
+  state.total = state.events.length
+  if (state.config?.tju_schedule) {
+    state.config = {
+      ...state.config,
+      tju_schedule: { ...state.config.tju_schedule, import_meta: {} },
+    }
+    saveConfigCache(state.config)
+  }
+  saveEventsCache(state.events, state.total)
+  return { removed: before - state.events.length }
 }
 
 /** 用服务器上已保存的教务凭据免密续一次（不需要校园网、不需要本机令牌）。 */

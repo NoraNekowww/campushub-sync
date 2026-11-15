@@ -28,8 +28,9 @@ export function setOfflineMode(value) {
   }
 }
 
-/* 离线模式下仍要联网的少数几个只读接口：版本检查（更新提示）与健康探针。 */
-const OFFLINE_ALLOWED = ['/version', '/health']
+/* 离线模式下仍要联网的少数几个接口：版本检查（更新提示）、健康探针，
+   以及「教务课表换算」——它只把课表抓回来交给本机，不存服务器、不建账号。 */
+const OFFLINE_ALLOWED = ['/version', '/health', '/tju/jw/local']
 
 export function getSessionToken() {
   try {
@@ -288,6 +289,10 @@ export const api = {
   jwStatus: () => request('/tju/jw/status'),
   jwImport: (payload) => request('/tju/jw/import', { method: 'POST', body: payload }),
   jwCaptcha: () => request('/tju/jw/captcha', { method: 'POST' }),
+  /* 离线模式的课表换算：匿名、不落库，只把解析好的事件数组还给本机 */
+  jwLocalImport: (payload) =>
+    request('/tju/jw/local/import', { method: 'POST', body: payload, timeoutMs: 90000 }),
+  jwLocalCaptcha: () => request('/tju/jw/local/captcha', { method: 'POST' }),
   jwRefresh: () => request('/tju/jw/refresh', { method: 'POST' }),
   jwForget: () => request('/tju/jw/credentials', { method: 'DELETE' }),
 }

@@ -16,6 +16,10 @@ PUBLIC_MUTATIONS = {
     ("post", "/api/auth/register"),
     ("post", "/api/auth/login"),
     ("post", "/api/auth/logout"),
+    # 离线模式（无账号）导入课表：服务器只做 CAS 抓取 + 解析，不写库、不发凭据，
+    # 调用方按 IP 限流。它必须匿名可用，否则离线用户永远导不进课表。
+    ("post", "/api/tju/jw/local/import"),
+    ("post", "/api/tju/jw/local/captcha"),
 }
 
 MUTATING = {"post", "put", "patch", "delete"}

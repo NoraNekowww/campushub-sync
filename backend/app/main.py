@@ -149,18 +149,19 @@ def create_app() -> FastAPI:
     async def app_version() -> JSONResponse:
         return JSONResponse(
             content={
-                "version": "2.8.8",
-                "tag": "v2.8.8",
-                "title": "CampusHub Android v2.8.8",
+                "version": "2.8.9",
+                "tag": "v2.8.9",
+                "title": "CampusHub Android v2.8.9",
                 "download_url": "https://nzlab.online/schedule/CampusHub.apk",
                 "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
                 "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
                 "features": [
-                    "历史归档并入日程栏：与「仅 DDL / 仅日程 / 含课表」并排成第四个筛选，随手就能翻已完成记录，不用再切到另一个页面",
-                    "新增「无截止时间待办」：新建待办勾上「无截止时间」即可，它只出现在「可办」列表里，不进 DDL 列表、也不占课表",
-                    "原「历史」页改为「可办事项列表」：按建立时间从新到旧排列，每条卡片上直接标出建立时间，没有截止日期的事不会丢",
-                    "登录页新增离线模式：不登录、不上传任何数据，课表/日程/待办只保存在本机，账号栏显示为「本地账号」；设置页可随时退出离线模式恢复云同步",
-                    "后端同步支持无截止待办字段：换设备后「可办」列表照旧，历史归档也不会把它误判成已完成",
+                    "离线模式也能导入课表：服务器只替你登录一次教务、把课表换算成事件，结果直接写进本机——不建账号、不落库、不保存密码",
+                    "日程栏去掉「无截止」筛选：无截止待办现在只在「可办事项」页，两种逻辑彻底分开",
+                    "「可办事项」页的圆形按钮改为极简新建：只填标题和备注，不再跳进完整的日程编辑器",
+                    "日程/待办编辑器移除「无截止时间」选项：普通日程就是普通日程，想到就记的事去「可办事项」页",
+                    "离线模式下附件存本机：单个 ≤ 2MB、合计 ≤ 4MB，数据不离开设备",
+                    "清理卡片文案：附件卡片不再堆说明，新建日程底部也不再写存储位置",
                 ],
             },
             headers={

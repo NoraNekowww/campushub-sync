@@ -248,7 +248,7 @@ function releaseSwipe(closer) {
             </div>
           </dl>
 
-          <!-- 云端附件列表（每个 <= 100MB，支持直接点击下载/在线预览） -->
+          <!-- 附件列表（离线模式存本机，直接按 data URL 打开） -->
           <div
             v-if="event.attachments && event.attachments.length"
             class="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-slate-100/80 pt-2 dark:border-slate-800/60"
@@ -257,15 +257,15 @@ function releaseSwipe(closer) {
             <a
               v-for="att in event.attachments"
               :key="att.id"
-              :href="api.attachmentUrl(att.id)"
+              :href="att.url || api.attachmentUrl(att.id)"
+              :download="att.local ? att.name : undefined"
               target="_blank"
               class="inline-flex items-center gap-1 rounded-md border border-slate-200/90 bg-slate-50/80 px-2 py-0.5 text-[11px] font-medium text-slate-700 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-700/80 dark:bg-slate-800/60 dark:text-slate-200 dark:hover:border-brand-500/50 dark:hover:bg-brand-500/10 dark:hover:text-brand-300"
-              :title="`下载附件：${att.name} (${formatAttachmentSize(att.size)})`"
+              :title="att.name"
               @click.stop
             >
               <Paperclip :size="11" class="text-brand-600 dark:text-brand-400" />
               <span class="max-w-[130px] truncate">{{ att.name }}</span>
-              <span class="font-mono text-[9.5px] opacity-70">({{ formatAttachmentSize(att.size) }})</span>
             </a>
           </div>
         </div>

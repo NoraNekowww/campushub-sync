@@ -100,7 +100,7 @@
           {{ detectHint }}
         </p>
 
-        <!-- 待办 DDL：截止日期 + 截止时间并排成一行；勾了「无截止时间」就整块收起（日程模式则是活动日期 + 地点） -->
+        <!-- 待办 DDL：截止日期 + 截止时间并排成一行 -->
         <div v-if="form.kind === 'deadline'" class="space-y-2">
           <div v-if="!form.undated" class="grid grid-cols-2 gap-2">
             <label class="block space-y-1 text-xs">
@@ -113,22 +113,13 @@
             </label>
           </div>
 
-          <label
-            class="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200/70 bg-slate-50/70 px-2.5 py-2 text-[11px] leading-relaxed text-slate-600 dark:border-slate-700/60 dark:bg-slate-800/50 dark:text-slate-300"
+          <!-- 可办事项的 DDL 字段只读展示：无截止是「可办」页的专属逻辑，这里不再提供开关 -->
+          <p
+            v-if="form.undated"
+            class="rounded-xl border border-slate-200/70 bg-slate-50/70 px-2.5 py-2 text-[11px] leading-relaxed text-slate-500 dark:border-slate-700/60 dark:bg-slate-800/50 dark:text-slate-400"
           >
-            <input
-              v-model="form.undated"
-              type="checkbox"
-              data-testid="custom-undated-toggle"
-              class="mt-0.5 accent-brand-600"
-            />
-            <span>
-              无截止时间
-              <span class="block text-[10px] text-slate-400 dark:text-slate-500">
-                只收进「可办」列表，不占 DDL 列表、也不上课表
-              </span>
-            </span>
-          </label>
+            可办事项 · 无截止时间（只收在「可办」列表里，不占 DDL、也不上课表）
+          </p>
         </div>
 
         <div v-else class="grid grid-cols-2 gap-2">
@@ -237,12 +228,12 @@
           <textarea v-model="form.description" class="input h-16 resize-none" maxlength="500" />
         </label>
 
-        <!-- 云端附加文件（每个不大于 100MB） -->
+        <!-- 附加文件：在线走服务器，离线模式存本机 -->
         <div class="space-y-2 rounded-2xl border border-white/60 bg-white/50 p-3 text-xs dark:border-white/10 dark:bg-slate-800/40 backdrop-blur-sm">
           <div class="flex items-center justify-between">
             <span class="flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-200">
               <Paperclip :size="13" class="text-brand-600 dark:text-brand-400" />
-              <span>附加文件（云端存储，每个不超过 100MB）</span>
+              <span>附加文件{{ state.offlineMode ? '（存本机）' : '' }}</span>
             </span>
             <label class="btn-ghost !py-0.5 !px-2 cursor-pointer text-[11px] text-brand-600 hover:text-brand-700 dark:text-brand-400">
               <Upload :size="12" />
@@ -267,7 +258,6 @@
               <div class="flex min-w-0 items-center gap-1.5">
                 <FileText :size="13" class="shrink-0 text-slate-400" />
                 <span class="truncate font-medium text-slate-700 dark:text-slate-200" :title="att.name">{{ att.name }}</span>
-                <span class="shrink-0 font-mono text-[10px] text-slate-400">({{ formatFileSize(att.size) }})</span>
               </div>
               <button
                 type="button"
@@ -279,9 +269,6 @@
               </button>
             </div>
           </div>
-          <p v-else class="text-[11px] text-slate-400">
-            暂无附件。可点击右侧上传课件、报告、复习资料或图片。
-          </p>
         </div>
 
         <!-- 批量修改应用范围切换（当编辑对象为批量生成的重复任务时展示） -->
@@ -356,8 +343,8 @@
             {{ busy ? '保存中…' : isEdit ? '保存' : '添加' }}
           </button>
         </div>
-        <p class="text-[11px] leading-relaxed text-slate-400">
-          {{ footerNote }}
+        <p v-if="source === 'tju_schedule'" class="text-[11px] leading-relaxed text-slate-400">
+          改的是这一周的这节课（还可以顺手写备注，比如带什么书）；改过的字段不会被下次课表同步覆盖。
         </p>
       </form>
     </div>
@@ -448,13 +435,6 @@ const removeLabel = computed(() => {
   if (isCustom.value) return '删除'
   return source.value === 'tju_schedule' ? '移除这次课' : '从日历里移除'
 })
-const footerNote = computed(() => {
-  if (source.value === 'tju_schedule') {
-    return '改的是这一周的这节课（还可以顺手写备注，比如带什么书）；改过的字段不会被下次课表同步覆盖。'
-  }
-  return '自定义日程安全存储在服务器端数据库中，支持本地无网长期缓存离线查看。'
-})
-
 function today() {
   const now = new Date()
   const pad = (value) => String(value).padStart(2, '0')
@@ -495,6 +475,39 @@ function formatFileSize(size) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 
+/* 离线模式附件存本机：localStorage 里是文本，base64 会涨 1/3，所以限 2MB/个、合计 4MB */
+const LOCAL_ATTACH_MAX = 2 * 1024 * 1024
+const LOCAL_ATTACH_TOTAL = 4 * 1024 * 1024
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(new Error('读取文件失败'))
+    reader.readAsDataURL(file)
+  })
+}
+
+async function uploadLocally(file) {
+  const used = (form.attachments || []).reduce((sum, att) => sum + Number(att.size || 0), 0)
+  if (file.size > LOCAL_ATTACH_MAX) {
+    throw new Error(`「${file.name}」超过 2MB，离线模式附件存在本机，装不下这么大的文件`)
+  }
+  if (used + file.size > LOCAL_ATTACH_TOTAL) {
+    throw new Error('离线模式附件总大小限 4MB，删掉几个大文件再传')
+  }
+  const url = await readFileAsDataUrl(file)
+  return {
+    id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    name: file.name,
+    size: file.size,
+    mime: file.type || 'application/octet-stream',
+    url,
+    local: true,
+    created_at: new Date().toISOString(),
+  }
+}
+
 async function handleAttachmentUpload(e) {
   const files = Array.from(e.target?.files || [])
   if (!files.length) return
@@ -502,8 +515,12 @@ async function handleAttachmentUpload(e) {
   error.value = ''
   try {
     for (const file of files) {
-      if (file.size > 100 * 1024 * 1024) {
+      if (!state.offlineMode && file.size > 100 * 1024 * 1024) {
         error.value = `文件「${file.name}」超出限制，单个文件最大支持 100MB`
+        continue
+      }
+      if (state.offlineMode) {
+        form.attachments.push(await uploadLocally(file))
         continue
       }
       const att = await api.uploadAttachment(file)

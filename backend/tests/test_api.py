@@ -753,3 +753,10 @@ def test_batch_update_and_delete_recurring_events(client, admin_headers):
     assert len(items3) == 2
 
 
+
+
+def test_local_timetable_import_is_anonymous_but_validated(client):
+    """离线模式的课表换算：没有账号也能调（否则本地模式永远导不了课表），
+    但空凭据必须先被挡下来，别让它去碰教务。"""
+    resp = client.post("/api/tju/jw/local/import", json={"username": "", "password": ""})
+    assert resp.status_code == 422

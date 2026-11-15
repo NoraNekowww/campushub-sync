@@ -44,6 +44,7 @@
       <FloatingAdd />
 
       <EventEditor />
+      <TodoQuickAdd />
     </template>
 
     <Transition
@@ -77,6 +78,7 @@ import AppHeader from './components/AppHeader.vue'
 import AuthGate from './components/AuthGate.vue'
 import BottomNav from './components/BottomNav.vue'
 import FloatingAdd from './components/FloatingAdd.vue'
+import TodoQuickAdd from './components/TodoQuickAdd.vue'
 // TokenBanner 已停用，全局统一由 AuthGate 与 Session 处理
 import UpdateNotification from './components/UpdateNotification.vue'
 import AgendaView from './views/AgendaView.vue'

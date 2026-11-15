@@ -23,9 +23,10 @@ import base64
 import json
 import logging
 import re
+import time
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -532,6 +533,144 @@ async def jw_captcha() -> SimpleResult:
             "captcha_id": meta["captcha_id"],
             "expires_in": meta["expires_in"],
             "image": "data:image/jpeg;base64," + base64.b64encode(image).decode(),
+        },
+    )
+
+
+@router.post("/jw/local/captcha", response_model=SimpleResult)
+async def jw_local_captcha() -> SimpleResult:
+    """Captcha for the local (offline-mode) import: same image, no account needed."""
+    try:
+        meta, image = await cas_start_captcha()
+    except JwEamsError as exc:
+        raise _jw_http_error(exc) from exc
+    return SimpleResult(
+        ok=True,
+        message="验证码已取回：把图里的 4 个字符填进「验证码」框，再提交导入（5 分钟内有效）",
+        detail={
+            "captcha_id": meta["captcha_id"],
+            "expires_in": meta["expires_in"],
+            "image": "data:image/jpeg;base64," + base64.b64encode(image).decode(),
+        },
+    )
+
+
+#: 本机导入的限流表：``{ip: [timestamp, ...]}`` —— 这个端点不需要登录，
+#: 不能让陌生人拿它当撞库代理去打教务。
+_LOCAL_TRIES: dict[str, list[float]] = {}
+_LOCAL_WINDOW = 600.0
+_LOCAL_LIMIT = 8
+
+
+def _local_guard(request: Request) -> None:
+    now = time.time()
+    ip = (request.client.host if request.client else "?") or "?"
+    tries = [t for t in _LOCAL_TRIES.get(ip, []) if now - t < _LOCAL_WINDOW]
+    if len(tries) >= _LOCAL_LIMIT:
+        raise HTTPException(status_code=429, detail="试得有点频繁，等几分钟再导入（每 10 分钟 8 次）")
+    tries.append(now)
+    _LOCAL_TRIES[ip] = tries
+
+
+def _stateful_event(ev: Any) -> dict[str, Any]:
+    """Connector ``Event`` → the same JSON the API hands out for stored events."""
+    from ..schemas import EventOut
+
+    return EventOut.from_event(ev).model_dump(mode="json")
+
+
+@router.post("/jw/local/import", response_model=SimpleResult)
+async def jw_local_import(body: JwImportIn, request: Request) -> SimpleResult:
+    """离线模式（无账号、纯本机）的课表导入：只解析，不落库。
+
+    服务器仍然负责 CAS 登录与课表抓取（教务只对公网开放到服务器这一层，且
+    浏览器跨站会被拦），但**不保存任何东西**：凭据用完即弃，课表转成事件数组
+    回给手机端，由本机自己存。这样离线用户也能联网导课表，而云端一份数据都没有。
+    """
+    _local_guard(request)
+    username = (body.username or "").strip()
+    password = body.password or ""
+    if not username or not password:
+        raise HTTPException(status_code=422, detail="请填写学号和教务密码")
+
+    try:
+        raw, cas_meta = await cas_fetch_classes(
+            username,
+            password,
+            code=body.captcha,
+            captcha_id=body.captcha_id,
+            on_login=None,
+            week=body.week,
+        )
+    except JwEamsError as exc:
+        raise _jw_http_error(exc) from exc
+
+    try:
+        payload = jw_convert_classtable(
+            raw,
+            term=cas_meta.get("term") or "",
+            week=cas_meta.get("week"),
+            term_start=cas_meta.get("term_start"),
+        )
+    except JwEamsError as exc:
+        raise _jw_http_error(exc) from exc
+
+    from ..connectors.tju_api import parse_classtable
+
+    connector = _connector()
+    settings = get_settings()
+    used_weeks = int(body.total_weeks) if body.total_weeks else int(connector.semester.total_weeks)
+    if total := _max_week(raw):
+        used_weeks = max(used_weeks, total)
+    try:
+        parsed = parse_classtable(payload, used_weeks)
+    except (TjuApiError, ConnectorError, ValueError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail=f"课表解析失败：{exc}") from exc
+
+    def _as_date(value: Any) -> Any:
+        from datetime import date as _date
+
+        if isinstance(value, _date):
+            return value
+        if isinstance(value, str) and value[:4].isdigit():
+            try:
+                return _date.fromisoformat(value[:10])
+            except ValueError:
+                return None
+        return None
+
+    base = connector.semester
+    from ..connectors.tju_schedule import Semester
+
+    semester = Semester(
+        name=base.name,
+        start_date=_as_date(cas_meta.get("term_start")) or parsed.term_start or base.start_date,
+        total_weeks=used_weeks,
+        holidays=set(base.holidays),
+    )
+    horizon = max(int(settings.horizon_days or 0), 210)
+    events = [
+        ev
+        for entry in parsed.entries
+        for ev in entry.to_events(semester, horizon_days=horizon, past_days=200)
+    ]
+
+    names: list[str] = []
+    for entry in payload["data"]["data"]:
+        name = str(entry.get("coursename") or "").strip()
+        if name and name not in names:
+            names.append(name)
+
+    return SimpleResult(
+        ok=True,
+        message=f"课表已换算成本机事件：{parsed.summary().get('courses', len(names))} 门课 / {len(events)} 节课",
+        detail={
+            "events": [_stateful_event(ev) for ev in events],
+            "courses": parsed.summary().get("courses", len(names)),
+            "course_names": names[:40],
+            "semester": semester.summary(),
+            "term_start": (parsed.term_start.isoformat() if parsed.term_start else None),
+            "total_weeks": used_weeks,
         },
     )
 

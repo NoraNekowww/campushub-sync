@@ -23,10 +23,16 @@
     </header>
 
     <p class="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-      <b>填「学号 + 教务系统密码」点一次就行。</b>这条链路在服务器上直连教务系统
-      （<code>sso.tju.edu.cn</code> 统一身份认证 → <code>classes.tju.edu.cn/eams</code>，公网可达，
-      <b>不需要待在校园网里</b>）：验证码服务器先替你识别，认不出来时才让你手填一张图。
-      密码会保存在服务器上用于以后自动刷新课表，随时可以在「高级」里删掉。
+      <template v-if="offline">
+        <b>离线模式也能导入课表。</b>服务器只替你登录一次教务系统、把课表换算成事件，结果直接写进本机；
+        <b>不建账号、不落库、不保存密码</b>（密码只在这一页的内存里活到导入结束）。
+      </template>
+      <template v-else>
+        <b>填「学号 + 教务系统密码」点一次就行。</b>这条链路在服务器上直连教务系统
+        （<code>sso.tju.edu.cn</code> 统一身份认证 → <code>classes.tju.edu.cn/eams</code>，公网可达，
+        <b>不需要待在校园网里</b>）：验证码服务器先替你识别，认不出来时才让你手填一张图。
+        密码会保存在服务器上用于以后自动刷新课表，随时可以在「高级」里删掉。
+      </template>
     </p>
 
     <div class="grid grid-cols-2 gap-2">
@@ -94,7 +100,12 @@
 
       <div class="mt-2 space-y-2 rounded-xl bg-white p-2.5 dark:bg-slate-900/40">
         <p class="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-          教务账号与密码在首次导入后安全储存在服务器用于定时拉取最新课表。如需更换账号或清除课表，可在下方操作：
+          <template v-if="offline">
+            离线模式的课表只存在本机：换设备、清缓存都会丢，重新导入一次即可；服务器上没有你的教务凭据可删。
+          </template>
+          <template v-else>
+            教务账号与密码在首次导入后安全储存在服务器用于定时拉取最新课表。如需更换账号或清除课表，可在下方操作：
+          </template>
         </p>
         <div class="flex flex-wrap gap-2 pt-1">
           <button
@@ -143,10 +154,12 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { GraduationCap, RefreshCw, Trash2 } from 'lucide-vue-next'
-import { api } from '../api'
+import { api, isOfflineMode } from '../api'
 import {
+  clearLocalTimetable,
   forgetJw,
   jwImport,
+  jwImportLocal,
   loadConfig,
   loadJwStatus,
   notify,
@@ -192,15 +205,22 @@ async function refreshConfig() {
 
 /** 读一次「服务器上有没有教务凭据 / 上次导入结果」（响应里永远没有密码）。 */
 async function loadJwMeta() {
+  if (isOfflineMode()) {
+    jw.value = {}
+    return jw.value
+  }
   const info = await loadJwStatus()
   jw.value = info?.detail || {}
   return jw.value
 }
 
+/** 离线模式下没有服务器凭据可查，导入只是「借服务器算一次」。 */
+const offline = computed(() => isOfflineMode())
+
 /** 服务器 OCR 没认出验证码时，取一张真图让用户手填。 */
 async function loadCaptchaImage() {
   try {
-    const info = await api.jwCaptcha()
+    const info = isOfflineMode() ? await api.jwLocalCaptcha() : await api.jwCaptcha()
     captcha.image = info?.detail?.image || ''
     captcha.id = info?.detail?.captcha_id || ''
     captcha.code = ''
@@ -225,6 +245,15 @@ async function reportJwError(error) {
   say(detail.message || error?.message || '导入失败', 'danger')
 }
 
+/** 真·导入：离线模式走匿名换算（结果只落本机），在线模式走服务器落库。 */
+async function runImport(payload) {
+  return isOfflineMode() ? jwImportLocal(payload) : jwImport(payload)
+}
+
+function importedCount(result) {
+  return result?.detail?.import?.courses ?? result?.detail?.courses ?? 0
+}
+
 /**
  * 一次点击走完：服务器登录教务系统（CAS）→ 抓课表 → 导入 → 同步。
  * 不依赖校园网、不需要本机令牌。要人工验证码时把图显示出来，填完点「提交并导入」。
@@ -241,17 +270,17 @@ async function oneClick() {
   captcha.code = ''
   try {
     say('① 正在服务器上登录教务系统…', 'warn')
-    const result = await jwImport({
+    const result = await runImport({
       username,
       password: form.password,
-      save: true,
-      run_sync: true,
+      save: !isOfflineMode(),
+      run_sync: !isOfflineMode(),
       via: 'cas',
       week: props.semester?.current_week || null,
     })
     const info = result?.detail?.import || {}
-    say(result?.message || `已导入 ${info.courses || 0} 门课`, 'ok')
-    notify(result?.message || '课表已导入', 'ok')
+    say(result?.message || `已导入 ${importedCount(result)} 门课`, 'ok')
+    notify(result?.message || (isOfflineMode() ? '课表已存入本机' : '课表已导入'), 'ok')
     if (result?.detail?.warning) say(`${result.message}｜${result.detail.warning}`, 'warn')
     form.password = ''
     await loadJwMeta()
@@ -275,19 +304,18 @@ async function submitCaptcha() {
   }
   busy.value = true
   try {
-    const result = await jwImport({
+    const result = await runImport({
       username,
       password: form.password,
-      save: true,
-      run_sync: true,
+      save: !isOfflineMode(),
+      run_sync: !isOfflineMode(),
       via: 'cas',
       week: props.semester?.current_week || null,
       captcha: captcha.code.trim(),
       captcha_id: captcha.id,
     })
-    const info = result?.detail?.import || {}
-    say(result?.message || `已导入 ${info.courses || 0} 门课`, 'ok')
-    notify(result?.message || '课表已导入', 'ok')
+    say(result?.message || `已导入 ${importedCount(result)} 门课`, 'ok')
+    notify(result?.message || (isOfflineMode() ? '课表已存入本机' : '课表已导入'), 'ok')
     captcha.image = ''
     captcha.code = ''
     form.password = ''
@@ -316,6 +344,11 @@ async function forgetJwCredentials() {
 async function clearImport() {
   busy.value = true
   try {
+    if (isOfflineMode()) {
+      const { removed } = clearLocalTimetable()
+      say(`已清除本机课表（${removed} 条）`, 'ok')
+      return
+    }
     const result = await api.tjuClearImport()
     say(result.message || '已清除导入的课表', 'ok')
     await refreshConfig()
