@@ -204,6 +204,7 @@ import EventCard from '../components/EventCard.vue'
 import { api } from '../api'
 import { isImportantEvent, isMobileNativeApp, loadWeekCache, matchesQuery, removeEvent, saveWeekCache, state, toggleCompleted } from '../store'
 import { dayKey, dayLabel, isEventEnded, minutesOfDay, periodLabel, timeLabel, todayKey, weekOffsetOf, weekWindow } from '../utils/datetime'
+import { dedupeEvents } from '../utils/dedupe'
 
 const DAY_START = 8 * 60 // 08:00
 const DAY_END = 22 * 60 // 22:00（晚上 11-12 节连着上，最晚到 21:40）
@@ -576,7 +577,7 @@ async function loadWeek(force = false) {
       ...globalList.map((g) => serverMap.get(g.id) || g),
       ...serverItems.filter((s) => !globalList.some((g) => g.id === s.id)),
     ]
-    events.value = merged
+    events.value = dedupeEvents(merged)
     saveWeekCache(events.value)
   } catch (error) {
     if (!events.value || events.value.length === 0) {
@@ -606,7 +607,7 @@ watch(
       ...newGlobalEvents,
       ...currentList.filter((item) => !globalIds.has(item.id) && item.source === 'tju_schedule'),
     ]
-    events.value = merged
+    events.value = dedupeEvents(merged)
     saveWeekCache(events.value)
   },
   { deep: true, immediate: true },

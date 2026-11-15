@@ -6,6 +6,7 @@ import { reactive } from 'vue'
 import { api, ApiError, getSessionToken, getToken, isAuthError, isOfflineMode, setOfflineMode as persistOfflineMode, setSessionToken, setToken } from './api'
 import { dayKey, isEventEnded, todayKey } from './utils/datetime'
 import { applyThemeColor, getSavedThemeColor } from './utils/themeColors'
+import { dedupeEvents } from './utils/dedupe'
 
 const THEME_KEY = 'campushub.theme'
 const GRID_STYLE_KEY = 'campushub.week_grid_style'
@@ -696,7 +697,8 @@ export async function refresh({ silent = false } = {}) {
       return true
     })
 
-    state.events = [...preservedLocalItems, ...mergedServerItems]
+    // 5. 内容去重：同一节课如果被同步器和直连导入各建了一次（两个 id），这里只留一份
+    state.events = dedupeEvents([...preservedLocalItems, ...mergedServerItems])
 
     // 对本地未同步至云端的自建/临时日程自动加入补推同步队列
     for (const local of preservedLocalItems) {

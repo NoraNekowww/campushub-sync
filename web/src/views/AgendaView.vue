@@ -157,6 +157,7 @@ import ArchiveList from '../components/ArchiveList.vue'
 import EventCard from '../components/EventCard.vue'
 import SkeletonList from '../components/SkeletonList.vue'
 import { filterEvents, notify, openCustomEditor, refresh, removeEvent, state, toggleCompleted } from '../store'
+import { dedupeEvents } from '../utils/dedupe'
 import { groupByDay, todayKey, dayKey } from '../utils/datetime'
 
 const today = todayKey()
@@ -199,7 +200,7 @@ const AGENDA_TABS = [
 ]
 
 const visible = computed(() => {
-  const list = filterEvents(undefined, { include_undated: false })
+  const list = dedupeEvents(filterEvents(undefined, { include_undated: false }))
   if (agendaMode.value === 'ddl') {
     return list.filter((event) => event.is_deadline && !isRangeTask(event))
   }

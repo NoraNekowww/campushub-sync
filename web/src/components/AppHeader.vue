@@ -43,6 +43,11 @@
             @click="state.view === 'week' && triggerFocusToday()"
           >
             {{ currentSectionTitle }}
+            <span
+              v-if="titleSuffix"
+              class="ml-1 text-xs font-normal text-slate-400 dark:text-slate-500"
+              data-testid="header-title-count"
+            >{{ titleSuffix }}</span>
           </h1>
           <button
             v-if="state.view === 'week' && !state.isCurrentWeekCentered"
@@ -96,6 +101,11 @@ import { state, runSync } from '../store'
 
 const searching = ref(false)
 const searchInput = ref(null)
+
+const todoCount = computed(
+  () => (state.events || []).filter((event) => event.is_undated && event.status !== 'completed' && !event.hidden).length,
+)
+const titleSuffix = computed(() => (state.view === 'todo' || state.view === 'history' ? `（${todoCount.value}）` : ''))
 
 const currentSectionTitle = computed(() => {
   switch (state.view) {

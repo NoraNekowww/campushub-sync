@@ -30,9 +30,9 @@ _STARTED_AT = time.time()
 async def app_version() -> JSONResponse:
     return JSONResponse(
         content={
-            "version": "2.8.9",
-            "tag": "v2.8.9",
-            "title": "CampusHub Android v2.8.9",
+            "version": "2.9.0",
+            "tag": "v2.9.0",
+            "title": "CampusHub Android v2.9.0",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",

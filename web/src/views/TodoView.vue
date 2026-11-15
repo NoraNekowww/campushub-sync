@@ -1,18 +1,5 @@
 <template>
   <div class="space-y-4 px-4 pt-1">
-    <!-- 顶部说明：这一页只放「没有截止时间」的事，按记下来的先后倒序 -->
-    <header class="flex items-end justify-between gap-3">
-      <div>
-        <h2 class="text-base font-semibold text-slate-800 dark:text-slate-100">可办事项</h2>
-        <p class="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
-          没有截止时间的待办都收在这里，按建立时间从新到旧
-        </p>
-      </div>
-      <span class="chip shrink-0 border-transparent bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-        {{ items.length }} 项
-      </span>
-    </header>
-
     <SkeletonList v-if="state.loading && !items.length" :rows="4" />
 
     <div v-else-if="!items.length" class="card space-y-3 p-5 text-center">

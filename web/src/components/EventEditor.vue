@@ -113,13 +113,6 @@
             </label>
           </div>
 
-          <!-- 可办事项的 DDL 字段只读展示：无截止是「可办」页的专属逻辑，这里不再提供开关 -->
-          <p
-            v-if="form.undated"
-            class="rounded-xl border border-slate-200/70 bg-slate-50/70 px-2.5 py-2 text-[11px] leading-relaxed text-slate-500 dark:border-slate-700/60 dark:bg-slate-800/50 dark:text-slate-400"
-          >
-            可办事项 · 无截止时间（只收在「可办」列表里，不占 DDL、也不上课表）
-          </p>
         </div>
 
         <div v-else class="grid grid-cols-2 gap-2">
