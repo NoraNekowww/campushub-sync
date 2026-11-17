@@ -287,12 +287,11 @@ curl -sI https://nzlab.online/schedule/CampusHub.apk | grep -i "content-type\|co
 ### 6.1 前置
 - 仓库：`https://github.com/NoraNekowww/campushub-sync`，分支 `main`，`origin` 已配。
 - `gh` 已登录 `NoraNekowww`。
-- **直连 GitHub 不通**，必须走本地 SOCKS5 `127.0.0.1:30808`。
+- **直连 GitHub 不通**，走常开的 Clash Verge（`verge-mihomo`）混合端口 `127.0.0.1:7897`。它开机常驻，**不需要手动拉起**（以前的 v2rayN `30808` 已废弃）。
 
 ```bash
-# 代理没起时先拉起（Windows）
-cd "E:/V2RayN/v2rayN-windows-64" && (./v2rayN.exe > /dev/null 2>&1 &)
-sleep 12 && netstat -ano | grep LISTENING | grep 30808     # 有输出=就绪
+netstat -ano | grep LISTENING | grep 7897    # 有输出=代理在跑
+curl -s -m 10 --proxy socks5h://127.0.0.1:7897 -o /dev/null -w "%{http_code}\n" https://github.com
 ```
 
 ### 6.2 提交与推送
@@ -300,13 +299,13 @@ sleep 12 && netstat -ano | grep LISTENING | grep 30808     # 有输出=就绪
 cd E:/Agent_Workspace_Isolated/campussync
 git add -A
 git commit -m "feat: xxx (v2.9.1)"
-git -c http.proxy=socks5://127.0.0.1:30808 \
-    -c https.proxy=socks5://127.0.0.1:30808 push origin main
+git -c http.proxy=socks5h://127.0.0.1:7897 \
+    -c https.proxy=socks5h://127.0.0.1:7897 push origin main
 ```
 
 ### 6.3 发 Release（挂 APK）
 ```bash
-HTTPS_PROXY=socks5://127.0.0.1:30808 HTTP_PROXY=socks5://127.0.0.1:30808 \
+HTTPS_PROXY=socks5h://127.0.0.1:7897 HTTP_PROXY=socks5h://127.0.0.1:7897 \
   gh release create v2.9.1 ./CampusHub.apk \
   --title "CampusHub v2.9.1 — <一句话主题>" --notes-file /tmp/notes.md
 
@@ -325,7 +324,15 @@ gh release view v2.9.1 --json assets -q '.assets[] | "\(.name) \(.size)"'
 ## 7. 红线与已知坑（务必读）
 
 ### 7.1 SSH 报 `Unable to connect to relay host, errno=10061`
-`~/.ssh/config` 里的 `ProxyCommand` 走 `127.0.0.1:30808`，本地 SOCKS 代理没起。按 §6.1 拉起 v2rayN，再重试。别去改 `~/.ssh/config` 去掉代理——直连 22 端口同样不通。
+`~/.ssh/config` 的 `ProxyCommand` 走 `127.0.0.1:30808`。**不要手动开 v2rayN**——直接确认 Clash Verge 已在跑，并让 30808 有监听：
+
+```bash
+netstat -ano | grep LISTENING | grep 30808
+# 没有输出就临时走 Clash 的 7897 直连一次：
+ssh -o ProxyCommand='E:/PlatformIO/git/ucrt64/bin/connect.exe -S 127.0.0.1:7897 %h %p' nzlab.online
+```
+
+直连 22 端口是不通的（Cloudflare 挡了），别去掉代理。
 
 ### 7.2 白屏（最高频事故）
 **根因**：漏了 `VITE_BASE=/schedule/`，`index.html` 引用 `/assets/index-xxx.js` 而线上实际在 `/schedule/assets/`。
