@@ -27,6 +27,7 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -35,8 +36,21 @@ public class TodayWidgetProvider extends AppWidgetProvider {
     private static final String API_URL = "https://nzlab.online/schedule/api/widgets/today";
     private static final String PREF_NAME = "campushub_auth";
     private static final String KEY_ADMIN_TOKEN = "admin_token";
+    private static final String KEY_SESSION_TOKEN = "session_token";
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
+
+    public static void requestRefresh(Context context) {
+        if (context == null) return;
+        AppWidgetManager mgr = AppWidgetManager.getInstance(context);
+        int[] ids = mgr.getAppWidgetIds(new ComponentName(context, TodayWidgetProvider.class));
+        if (ids != null && ids.length > 0) {
+            Intent intent = new Intent(context, TodayWidgetProvider.class);
+            intent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
+            intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids);
+            context.sendBroadcast(intent);
+        }
+    }
 
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
@@ -50,7 +64,8 @@ public class TodayWidgetProvider extends AppWidgetProvider {
     static void updateAppWidget(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_today);
 
-        SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
+        SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.CHINA);
+        timeFormat.setTimeZone(TimeZone.getTimeZone("Asia/Shanghai"));
         views.setTextViewText(R.id.widgetClock, timeFormat.format(new Date()));
 
         // 点击小部件任意区域直接启动主应用
@@ -70,11 +85,12 @@ public class TodayWidgetProvider extends AppWidgetProvider {
         EXECUTOR.execute(() -> {
             try {
                 SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-                String token = prefs.getString(KEY_ADMIN_TOKEN, "").trim();
+                String adminToken = prefs.getString(KEY_ADMIN_TOKEN, "").trim();
+                String sessionToken = prefs.getString(KEY_SESSION_TOKEN, "").trim();
 
                 String reqUrl = API_URL;
-                if (!token.isEmpty()) {
-                    reqUrl = API_URL + "?token=" + URLEncoder.encode(token, "UTF-8");
+                if (!adminToken.isEmpty()) {
+                    reqUrl = API_URL + "?token=" + URLEncoder.encode(adminToken, "UTF-8");
                 }
 
                 URL url = new URL(reqUrl);
@@ -82,11 +98,15 @@ public class TodayWidgetProvider extends AppWidgetProvider {
                 conn.setRequestMethod("GET");
                 conn.setConnectTimeout(6000);
                 conn.setReadTimeout(6000);
-                if (!token.isEmpty()) {
-                    conn.setRequestProperty("X-Admin-Token", token);
+                if (!adminToken.isEmpty()) {
+                    conn.setRequestProperty("X-Admin-Token", adminToken);
+                }
+                if (!sessionToken.isEmpty()) {
+                    conn.setRequestProperty("X-Session-Token", sessionToken);
                 }
 
-                if (conn.getResponseCode() == 200) {
+                int code = conn.getResponseCode();
+                if (code == 200) {
                     BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
                     StringBuilder sb = new StringBuilder();
                     String line;
@@ -97,11 +117,34 @@ public class TodayWidgetProvider extends AppWidgetProvider {
 
                     JSONObject data = new JSONObject(sb.toString());
                     MAIN_HANDLER.post(() -> renderWidgetData(context, data));
+                } else if (code == 401 || code == 403) {
+                    MAIN_HANDLER.post(() -> renderAuthHint(context));
                 }
             } catch (Exception ignored) {
                 // 网络不通时保持最后一次渲染或默认视图
             }
         });
+    }
+
+    private static void renderAuthHint(Context context) {
+        AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
+        ComponentName thisWidget = new ComponentName(context, TodayWidgetProvider.class);
+        int[] allWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget);
+        if (allWidgetIds == null || allWidgetIds.length == 0) return;
+
+        RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_today);
+        views.setViewVisibility(R.id.heroCard, View.GONE);
+        int[] rowIds = { R.id.itemRow1, R.id.itemRow2, R.id.itemRow3, R.id.itemRow4 };
+        for (int rowId : rowIds) {
+            views.setViewVisibility(rowId, View.GONE);
+        }
+        views.setViewVisibility(R.id.emptyNotice, View.VISIBLE);
+        views.setTextViewText(R.id.emptyNotice, "请先打开 CampusHub 登录账号后同步课表");
+        views.setTextViewText(R.id.widgetSummary, "点击进入 CampusHub 登录");
+
+        for (int widgetId : allWidgetIds) {
+            appWidgetManager.updateAppWidget(widgetId, views);
+        }
     }
 
     private static void renderWidgetData(Context context, JSONObject data) {
@@ -120,7 +163,7 @@ public class TodayWidgetProvider extends AppWidgetProvider {
         if (!currentTime.isEmpty()) {
             views.setTextViewText(R.id.widgetClock, currentTime);
         }
-        views.setTextViewText(R.id.widgetTitle, "CampusHub · " + dateLabel + " (" + totalClasses + "课·" + totalDeadlines + "待办)");
+        views.setTextViewText(R.id.widgetTitle, dateLabel + " · " + totalClasses + " 节 · " + totalDeadlines + " DDL");
 
         // 1. 处理 Hero 焦点卡片（正在上课或即将开始的下一节课）
         JSONObject hero = data.optJSONObject("current_class");
@@ -134,8 +177,8 @@ public class TodayWidgetProvider extends AppWidgetProvider {
         if (hero != null) {
             heroId = hero.optString("id", "");
             views.setViewVisibility(R.id.heroCard, View.VISIBLE);
-            views.setTextViewText(R.id.heroStatus, isNow ? "正在上课" : "下一节课");
-            views.setTextViewText(R.id.heroClassTitle, hero.optString("title", "未知课程"));
+            views.setTextViewText(R.id.heroStatus, isNow ? "正在进行" : "下一项");
+            views.setTextViewText(R.id.heroClassTitle, hero.optString("title", "未知日程"));
             views.setTextViewText(R.id.heroClassTime, hero.optString("time", ""));
             String loc = hero.optString("location", "").trim();
             if (!loc.isEmpty()) {
@@ -148,7 +191,7 @@ public class TodayWidgetProvider extends AppWidgetProvider {
             views.setViewVisibility(R.id.heroCard, View.GONE);
         }
 
-        // 2. 解析所有今日日程（支持多日程列表呈现）
+        // 2. 解析所有今日日程
         List<JSONObject> scheduleItems = new ArrayList<>();
         JSONArray allItemsJson = data.optJSONArray("all_items");
         if (allItemsJson != null && allItemsJson.length() > 0) {
@@ -159,7 +202,6 @@ public class TodayWidgetProvider extends AppWidgetProvider {
                 }
             }
         } else {
-            // 兼容旧接口：从 classes 与 deadlines 汇聚
             JSONArray classes = data.optJSONArray("classes");
             if (classes != null) {
                 for (int i = 0; i < classes.length(); i++) {
@@ -197,14 +239,23 @@ public class TodayWidgetProvider extends AppWidgetProvider {
             });
         }
 
-        // 过滤掉已经在 Hero 突出显示的那一项，避免重复
-        List<JSONObject> listItems = new ArrayList<>();
+        // 优先展示未结束的活动日程与待办（过滤已在 Hero 展示的条目）
+        List<JSONObject> activeItems = new ArrayList<>();
+        List<JSONObject> pastItems = new ArrayList<>();
         for (JSONObject it : scheduleItems) {
             String itemId = it.optString("id", "");
             if (!heroId.isEmpty() && heroId.equals(itemId)) {
                 continue;
             }
-            listItems.add(it);
+            if ("past".equals(it.optString("status", ""))) {
+                pastItems.add(it);
+            } else {
+                activeItems.add(it);
+            }
+        }
+        List<JSONObject> listItems = new ArrayList<>(activeItems);
+        if (listItems.isEmpty() && hero == null) {
+            listItems.addAll(pastItems);
         }
 
         // 3. 填充多日程槽位（Slot 1 ~ 4）
@@ -215,6 +266,9 @@ public class TodayWidgetProvider extends AppWidgetProvider {
         int[] locIds = { R.id.itemLoc1, R.id.itemLoc2, R.id.itemLoc3, R.id.itemLoc4 };
 
         int displayCount = Math.min(listItems.size(), 4);
+        int textNormal = context.getColor(R.color.widget_title);
+        int textMuted = context.getColor(R.color.widget_text_muted);
+
         for (int i = 0; i < 4; i++) {
             if (i < displayCount) {
                 JSONObject item = listItems.get(i);
@@ -223,23 +277,25 @@ public class TodayWidgetProvider extends AppWidgetProvider {
                 String type = item.optString("type", "class");
                 String status = item.optString("status", "");
                 boolean isOngoing = "ongoing".equals(status);
+                boolean isPast = "past".equals(status);
 
                 if (isOngoing) {
-                    views.setTextViewText(tagIds[i], "在课");
+                    views.setTextViewText(tagIds[i], "进行中");
                     views.setInt(tagIds[i], "setBackgroundResource", R.drawable.widget_tag_now);
-                    views.setTextColor(tagIds[i], 0xff34d399);
+                    views.setTextColor(tagIds[i], context.getColor(R.color.widget_tag_now_text));
                 } else if ("deadline".equals(type)) {
-                    views.setTextViewText(tagIds[i], "待办");
+                    views.setTextViewText(tagIds[i], "DDL");
                     views.setInt(tagIds[i], "setBackgroundResource", R.drawable.widget_tag_todo);
-                    views.setTextColor(tagIds[i], 0xfffcd34d);
+                    views.setTextColor(tagIds[i], context.getColor(R.color.widget_tag_todo_text));
                 } else {
-                    views.setTextViewText(tagIds[i], "课");
+                    views.setTextViewText(tagIds[i], "日程");
                     views.setInt(tagIds[i], "setBackgroundResource", R.drawable.widget_tag_class);
-                    views.setTextColor(tagIds[i], 0xff93c5fd);
+                    views.setTextColor(tagIds[i], context.getColor(R.color.widget_tag_class_text));
                 }
 
                 views.setTextViewText(timeIds[i], item.optString("time", ""));
                 views.setTextViewText(titleIds[i], item.optString("title", ""));
+                views.setTextColor(titleIds[i], isPast ? textMuted : textNormal);
 
                 String loc = item.optString("location", "").trim();
                 if (!loc.isEmpty()) {
@@ -259,7 +315,7 @@ public class TodayWidgetProvider extends AppWidgetProvider {
             if (totalClasses == 0 && totalDeadlines == 0) {
                 views.setTextViewText(R.id.emptyNotice, "今天没有待办和课程，好好休息吧~");
             } else {
-                views.setTextViewText(R.id.emptyNotice, "今日课程与待办已全部完成 🎉");
+                views.setTextViewText(R.id.emptyNotice, "今日课程与待办已全部完成");
             }
         } else {
             views.setViewVisibility(R.id.emptyNotice, View.GONE);
@@ -268,9 +324,9 @@ public class TodayWidgetProvider extends AppWidgetProvider {
         // 5. 底部汇总文案
         if (listItems.size() > 4) {
             int more = listItems.size() - 4;
-            views.setTextViewText(R.id.widgetSummary, "还有 " + more + " 项日程 · 点击查看完整课表");
+            views.setTextViewText(R.id.widgetSummary, "还有 " + more + " 项日程 · 点击进入完整课表");
         } else {
-            views.setTextViewText(R.id.widgetSummary, "共 " + totalClasses + " 门课 · " + totalDeadlines + " 个待办 · 点击进入完整课表");
+            views.setTextViewText(R.id.widgetSummary, "点击进入完整课表");
         }
 
         Intent intent = new Intent(context, MainActivity.class);

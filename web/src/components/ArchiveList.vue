@@ -63,7 +63,7 @@ import EventCard from './EventCard.vue'
 import SkeletonList from './SkeletonList.vue'
 import { fetchHistoryEvents, removeEvent, state, toggleCompleted } from '../store'
 import { dedupeEvents } from '../utils/dedupe'
-import { dayDiff, dayLabel, isEventEnded, todayKey } from '../utils/datetime'
+import { dayDiff, dayKey, dayLabel, isEventEnded, toDate, todayKey } from '../utils/datetime'
 
 // 进入历史归档视图时主动从服务器全量拉取已完成归档记录，确保换设备/清缓存后 100% 留存不丢失
 onMounted(() => {
@@ -90,8 +90,8 @@ const completedEvents = computed(() => {
       return isTicked || isEnded
     })
     .sort((a, b) => {
-      const tA = new Date(a.end_time || a.start_time).getTime() || 0
-      const tB = new Date(b.end_time || b.start_time).getTime() || 0
+      const tA = toDate(a.end_time || a.start_time)?.getTime() || 0
+      const tB = toDate(b.end_time || b.start_time)?.getTime() || 0
       return tB - tA
     })
 })
@@ -123,7 +123,7 @@ const groups = computed(() => {
 
   completedEvents.value.forEach((event) => {
     const refTime = event.end_time || event.start_time
-    const when = refTime ? String(refTime).slice(0, 10) : ''
+    const when = dayKey(refTime)
     if (!when) return
     if (!buckets.has(when)) {
       const diff = dayDiff(when, today)
@@ -145,8 +145,8 @@ const groups = computed(() => {
       ...bucket,
       // 组内同样按完成/结束时间倒序排列（最新完成的在最前）
       events: bucket.events.sort((a, b) => {
-        const tA = new Date(a.end_time || a.start_time).getTime() || 0
-        const tB = new Date(b.end_time || b.start_time).getTime() || 0
+        const tA = toDate(a.end_time || a.start_time)?.getTime() || 0
+        const tB = toDate(b.end_time || b.start_time)?.getTime() || 0
         return tB - tA
       }),
     }))

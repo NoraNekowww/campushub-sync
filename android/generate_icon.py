@@ -9,16 +9,15 @@ def generate_icons():
     H = 2048
     scale = W / 512.0 # 4.0
     
-    # 1. 生成渐变背景
-    # 从左上角 天大深蓝 (#002244) 渐变到 右下角 微软沉浸蓝 (#0078D4)
+    # 1. 生成柔和浅色渐变背景（清透浅蓝 -> 静谧灰蓝，轻盈通透）
     y_coords, x_coords = np.ogrid[:H, :W]
     proj = (x_coords * 0.75 + y_coords * 0.75) / (W * 1.5)
     proj = np.clip(proj, 0.0, 1.0)
     
-    # 颜色梯度: Peiyang Navy (#002855) -> Brand Blue (#005A9E) -> Microsoft Fluent Blue (#0078D4)
-    c_start = np.array([0, 38, 85], dtype=np.float32)
-    c_mid = np.array([0, 90, 158], dtype=np.float32)
-    c_end = np.array([0, 120, 212], dtype=np.float32)
+    # 颜色梯度: Light Sky (#8DC2F8) -> Soft Azure (#70AAE8) -> Gentle Morandi Blue (#5892D6)
+    c_start = np.array([141, 194, 248], dtype=np.float32)
+    c_mid = np.array([112, 170, 232], dtype=np.float32)
+    c_end = np.array([88, 146, 214], dtype=np.float32)
     
     r = np.where(proj < 0.5, 
                  c_start[0] + (c_mid[0] - c_start[0]) * (proj / 0.5),
@@ -76,9 +75,9 @@ def generate_icons():
     text_x = (W - text_w) // 2 - bbox[0]
     text_y = int(92 * scale) - bbox[1]
     
-    # 绘制文字阴影
+    # 绘制文字阴影（轻柔淡蓝阴影，保持浅色通透感）
     shadow_offset = int(8 * scale)
-    shadow_draw.text((text_x, text_y + shadow_offset), text, font=font, fill=(0, 16, 40, 120))
+    shadow_draw.text((text_x, text_y + shadow_offset), text, font=font, fill=(30, 64, 120, 72))
     # 绘制纯白文字
     fg_draw.text((text_x, text_y), text, font=font, fill=(255, 255, 255, 255))
     
@@ -95,16 +94,16 @@ def generate_icons():
     sh_p1 = (p1[0], p1[1] + shadow_offset)
     sh_p2 = (p2[0], p2[1] + shadow_offset)
     sh_p3 = (p3[0], p3[1] + shadow_offset)
-    shadow_draw.line([sh_p1, sh_p2, sh_p3], fill=(0, 16, 40, 130), width=check_w, joint="round")
-    shadow_draw.ellipse([sh_p1[0] - check_w//2, sh_p1[1] - check_w//2, sh_p1[0] + check_w//2, sh_p1[1] + check_w//2], fill=(0, 16, 40, 130))
-    shadow_draw.ellipse([sh_p2[0] - check_w//2, sh_p2[1] - check_w//2, sh_p2[0] + check_w//2, sh_p2[1] + check_w//2], fill=(0, 16, 40, 130))
-    shadow_draw.ellipse([sh_p3[0] - check_w//2, sh_p3[1] - check_w//2, sh_p3[0] + check_w//2, sh_p3[1] + check_w//2], fill=(0, 16, 40, 130))
+    shadow_draw.line([sh_p1, sh_p2, sh_p3], fill=(30, 64, 120, 72), width=check_w, joint="round")
+    shadow_draw.ellipse([sh_p1[0] - check_w//2, sh_p1[1] - check_w//2, sh_p1[0] + check_w//2, sh_p1[1] + check_w//2], fill=(30, 64, 120, 72))
+    shadow_draw.ellipse([sh_p2[0] - check_w//2, sh_p2[1] - check_w//2, sh_p2[0] + check_w//2, sh_p2[1] + check_w//2], fill=(30, 64, 120, 72))
+    shadow_draw.ellipse([sh_p3[0] - check_w//2, sh_p3[1] - check_w//2, sh_p3[0] + check_w//2, sh_p3[1] + check_w//2], fill=(30, 64, 120, 72))
     
-    # 对号主体：微软 To Do 经典的实心亮青色发光层 (#38BDF8)
-    fg_draw.line([p1, p2, p3], fill=(56, 189, 248, 255), width=check_w, joint="round")
-    fg_draw.ellipse([p1[0] - check_w//2, p1[1] - check_w//2, p1[0] + check_w//2, p1[1] + check_w//2], fill=(56, 189, 248, 255))
-    fg_draw.ellipse([p2[0] - check_w//2, p2[1] - check_w//2, p2[0] + check_w//2, p2[1] + check_w//2], fill=(56, 189, 248, 255))
-    fg_draw.ellipse([p3[0] - check_w//2, p3[1] - check_w//2, p3[0] + check_w//2, p3[1] + check_w//2], fill=(56, 189, 248, 255))
+    # 对号主体：浅冰蓝高光外边 (#BAE6FD)
+    fg_draw.line([p1, p2, p3], fill=(186, 230, 253, 255), width=check_w, joint="round")
+    fg_draw.ellipse([p1[0] - check_w//2, p1[1] - check_w//2, p1[0] + check_w//2, p1[1] + check_w//2], fill=(186, 230, 253, 255))
+    fg_draw.ellipse([p2[0] - check_w//2, p2[1] - check_w//2, p2[0] + check_w//2, p2[1] + check_w//2], fill=(186, 230, 253, 255))
+    fg_draw.ellipse([p3[0] - check_w//2, p3[1] - check_w//2, p3[0] + check_w//2, p3[1] + check_w//2], fill=(186, 230, 253, 255))
     
     # 对号内芯：饱满纯白高光，与上方的纯白 TJU 形成统一的视觉语言
     inner_w = int(check_w * 0.58)

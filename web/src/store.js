@@ -4,7 +4,7 @@
  */
 import { reactive } from 'vue'
 import { api, ApiError, getSessionToken, getToken, isAuthError, isOfflineMode, setOfflineMode as persistOfflineMode, setSessionToken, setToken } from './api'
-import { dayKey, isEventEnded, todayKey } from './utils/datetime'
+import { dayKey, formatShanghaiIso, isEventEnded, toDate, todayKey } from './utils/datetime'
 import { applyThemeColor, getSavedThemeColor } from './utils/themeColors'
 import { dedupeEvents } from './utils/dedupe'
 
@@ -360,8 +360,10 @@ export async function fetchHistoryEvents() {
     const res = await api.events({ status: 'completed', limit: 800 })
     const historyItems = res.items || []
     if (!historyItems.length) return
+    const deletedMap = getDeletedEventIds()
     const eventMap = new Map((state.events || []).map((e) => [e.id, e]))
     historyItems.forEach((item) => {
+      if (deletedMap[item.id]) return
       eventMap.set(item.id, { ...item, status: 'completed' })
     })
     state.events = [...eventMap.values()]
@@ -497,6 +499,11 @@ function getDeletedEventIds() {
   }
 }
 
+export function isEventDeleted(id) {
+  if (!id) return false
+  return Boolean(getDeletedEventIds()[id])
+}
+
 function recordDeletedEventId(id) {
   try {
     const map = getDeletedEventIds()
@@ -566,7 +573,11 @@ function getSyncQueue() {
 function appendSyncQueue(action) {
   try {
     const queue = getSyncQueue()
-    queue.push({ ...action, timestamp: Date.now() })
+    queue.push({
+      ...action,
+      _qid: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: Date.now(),
+    })
     localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue))
   } catch {}
 }
@@ -577,67 +588,113 @@ function clearSyncQueue() {
   } catch {}
 }
 
-/** 异步向服务器回写离线操作队列（仅在手动或后台同步时触发） */
+let activeFlushPromise = null
+let flushAgainRequested = false
+
+/** 异步向服务器回写离线操作队列（仅在手动或后台同步时触发，单飞串行防止重复提交或覆盖新入队项） */
 export async function flushSyncQueue() {
   // 离线模式：永不回传服务器
   if (state.offlineMode) return
-  const queue = getSyncQueue()
-  if (!queue.length) return
-  const remaining = []
-  for (const item of queue) {
+  if (activeFlushPromise) {
+    flushAgainRequested = true
+    return activeFlushPromise
+  }
+  activeFlushPromise = (async () => {
+    const tempIdMap = new Map()
     try {
-      if (item.type === 'create') {
-        const res = await api.createEvent(item.payload)
-        // 服务器确认创建成功：支持单事件与重复事件批量返回
-        if (res && item.temp_id) {
-          if (Array.isArray(res.items) && res.items.length > 0) {
-            // 批量重复事件返回：替换首个临时事件，并将其余事件按顺序更新/补充进本地缓存
-            const primary = res.items[0]
-            const idx = state.events.findIndex((e) => e.id === item.temp_id)
-            if (idx >= 0) {
-              state.events.splice(idx, 1, primary)
-            }
-            for (let i = 1; i < res.items.length; i++) {
-              const follower = res.items[i]
-              // 寻找本地可能预生成的对应临时项并替换，或直接入列
-              const followerTempIdx = state.events.findIndex(
-                (e) => String(e.id).startsWith('local_') && e.recurrence?.index === i + 1
-              )
-              if (followerTempIdx >= 0) {
-                state.events.splice(followerTempIdx, 1, follower)
-              } else if (!state.events.some((e) => e.id === follower.id)) {
-                state.events.push(follower)
+      do {
+        flushAgainRequested = false
+        const queue = getSyncQueue()
+        if (!queue.length) break
+        const processedQids = new Set(queue.map((q) => q._qid).filter(Boolean))
+        const remaining = []
+        for (const item of queue) {
+          const resolvedId = item.id && tempIdMap.has(item.id) ? tempIdMap.get(item.id) : item.id
+          try {
+            if (item.type === 'create') {
+              const res = await api.createEvent(item.payload)
+              // 服务器确认创建成功：支持单事件与重复事件批量返回
+              if (res && item.temp_id) {
+                if (Array.isArray(res.items) && res.items.length > 0) {
+                  const tempIds = Array.isArray(item.temp_ids) && item.temp_ids.length
+                    ? item.temp_ids
+                    : [item.temp_id]
+                  for (let i = 0; i < res.items.length; i++) {
+                    const serverEv = res.items[i]
+                    const matchedTempId = tempIds[i]
+                    if (matchedTempId && serverEv?.id) {
+                      tempIdMap.set(matchedTempId, serverEv.id)
+                    }
+                    let idx = matchedTempId ? state.events.findIndex((e) => e.id === matchedTempId) : -1
+                    if (idx < 0 && i > 0) {
+                      idx = state.events.findIndex(
+                        (e) => String(e.id).startsWith('local_') && e.recurrence?.index === i + 1,
+                      )
+                    }
+                    if (idx >= 0) {
+                      state.events.splice(idx, 1, serverEv)
+                    } else if (!state.events.some((e) => e.id === serverEv.id)) {
+                      state.events.push(serverEv)
+                    }
+                  }
+                  saveEventsCache(state.events, state.total)
+                } else if (res.id) {
+                  tempIdMap.set(item.temp_id, res.id)
+                  const idx = state.events.findIndex((e) => e.id === item.temp_id)
+                  if (idx >= 0) {
+                    state.events.splice(idx, 1, res)
+                    saveEventsCache(state.events, state.total)
+                  }
+                }
               }
+            } else if (item.type === 'patch') {
+              if (String(resolvedId || '').startsWith('local_')) {
+                remaining.push(item)
+                continue
+              }
+              await api.patchEvent(resolvedId, item.payload)
+              // 服务器确认成功写入后，移除本地覆盖保护
+              if (item.payload?.status) {
+                unrecordCompletedOverride(resolvedId)
+                unrecordCompletedOverride(item.id)
+              }
+            } else if (item.type === 'delete') {
+              if (String(resolvedId || '').startsWith('local_')) {
+                continue
+              }
+              await api.deleteEvent(resolvedId, item.options || {})
             }
-            saveEventsCache(state.events, state.total)
-          } else if (res.id) {
-            const idx = state.events.findIndex((e) => e.id === item.temp_id)
-            if (idx >= 0) {
-              state.events.splice(idx, 1, res)
-              saveEventsCache(state.events, state.total)
+          } catch (e) {
+            // 400/404/422 属于永久性参数/对象无效，不再无限重试卡死队列
+            if (e instanceof ApiError && (e.status === 400 || e.status === 404 || e.status === 422)) {
+              console.warn('同步队列丢弃无效操作:', item.type, resolvedId, e.message)
+            } else {
+              remaining.push(resolvedId !== item.id ? { ...item, id: resolvedId } : item)
             }
           }
         }
-      } else if (item.type === 'patch') {
-        await api.patchEvent(item.id, item.payload)
-        // 服务器确认成功写入后，移除本地覆盖保护
-        if (item.payload?.status) {
-          unrecordCompletedOverride(item.id)
-        }
-      } else if (item.type === 'delete') {
-        await api.deleteEvent(item.id, item.options || {})
-      }
-    } catch (e) {
-      remaining.push(item)
+        // 合并请求期间新入队的操作，避免直接 clearSyncQueue 误删并发写入的日程
+        try {
+          const latestQueue = getSyncQueue()
+          const newlyAppended = latestQueue
+            .filter((q) => !q._qid || !processedQids.has(q._qid))
+            .map((q) => (q.id && tempIdMap.has(q.id) ? { ...q, id: tempIdMap.get(q.id) } : q))
+          const nextQueue = [...remaining, ...newlyAppended]
+          if (nextQueue.length) {
+            localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(nextQueue))
+          } else {
+            clearSyncQueue()
+          }
+          if (newlyAppended.length > 0) {
+            flushAgainRequested = true
+          }
+        } catch {}
+      } while (flushAgainRequested)
+    } finally {
+      activeFlushPromise = null
     }
-  }
-  try {
-    if (remaining.length) {
-      localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(remaining))
-    } else {
-      clearSyncQueue()
-    }
-  } catch {}
+  })()
+  return activeFlushPromise
 }
 
 function saveUserCache(user) {
@@ -701,11 +758,25 @@ export async function refresh({ silent = false } = {}) {
     state.events = dedupeEvents([...preservedLocalItems, ...mergedServerItems])
 
     // 对本地未同步至云端的自建/临时日程自动加入补推同步队列
+    const queuedSnapshot = getSyncQueue()
     for (const local of preservedLocalItems) {
       if (local.id && String(local.id).startsWith('local_')) {
-        const q = getSyncQueue()
-        if (!q.some((item) => item.temp_id === local.id)) {
-          appendSyncQueue({ type: 'create', temp_id: local.id, payload: local })
+        const alreadyQueued = queuedSnapshot.some(
+          (item) =>
+            item.temp_id === local.id ||
+            (Array.isArray(item.temp_ids) && item.temp_ids.includes(local.id)),
+        )
+        if (!alreadyQueued) {
+          const {
+            repeat_frequency,
+            repeat_interval,
+            repeat_count,
+            clear_end_time,
+            duration_hours,
+            _endTs,
+            ...cleanPayload
+          } = local
+          appendSyncQueue({ type: 'create', temp_id: local.id, payload: cleanPayload })
         }
       }
     }
@@ -1016,18 +1087,50 @@ export async function saveQuickTodo({ title, description = '' } = {}) {
   return saved
 }
 
+/** 在 Asia/Shanghai (+08:00) 日历下安全地增加指定月数（月末自动回拨到当月最后一天）。 */
+function addMonthsShanghai(baseDate, months) {
+  const shifted = new Date(baseDate.getTime() + 8 * 3600000)
+  const year0 = shifted.getUTCFullYear()
+  const month0 = shifted.getUTCMonth()
+  const day0 = shifted.getUTCDate()
+  const hh = shifted.getUTCHours()
+  const mm = shifted.getUTCMinutes()
+  const ss = shifted.getUTCSeconds()
+  const targetYear = year0 + Math.floor((month0 + months) / 12)
+  const targetMonth = ((month0 + months) % 12 + 12) % 12
+  const maxDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate()
+  const targetDay = Math.min(day0, maxDay)
+  return new Date(Date.UTC(targetYear, targetMonth, targetDay, hh, mm, ss) - 8 * 3600000)
+}
+
 export async function saveCustomEvent(payload) {
   const existing = state.customEditor.event
   const isExisting = Boolean(existing && !existing.is_draft && existing.id)
   const isMobile = isMobileNativeApp() || state.offlineMode
-  const nowIso = new Date().toISOString()
+  const nowIso = formatShanghaiIso(new Date()) || new Date().toISOString()
   const payloadWithMeta = { ...payload, client_updated_at: nowIso }
 
   // 1. 移动端 / 离线模式秒存：纯本地立即生成或更新内存与闪存，无需等待服务器返回
   if (isMobile) {
     let localItem = null
     if (isExisting) {
-      localItem = { ...existing, ...payload, updated_at: nowIso, client_updated_at: nowIso }
+      const { _endTs, ...cleanExisting } = existing
+      const { clear_end_time, duration_hours, ...cleanFields } = payload
+      const normalizedStart = formatShanghaiIso(toDate(payload.start_time)) || payload.start_time
+      const normalizedEnd = payload.end_time
+        ? (formatShanghaiIso(toDate(payload.end_time)) || payload.end_time)
+        : null
+      localItem = {
+        ...cleanExisting,
+        ...cleanFields,
+        start_time: normalizedStart,
+        end_time: normalizedEnd,
+        updated_at: nowIso,
+        client_updated_at: nowIso,
+      }
+      if (payload.status === 'pending') {
+        unrecordCompletedOverride(existing.id)
+      }
       const idx = state.events.findIndex((e) => e.id === existing.id)
       if (idx >= 0) state.events.splice(idx, 1, localItem)
       if (!state.offlineMode) appendSyncQueue({ type: 'patch', id: existing.id, payload: payloadWithMeta })
@@ -1041,8 +1144,18 @@ export async function saveCustomEvent(payload) {
       const repeatInterval = Math.max(1, payload.repeat_interval || 1)
       const repeatCount = Math.max(1, Math.min(100, payload.repeat_count || 1))
       const seriesGroupId = `rec_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-      const baseStart = new Date(payload.start_time)
-      const durationMs = payload.end_time ? new Date(payload.end_time).getTime() - baseStart.getTime() : null
+      const baseStart = toDate(payload.start_time) || new Date()
+      const baseEnd = payload.end_time ? toDate(payload.end_time) : null
+      const durationMs = baseEnd ? Math.max(0, baseEnd.getTime() - baseStart.getTime()) : null
+
+      const {
+        repeat_frequency,
+        repeat_interval,
+        repeat_count,
+        clear_end_time,
+        duration_hours,
+        ...cleanFields
+      } = payload
 
       const createdItems = []
       const count = isRecurring ? repeatCount : 1
@@ -1052,16 +1165,16 @@ export async function saveCustomEvent(payload) {
         let curStart = new Date(baseStart.getTime())
         if (isRecurring && i > 0) {
           if (repeatFreq === 'day') {
-            curStart.setDate(curStart.getDate() + i * repeatInterval)
+            curStart = new Date(baseStart.getTime() + i * repeatInterval * 86400000)
           } else if (repeatFreq === 'week') {
-            curStart.setDate(curStart.getDate() + i * repeatInterval * 7)
+            curStart = new Date(baseStart.getTime() + i * repeatInterval * 7 * 86400000)
           } else if (repeatFreq === 'month') {
-            const expectedMonth = curStart.getMonth() + i * repeatInterval
-            curStart.setMonth(expectedMonth)
+            curStart = addMonthsShanghai(baseStart, i * repeatInterval)
           }
         }
-        const curStartIso = curStart.toISOString()
-        const curEndIso = durationMs != null ? new Date(curStart.getTime() + durationMs).toISOString() : null
+        // 使用 +08:00 (Asia/Shanghai) ISO 字符串，确保课表网格立刻精确对齐真实时刻，无需等服务器回写纠偏
+        const curStartIso = formatShanghaiIso(curStart)
+        const curEndIso = durationMs != null ? formatShanghaiIso(new Date(curStart.getTime() + durationMs)) : null
 
         const item = {
           id: tempId,
@@ -1070,7 +1183,7 @@ export async function saveCustomEvent(payload) {
           created_at: nowIso,
           updated_at: nowIso,
           client_updated_at: nowIso,
-          ...payload,
+          ...cleanFields,
           start_time: curStartIso,
           end_time: curEndIso,
           recurrence: isRecurring ? {
@@ -1084,12 +1197,19 @@ export async function saveCustomEvent(payload) {
         createdItems.push(item)
       }
 
-      for (const it of createdItems) {
+      for (const it of [...createdItems].reverse()) {
         state.events.unshift(it)
       }
       state.total += createdItems.length
       localItem = createdItems[0]
-      if (!state.offlineMode) appendSyncQueue({ type: 'create', temp_id: localItem.id, payload: payloadWithMeta })
+      if (!state.offlineMode) {
+        appendSyncQueue({
+          type: 'create',
+          temp_id: localItem.id,
+          temp_ids: createdItems.map((it) => it.id),
+          payload: payloadWithMeta,
+        })
+      }
     }
     // 立即写回本地永久缓存
     saveEventsCache(state.events, state.total)
@@ -1110,6 +1230,25 @@ export async function saveCustomEvent(payload) {
     const saved = isExisting
       ? await api.patchEvent(existing.id, payloadWithMeta)
       : await api.createEvent(payloadWithMeta)
+    if (isExisting && payload.status === 'pending') {
+      unrecordCompletedOverride(existing.id)
+    }
+    const savedList = Array.isArray(saved?.items) ? saved.items : saved?.id ? [saved] : []
+    if (savedList.length > 0) {
+      if (isExisting) {
+        const idx = state.events.findIndex((e) => e.id === existing.id)
+        if (idx >= 0) state.events.splice(idx, 1, savedList[0])
+        else state.events.unshift(savedList[0])
+      } else {
+        for (const item of [...savedList].reverse()) {
+          if (!state.events.some((e) => e.id === item.id)) {
+            state.events.unshift(item)
+          }
+        }
+        state.total += savedList.length
+      }
+      saveEventsCache(state.events, state.total)
+    }
     closeCustomEditor()
     notify(isExisting ? '日程已更新' : '日程已添加', 'ok')
     await refresh({ silent: true })
@@ -1126,13 +1265,24 @@ export async function removeCustomEvent(id, options = {}) {
   const isMobile = isMobileNativeApp() || state.offlineMode
 
   if (isMobile) {
-    // 移动端 / 离线模式：直接从本地状态剔除并存入同步队列
-    const index = state.events.findIndex((e) => e.id === id)
-    if (index >= 0) {
-      state.events.splice(index, 1)
-      state.total = Math.max(0, state.total - 1)
-      saveEventsCache(state.events, state.total)
+    // 移动端 / 离线模式：直接从本地状态剔除、登记墓碑并存入同步队列
+    const groupId = target?.recurrence?.group_id
+    const toRemoveIds = new Set([id])
+    if (groupId && (applyScope === 'all' || applyScope === 'future')) {
+      const targetTs = toDate(target.start_time)?.getTime() ?? 0
+      state.events.forEach((ev) => {
+        if (ev.recurrence?.group_id !== groupId) return
+        if (applyScope === 'all' || (toDate(ev.start_time)?.getTime() ?? 0) >= targetTs) {
+          toRemoveIds.add(ev.id)
+        }
+      })
     }
+    const beforeLen = state.events.length
+    state.events = state.events.filter((e) => !toRemoveIds.has(e.id))
+    const removedCount = beforeLen - state.events.length
+    state.total = Math.max(0, state.total - removedCount)
+    toRemoveIds.forEach((removedId) => recordDeletedEventId(removedId))
+    saveEventsCache(state.events, state.total)
     closeCustomEditor()
     if (!state.offlineMode) {
       appendSyncQueue({ type: 'delete', id, options })

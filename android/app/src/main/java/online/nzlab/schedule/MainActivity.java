@@ -48,6 +48,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String APP_URL = "https://nzlab.online/schedule/";
     private static final String PREF_NAME = "campushub_auth";
     private static final String KEY_ADMIN_TOKEN = "admin_token";
+    private static final String KEY_SESSION_TOKEN = "session_token";
 
     private WebView webView;
     private SwipeRefreshLayout swipeRefresh;
@@ -377,22 +378,32 @@ public class MainActivity extends AppCompatActivity {
 
             // 双重保险：检查 SharedPreferences 中是否有备份 Token，自动注入还原
             String backupToken = prefs.getString(KEY_ADMIN_TOKEN, "");
-            if (!backupToken.isEmpty()) {
+            String backupSession = prefs.getString(KEY_SESSION_TOKEN, "");
+            if (!backupToken.isEmpty() || !backupSession.isEmpty()) {
+                String escapedAdmin = backupToken.replace("\\", "\\\\").replace("'", "\\'");
+                String escapedSession = backupSession.replace("\\", "\\\\").replace("'", "\\'");
                 String injectScript = "(function() {" +
                         "  try {" +
-                        "    if (!localStorage.getItem('campushub.adminToken')) {" +
-                        "      localStorage.setItem('campushub.adminToken', '" + backupToken + "');" +
+                        "    if ('" + escapedAdmin + "' && !localStorage.getItem('campushub.adminToken')) {" +
+                        "      localStorage.setItem('campushub.adminToken', '" + escapedAdmin + "');" +
+                        "    }" +
+                        "    if ('" + escapedSession + "' && !localStorage.getItem('campushub.userSessionToken')) {" +
+                        "      localStorage.setItem('campushub.userSessionToken', '" + escapedSession + "');" +
                         "    }" +
                         "  } catch(e) {}" +
                         "})();";
                 view.evaluateJavascript(injectScript, null);
             }
 
-            // 监听前端当前的 Token 并备份到原生 SharedPreferences
+            // 监听前端当前的 Token 与会话 Token 并备份到原生 SharedPreferences
             String backupScript = "(function() {" +
                     "  try {" +
                     "    var t = localStorage.getItem('campushub.adminToken') || '';" +
-                    "    if (window.NativeAuthBridge) { window.NativeAuthBridge.syncToken(t); }" +
+                    "    var s = localStorage.getItem('campushub.userSessionToken') || '';" +
+                    "    if (window.NativeAuthBridge) {" +
+                    "      if (window.NativeAuthBridge.syncAuthTokens) { window.NativeAuthBridge.syncAuthTokens(t, s); }" +
+                    "      else if (window.NativeAuthBridge.syncToken) { window.NativeAuthBridge.syncToken(t); }" +
+                    "    }" +
                     "  } catch(e) {}" +
                     "})();";
             view.evaluateJavascript(backupScript, null);
@@ -404,6 +415,25 @@ public class MainActivity extends AppCompatActivity {
         public void syncToken(String token) {
             if (token != null && !token.isEmpty()) {
                 prefs.edit().putString(KEY_ADMIN_TOKEN, token).apply();
+                TodayWidgetProvider.requestRefresh(MainActivity.this);
+            }
+        }
+
+        @JavascriptInterface
+        public void syncAuthTokens(String adminToken, String sessionToken) {
+            SharedPreferences.Editor ed = prefs.edit();
+            boolean changed = false;
+            if (adminToken != null && !adminToken.isEmpty()) {
+                ed.putString(KEY_ADMIN_TOKEN, adminToken);
+                changed = true;
+            }
+            if (sessionToken != null) {
+                ed.putString(KEY_SESSION_TOKEN, sessionToken);
+                changed = true;
+            }
+            if (changed) {
+                ed.apply();
+                TodayWidgetProvider.requestRefresh(MainActivity.this);
             }
         }
 
@@ -519,6 +549,7 @@ public class MainActivity extends AppCompatActivity {
         if (webView != null) {
             webView.onPause();
         }
+        TodayWidgetProvider.requestRefresh(this);
     }
 
     @Override

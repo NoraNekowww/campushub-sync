@@ -349,6 +349,7 @@ import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { Clock, FileText, GraduationCap, Paperclip, Pencil, RotateCcw, Sparkles, Upload, X } from 'lucide-vue-next'
 import { api } from '../api'
 import { closeCustomEditor, removeCustomEvent, saveCustomEvent, state } from '../store'
+import { dayKey, timeLabel, toDate, todayKey } from '../utils/datetime'
 import { parseScheduleText } from '../utils/parseScheduleText'
 
 const busy = ref(false)
@@ -398,14 +399,16 @@ function setKind(k) {
   form.kind = k
   if (k === 'deadline') {
     form.duration = 0
-    form.start = '21:00'
+    // 保留用户已填写的时刻；仅当时刻为空时兜底默认 21:00
+    if (!form.start) form.start = '21:00'
     // 待办 DDL 没有固定地点，也不提供重复
     form.location = ''
     form.recurring = false
   } else {
     form.undated = false
     form.allDay = false
-    form.start = '09:00'
+    // 从 DDL 切换到日程页时迁移已选开始时间（仅为空时兜底 09:00）
+    if (!form.start) form.start = '09:00'
     if (!form.duration || form.duration <= 0) form.duration = 1.5
   }
 }
@@ -428,19 +431,15 @@ const removeLabel = computed(() => {
   if (isCustom.value) return '删除'
   return source.value === 'tju_schedule' ? '移除这次课' : '从日历里移除'
 })
-function today() {
-  const now = new Date()
-  const pad = (value) => String(value).padStart(2, '0')
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
-}
-
 /* 下拉里能选的档位；反推时长时也往这些档位上靠，免得算出个 1.4999 选不中 */
 const DURATION_OPTIONS = [0, 0.5, 1, 1.5, 2, 2.5, 3, 4, 6, 8]
 
-/** 从「开始 / 结束」两个 `YYYY-MM-DDTHH:MM` 串算时长（小时），坏数据给 0。 */
+/** 从「开始 / 结束」两个时间串算时长（小时），坏数据给 0。 */
 function durationOf(start, end) {
-  if (!start || !end) return 0
-  const hours = (new Date(end) - new Date(start)) / 3600000
+  const startDate = toDate(start)
+  const endDate = toDate(end)
+  if (!startDate || !endDate) return 0
+  const hours = (endDate.getTime() - startDate.getTime()) / 3600000
   if (!Number.isFinite(hours) || hours <= 0) return 0
   return DURATION_OPTIONS.reduce(
     (best, option) => (Math.abs(option - hours) < Math.abs(best - hours) ? option : best),
@@ -448,17 +447,17 @@ function durationOf(start, end) {
   )
 }
 
-/** `${date}T${hhmm}` 往后推 hours 小时，返回同格式串（跨天照算）。 */
+/** `${date}T${hhmm}` 往后推 hours 小时，返回同格式串（跨天照算，不依赖设备时区/夏令时）。 */
 function addHours(date, hhmm, hours) {
-  const [hour, minute] = hhmm.split(':').map(Number)
+  const [year, month, day] = String(date || '').split('-').map(Number)
+  const [hour, minute] = String(hhmm || '').split(':').map(Number)
+  if (!year || !month || !day) return null
   const pad = (value) => String(value).padStart(2, '0')
-  const base = new Date(
-    `${date}T${pad(hour || 0)}:${pad(minute || 0)}:00`,
-  )
-  const later = new Date(base.getTime() + Math.round(hours * 3600000))
-  return `${later.getFullYear()}-${pad(later.getMonth() + 1)}-${pad(later.getDate())}T${pad(
-    later.getHours(),
-  )}:${pad(later.getMinutes())}:00`
+  const baseUtc = Date.UTC(year, month - 1, day, Number.isFinite(hour) ? hour : 0, Number.isFinite(minute) ? minute : 0, 0)
+  const later = new Date(baseUtc + Math.round(hours * 3600000))
+  return `${later.getUTCFullYear()}-${pad(later.getUTCMonth() + 1)}-${pad(later.getUTCDate())}T${pad(
+    later.getUTCHours(),
+  )}:${pad(later.getUTCMinutes())}:00`
 }
 
 function formatFileSize(size) {
@@ -592,15 +591,15 @@ watch(
     if (!state.customEditor.open) return
     error.value = ''
     const event = state.customEditor.event
-    // start_time 已经是本地时区（后端按 Asia/Shanghai 回），前 16 位即 date+T HH:MM
-    const start = (event?.start_time || '').slice(0, 16)
+    const parsedDay = event?.start_time ? dayKey(event.start_time) : ''
+    const parsedClock = event?.start_time ? timeLabel(event.start_time) : ''
     const isDdl = event ? Boolean(event.is_deadline) : true
     form.kind = isDdl ? 'deadline' : 'class'
     form.title = event?.title || ''
-    form.date = start ? start.slice(0, 10) : today()
-    form.start = start ? start.slice(11, 16) : (form.kind === 'deadline' ? '21:00' : '09:00')
+    form.date = parsedDay || todayKey()
+    form.start = parsedClock || (form.kind === 'deadline' ? '21:00' : '09:00')
     // 结束时间由「时长」反推：活动型日程默认 1.5h
-    const calculatedDuration = durationOf(start, (event?.end_time || '').slice(0, 16))
+    const calculatedDuration = durationOf(event?.start_time, event?.end_time)
     form.duration = calculatedDuration > 0 ? calculatedDuration : (form.kind === 'class' ? 1.5 : 0)
     form.allDay = false
     form.location = event?.location || ''
@@ -625,33 +624,42 @@ function close() {
 
 async function submit() {
   error.value = ''
-  // 粘了一整段话却直接点保存：先识别一遍再存，免得整段话被原样存成标题。
-  // 但已经识别过（detectedFrom 有值）就不再重跑，否则会把用户微调过的字段冲掉。
-  const currentTitle = String(form.title || '').trim()
-  if (!detectedFrom.value && form.kind === 'class' && currentTitle.length > DETECT_MIN_LEN) {
-    await applyDetect()
-  }
-  busy.value = true
   const isDdl = form.kind === 'deadline' || form.allDay
   const isUndated = form.kind === 'deadline' && form.undated
+  const normalizedDate = String(form.date || '').trim() || todayKey()
+  const rawStart = String(form.allDay ? '00:00' : (form.start || (isDdl ? '21:00' : '09:00'))).trim()
+  const timeMatch = rawStart.match(/^(\d{1,2}):(\d{2})/)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate) || !timeMatch) {
+    error.value = '请填写有效的日期和开始时间'
+    return
+  }
+  const normalizedStart = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`
+  const startTime = `${normalizedDate}T${normalizedStart}:00`
   // 时长换算成结束时刻；活动型日程自动算结束时间，上完自动隐退
-  const endTime =
-    !isDdl && form.duration > 0 ? addHours(form.date, form.start, form.duration) : null
+  const durationHours = !isDdl ? (Number(form.duration) > 0 ? Number(form.duration) : 1.5) : 0
+  const endTime = !isDdl && durationHours > 0 ? addHours(normalizedDate, normalizedStart, durationHours) : null
 
   const payload = {
     title: form.title.trim(),
     // 无截止待办只需要一个「落库时刻」占位；编辑时沿用原来的，别把顺序刷到最前
-    start_time: `${form.date}T${form.allDay ? '00:00' : form.start}:00`,
+    start_time: startTime,
     // end_time 传 null 表示「不改」，所以想清空结束时间得靠 clear_end_time
     end_time: endTime,
     clear_end_time: !endTime,
-    duration_hours: isDdl ? 0 : form.duration,
+    duration_hours: isDdl ? 0 : durationHours,
     // 空串 = 清空（null 会被后端当成「这一项不动」，地点和备注就删不掉了）
     // 待办 DDL 没有地点：一律发空串，顺带清掉历史遗留的地点
     location: isDdl ? '' : form.location.trim(),
     description: form.description.trim(),
     attachments: form.attachments,
     is_undated: isUndated,
+  }
+  // 把已归档/已完成的日程重新改到未来时段时，恢复为未完成，避免继续滞留历史归档
+  if (isEdit.value && editing.value?.status === 'completed' && !isUndated) {
+    const targetDate = toDate(endTime || startTime)
+    if (targetDate && targetDate.getTime() > Date.now()) {
+      payload.status = 'pending'
+    }
   }
   if (!isEdit.value && form.recurring) {
     payload.repeat_frequency = form.repeatUnit
@@ -664,18 +672,27 @@ async function submit() {
   // 只有自定义日程有「全天 / 当截止日期用」这个概念；外部来源发过去也会被忽略
   if (isCustom.value || !isEdit.value) payload.is_deadline = isDdl
 
-  const saved = await saveCustomEvent(payload)
-  busy.value = false
-  if (!saved) error.value = '没保存成功，请检查网络后重试'
+  busy.value = true
+  try {
+    const saved = await saveCustomEvent(payload)
+    if (!saved) error.value = '没保存成功，请检查网络后重试'
+  } catch (err) {
+    error.value = err?.message || '没保存成功，请检查网络后重试'
+  } finally {
+    busy.value = false
+  }
 }
 
 async function remove() {
   if (!editing.value) return
   busy.value = true
-  const removed = await removeCustomEvent(editing.value.id, {
-    apply_scope: form.applyScope || 'single',
-  })
-  busy.value = false
-  if (!removed) error.value = '删除失败，看一眼上面的提示'
+  try {
+    const removed = await removeCustomEvent(editing.value.id, {
+      apply_scope: form.applyScope || 'single',
+    })
+    if (!removed) error.value = '删除失败，看一眼上面的提示'
+  } finally {
+    busy.value = false
+  }
 }
 </script>

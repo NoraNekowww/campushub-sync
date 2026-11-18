@@ -40,10 +40,19 @@ export function getSessionToken() {
   }
 }
 
+function notifyNativeTokens() {
+  try {
+    if (typeof window !== 'undefined' && window.NativeAuthBridge?.syncAuthTokens) {
+      window.NativeAuthBridge.syncAuthTokens(getToken(), getSessionToken())
+    }
+  } catch (e) {}
+}
+
 export function setSessionToken(value) {
   try {
     if (value) localStorage.setItem(USER_SESSION_TOKEN_KEY, value)
     else localStorage.removeItem(USER_SESSION_TOKEN_KEY)
+    notifyNativeTokens()
   } catch (error) {
     /* private mode */
   }
@@ -82,6 +91,7 @@ export function setToken(value) {
   try {
     if (value) localStorage.setItem(TOKEN_KEY, value)
     else localStorage.removeItem(TOKEN_KEY)
+    notifyNativeTokens()
   } catch (error) {
     /* private mode — ignore */
   }

@@ -11,33 +11,35 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: rgba(255, 255, 255, 0.85);
-      --card-bg: rgba(241, 245, 249, 0.9);
+      --bg: rgba(255, 255, 255, 0.88);
+      --card-bg: rgba(248, 250, 252, 0.85);
       --text: #0f172a;
       --subtext: #64748b;
-      --brand: #2563eb;
-      --brand-light: #dbeafe;
-      --brand-text: #1e40af;
+      --brand: #4a6fa5;
+      --brand-light: rgba(228, 235, 245, 0.85);
+      --brand-border: rgba(74, 111, 165, 0.45);
+      --brand-text: #3d5c8b;
       --accent: #f59e0b;
       --accent-light: #fef3c7;
       --accent-text: #92400e;
-      --border: rgba(226, 232, 240, 0.8);
-      --badge-now: #10b981;
+      --border: rgba(203, 213, 225, 0.7);
+      --badge-now: #4e8775;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: rgba(15, 23, 42, 0.85);
-        --card-bg: rgba(30, 41, 59, 0.8);
+        --bg: rgba(15, 23, 42, 0.86);
+        --card-bg: rgba(30, 41, 59, 0.65);
         --text: #f8fafc;
         --subtext: #94a3b8;
-        --brand: #3b82f6;
-        --brand-light: rgba(59, 130, 246, 0.2);
-        --brand-text: #93c5fd;
+        --brand: #809cc6;
+        --brand-light: rgba(74, 111, 165, 0.28);
+        --brand-border: rgba(128, 156, 198, 0.4);
+        --brand-text: #acc0de;
         --accent: #f59e0b;
         --accent-light: rgba(245, 158, 11, 0.2);
         --accent-text: #fcd34d;
-        --border: rgba(51, 65, 85, 0.8);
-        --badge-now: #34d399;
+        --border: rgba(255, 255, 255, 0.16);
+        --badge-now: #6ee7b7;
       }
     }
     body {
@@ -92,8 +94,8 @@
     }
     .hero-card {
       background: var(--brand-light);
-      border: 1px solid var(--brand);
-      border-radius: 12px;
+      border: 1px solid var(--brand-border);
+      border-radius: 14px;
       padding: 8px 10px;
       margin-bottom: 8px;
       display: flex;
@@ -281,6 +283,14 @@
       }
     }
 
+    function getSessionToken() {
+      try {
+        return localStorage.getItem('campushub.userSessionToken') || '';
+      } catch (e) {
+        return '';
+      }
+    }
+
     function openApp(e) {
       if (e && e.target && e.target.closest('#clock')) return;
       window.location.href = MAIN_APP;
@@ -315,12 +325,16 @@
     async function loadData() {
       updateClock();
       const token = getToken();
+      const sessionToken = getSessionToken();
       const url = token ? `${API_BASE}?token=${encodeURIComponent(token)}` : API_BASE;
+      const headers = {};
+      if (token) headers['X-Admin-Token'] = token;
+      if (sessionToken) headers['X-Session-Token'] = sessionToken;
       try {
-        const resp = await fetch(url);
+        const resp = await fetch(url, { credentials: 'include', headers });
         if (!resp.ok) {
           if (resp.status === 401) {
-            document.getElementById('listWrap').innerHTML = '<div class="empty-tip" onclick="promptToken(event)" style="cursor:pointer;color:var(--brand)">点击设置令牌后点亮小组件 ›</div>';
+            document.getElementById('listWrap').innerHTML = '<div class="empty-tip" onclick="promptToken(event)" style="cursor:pointer;color:var(--brand)">点击设置令牌或先在主应用登录后刷新 ›</div>';
             return;
           }
           throw new Error('加载失败');
@@ -334,7 +348,10 @@
 
     function render(data) {
       document.getElementById('dateLabel').textContent = data.date_label || '今日日程';
-      document.getElementById('dateMeta').textContent = `(${data.total_classes}课·${data.total_deadlines}待办)`;
+      document.getElementById('dateMeta').textContent = `${data.total_classes} 节 · ${data.total_deadlines} DDL`;
+      if (data.current_time) {
+        document.getElementById('clock').textContent = data.current_time;
+      }
 
       const hero = data.current_class || data.next_class;
       const heroCard = document.getElementById('heroCard');
@@ -342,19 +359,32 @@
         heroCard.style.display = 'flex';
         const isNow = hero.status === 'ongoing';
         const badge = document.getElementById('heroBadge');
-        badge.textContent = isNow ? '正在上课' : '下一节课';
+        badge.textContent = isNow ? '正在进行' : '下一项';
         badge.className = `hero-badge ${isNow ? 'ongoing' : 'upcoming'}`;
         document.getElementById('heroTitle').textContent = hero.title;
         document.getElementById('heroTime').textContent = hero.time;
-        document.getElementById('heroLoc').textContent = hero.location ? hero.location : '无教室';
+        const heroLoc = document.getElementById('heroLoc');
+        if (hero.location) {
+          heroLoc.textContent = hero.location;
+          heroLoc.style.display = 'block';
+        } else {
+          heroLoc.style.display = 'none';
+        }
       } else {
         heroCard.style.display = 'none';
       }
 
       const listWrap = document.getElementById('listWrap');
-      const items = (data.classes || []).concat(data.deadlines || []);
+      const heroId = hero?.id || '';
+      const rawItems = Array.isArray(data.all_items)
+        ? data.all_items
+        : (data.classes || []).map((c) => ({ ...c, type: 'class' })).concat((data.deadlines || []).map((d) => ({ ...d, type: 'deadline' })));
+      const remaining = rawItems.filter((item) => !heroId || item.id !== heroId);
+      const activeItems = remaining.filter((item) => item.status !== 'past');
+      const items = activeItems.length || hero ? activeItems : remaining;
+
       if (!items.length) {
-        listWrap.innerHTML = '<div class="empty-tip">今天没有待办和课程，好好休息吧~</div>';
+        listWrap.innerHTML = hero ? '' : '<div class="empty-tip">今天没有待办和课程，好好休息吧~</div>';
         return;
       }
 
@@ -367,7 +397,7 @@
               <div class="item-title">${item.title}</div>
               <div class="item-time">${item.time} ${isDdl ? '· DDL' : ''}</div>
             </div>
-            ${loc ? `<div class="item-loc">📍${loc}</div>` : ''}
+            ${loc ? `<div class="item-loc">${loc}</div>` : ''}
           </div>
         `;
       }).join('');

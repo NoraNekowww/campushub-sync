@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 桌面小部件深色磨砂玻璃配色（与课程表暗色模式一致） -->
+    <color name="widget_bg_fill">#D90F172A</color>
+    <color name="widget_bg_stroke">#2EFFFFFF</color>
+    <color name="widget_divider">#24FFFFFF</color>
+    <color name="widget_title">#F8FAFC</color>
+    <color name="widget_text_secondary">#CBD5E1</color>
+    <color name="widget_text_muted">#94A3B8</color>
+    <color name="widget_clock_bg">#334A6FA5</color>
+    <color name="widget_clock_text">#ACC0DE</color>
+
+    <color name="widget_hero_bg_fill">#404A6FA5</color>
+    <color name="widget_hero_bg_stroke">#66809CC6</color>
+    <color name="widget_hero_status">#ACC0DE</color>
+    <color name="widget_hero_loc_bg">#4D0F172A</color>
+    <color name="widget_hero_loc_text">#CBD5E1</color>
+
+    <color name="widget_item_bg_fill">#401E293B</color>
+    <color name="widget_item_bg_stroke">#24FFFFFF</color>
+
+    <color name="widget_tag_class_bg">#334A6FA5</color>
+    <color name="widget_tag_class_stroke">#55809CC6</color>
+    <color name="widget_tag_class_text">#ACC0DE</color>
+
+    <color name="widget_tag_now_bg">#3310B981</color>
+    <color name="widget_tag_now_stroke">#5534D399</color>
+    <color name="widget_tag_now_text">#6EE7B7</color>
+
+    <color name="widget_tag_todo_bg">#33F59E0B</color>
+    <color name="widget_tag_todo_stroke">#55FBBF24</color>
+    <color name="widget_tag_todo_text">#FCD34D</color>
+</resources>

@@ -4,17 +4,12 @@
       <div
         ref="scroller"
         data-testid="week-scroller"
-        class="overflow-x-auto no-scrollbar scroll-smooth"
+        class="overflow-x-auto no-scrollbar snap-x snap-proximity"
         @scroll.passive="onScrollerScroll"
       >
         <div class="flex flex-col min-w-fit">
           <!-- day header -->
           <div class="grid border-b border-white/60 dark:border-white/10" :style="gridStyle">
-            <div
-              class="sticky left-0 z-10 bg-white/75 backdrop-blur-xl px-1 py-2 text-center text-[9px] text-slate-400 dark:bg-slate-900/75 dark:text-slate-500 select-none border-r border-white/60 dark:border-white/10"
-            >
-              时间
-            </div>
             <div
               v-for="day in days"
               :key="`head-${day.key}`"
@@ -36,35 +31,10 @@
 
           <!-- time grid -->
           <div class="grid" :style="gridStyle">
-            <!-- sticky so the hour labels stay visible while the week scrolls -->
-            <div
-              class="sticky left-0 z-10 bg-white/75 backdrop-blur-xl border-r border-white/60 dark:bg-slate-900/75 dark:border-white/10"
-              :style="{ height: `${GRID_HEIGHT}px` }"
-            >
-              <div
-                v-for="hour in hours"
-                :key="`tick-${hour}`"
-                class="absolute inset-x-0 -translate-y-1/2 text-center text-[10px] font-mono font-medium text-slate-400 dark:text-slate-500 select-none"
-                :style="{ top: pct(hour * 60) + '%' }"
-              >
-                {{ String(hour).padStart(2, '0') }}
-              </div>
-
-              <!-- 当前时间指示（呼吸闪烁，inset-x 自适应居中，绝不向左/向右溢出截断） -->
-              <div
-                v-if="isNowVisible && hasTodayInView"
-                data-testid="current-time-gutter"
-                class="pointer-events-none absolute inset-x-0.5 z-10 -translate-y-1/2 rounded bg-rose-500 py-0.5 text-center text-[8.5px] font-mono font-bold text-white shadow-xs animate-pulse leading-tight"
-                :style="{ top: `${nowPct}%` }"
-              >
-                {{ nowLabel }}
-              </div>
-            </div>
-
             <div
               v-for="day in days"
               :key="`col-${day.key}`"
-              class="relative week-day-col"
+              class="relative week-day-col snap-start"
               :class="[
                 state.weekGridStyle === 'blank'
                   ? (day.isMonday ? 'border-l-2 border-slate-200/80 dark:border-slate-800' : 'border-l border-slate-100/60 dark:border-slate-800/50')
@@ -202,8 +172,8 @@ import ClassDetail from '../components/ClassDetail.vue'
 import EmptyState from '../components/EmptyState.vue'
 import EventCard from '../components/EventCard.vue'
 import { api } from '../api'
-import { isImportantEvent, isMobileNativeApp, loadWeekCache, matchesQuery, removeEvent, saveWeekCache, state, toggleCompleted } from '../store'
-import { dayKey, dayLabel, isEventEnded, minutesOfDay, periodLabel, timeLabel, todayKey, weekOffsetOf, weekWindow } from '../utils/datetime'
+import { isEventDeleted, isImportantEvent, isMobileNativeApp, loadWeekCache, matchesQuery, removeEvent, saveWeekCache, state, toggleCompleted } from '../store'
+import { dayKey, dayLabel, minutesOfDay, periodLabel, timeLabel, todayKey, weekOffsetOf, weekWindow } from '../utils/datetime'
 import { dedupeEvents } from '../utils/dedupe'
 
 const DAY_START = 8 * 60 // 08:00
@@ -290,13 +260,32 @@ const days = computed(() => {
   })
 })
 
-const hasTodayInView = computed(() => days.value.some((d) => d.isToday))
-
-const GUTTER = 34
-const COL_WIDTH = 58
+/* 自适应列宽：一屏正好容纳完整 7 列（周一至周日），左右边缘对齐整数格 */
+const colWidth = ref(56)
 const gridStyle = computed(() => ({
-  gridTemplateColumns: `${GUTTER}px repeat(${days.value.length}, ${COL_WIDTH}px)`,
+  gridTemplateColumns: `repeat(${days.value.length}, ${colWidth.value}px)`,
 }))
+
+let resizeObserver = null
+let hasAlignedInitial = false
+
+function updateColWidth({ alignToMonday = false } = {}) {
+  const el = scroller.value
+  if (!el || !el.clientWidth) return
+  const nextWidth = el.clientWidth / 7
+  const prevWidth = colWidth.value
+  if (Math.abs(nextWidth - prevWidth) > 0.05) {
+    colWidth.value = nextWidth
+    if (!alignToMonday && prevWidth > 0 && hasAlignedInitial) {
+      const firstCol = Math.round(el.scrollLeft / prevWidth)
+      el.scrollLeft = Math.max(0, Math.round(firstCol * nextWidth))
+    }
+  }
+  if (alignToMonday || !hasAlignedInitial) {
+    hasAlignedInitial = true
+    nextTick(() => focusToday('auto'))
+  }
+}
 
 /* 课表无极滚动实时感知当前视窗居中的周次 */
 const centeredWeekOffset = ref(0)
@@ -347,11 +336,10 @@ function onScrollerScroll() {
   scrollRaf = requestAnimationFrame(() => {
     scrollRaf = null
     const el = scroller.value
-    if (!el) return
-    const centerLeft = el.scrollLeft + el.clientWidth / 2 - GUTTER
-    const colIndex = Math.floor(centerLeft / COL_WIDTH)
-    const clampedIndex = Math.max(0, Math.min(days.value.length - 1, colIndex))
-    const centerDay = days.value[clampedIndex]
+    if (!el || !colWidth.value) return
+    const firstCol = Math.round(el.scrollLeft / colWidth.value)
+    const centerIndex = Math.max(0, Math.min(days.value.length - 1, firstCol + 3))
+    const centerDay = days.value[centerIndex]
     if (centerDay && centerDay.weekOffset !== centeredWeekOffset.value) {
       centeredWeekOffset.value = centerDay.weekOffset
     }
@@ -361,15 +349,25 @@ function onScrollerScroll() {
 function scrollWeeks(delta) {
   const el = scroller.value
   if (!el) return
-  el.scrollBy({ left: delta * COL_WIDTH * 7, behavior: 'smooth' })
+  el.scrollBy({ left: delta * colWidth.value * 7, behavior: 'smooth' })
 }
 
 function focusToday(behavior = 'smooth') {
   const el = scroller.value
-  const index = days.value.findIndex((day) => day.isToday)
-  if (!el || index < 0 || !el.clientWidth) return
-  const left = GUTTER + index * COL_WIDTH - (el.clientWidth - COL_WIDTH) / 2
-  el.scrollTo({ left: Math.max(0, left), behavior })
+  if (!el || !el.clientWidth) return
+  const nextWidth = el.clientWidth / 7
+  if (Math.abs(nextWidth - colWidth.value) > 0.05) {
+    colWidth.value = nextWidth
+  }
+  // 以本周一对齐左边缘，一周 7 天正好铺满可视区域，左右均贴合整数列
+  const mondayIdx = days.value.findIndex((day) => day.weekOffset === 0 && day.isMonday)
+  const targetIdx = mondayIdx >= 0 ? mondayIdx : Math.max(0, days.value.findIndex((day) => day.isToday))
+  const left = Math.max(0, Math.round(targetIdx * colWidth.value))
+  if (behavior === 'auto') {
+    el.scrollLeft = left
+  } else {
+    el.scrollTo({ left, behavior })
+  }
   centeredWeekOffset.value = 0
 }
 
@@ -400,11 +398,11 @@ const overdueCount = computed(() => {
   return deadlines.value.filter((ev) => dayKey(ev.start_time) < today).length
 })
 
-onMounted(() => nextTick(() => focusToday('auto')))
+onMounted(() => nextTick(() => updateColWidth({ alignToMonday: true })))
 watch(
   () => state.view,
   (view) => {
-    if (view === 'week') nextTick(() => focusToday('auto'))
+    if (view === 'week') nextTick(() => updateColWidth({ alignToMonday: true }))
   },
 )
 
@@ -553,6 +551,7 @@ function lineStyle(item) {
 }
 
 async function loadWeek(force = false) {
+  if (state.offlineMode) return
   // 如果本地已经有持久化课表缓存，且属于移动端环境，且非主动强制刷新，优先保留已有数据
   const isMobile = isMobileNativeApp()
   if (!force && isMobile && events.value && events.value.length > 0) {
@@ -568,13 +567,22 @@ async function loadWeek(force = false) {
     const start = list[0].key
     const end = list[list.length - 1].key
     const payload = await api.events({ start_date: start, end_date: end, limit: 1200 })
-    const serverItems = payload.items || []
+    const serverItems = (payload.items || []).filter((it) => !isEventDeleted(it.id))
     const serverMap = new Map(serverItems.map((it) => [it.id, it]))
     const globalList = Array.isArray(state.events) ? state.events : []
 
-    // 严禁粗暴全量覆盖冲掉本地刚添加的日程；严格将服务器远期课程与本地真实日程双向合并
+    // 严禁粗暴全量覆盖冲掉本地刚添加/修改的日程；严格将服务器远期课程与本地真实日程双向合并
     const merged = [
-      ...globalList.map((g) => serverMap.get(g.id) || g),
+      ...globalList.map((g) => {
+        const s = serverMap.get(g.id)
+        if (!s) return g
+        if (g.client_updated_at && s.updated_at) {
+          const localTs = new Date(g.client_updated_at).getTime()
+          const serverTs = new Date(s.updated_at).getTime()
+          if (localTs > serverTs + 1000) return g
+        }
+        return s
+      }),
       ...serverItems.filter((s) => !globalList.some((g) => g.id === s.id)),
     ]
     events.value = dedupeEvents(merged)
@@ -618,6 +626,10 @@ const handleGlobalFocusToday = () => focusToday('smooth')
 watch(() => state.lastUpdated, () => loadWeek(true))
 onMounted(() => {
   loadWeek()
+  if (typeof ResizeObserver !== 'undefined' && scroller.value) {
+    resizeObserver = new ResizeObserver(() => updateColWidth())
+    resizeObserver.observe(scroller.value)
+  }
   nowTimer = setInterval(() => {
     now.value = new Date()
   }, 30000)
@@ -626,6 +638,10 @@ onMounted(() => {
   }
 })
 onUnmounted(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
   if (nowTimer) clearInterval(nowTimer)
   if (scrollRaf) cancelAnimationFrame(scrollRaf)
   if (typeof window !== 'undefined') {

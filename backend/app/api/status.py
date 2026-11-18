@@ -30,18 +30,18 @@ _STARTED_AT = time.time()
 async def app_version() -> JSONResponse:
     return JSONResponse(
         content={
-            "version": "2.9.0",
-            "tag": "v2.9.0",
-            "title": "CampusHub Android v2.9.0",
+            "version": "2.9.2",
+            "tag": "v2.9.2",
+            "title": "CampusHub Android v2.9.2",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
             "features": [
-                "离线（本地）模式也能导入课表：服务器只替你登录一次教务系统、把课表换算成事件，结果直接写进本机——不建账号、不落库、不保存密码",
-                "日程栏去掉「无截止」筛选：无截止待办只在「可办事项」页，与日程彻底分成两套逻辑；日程编辑器里也不再出现无截止选项",
-                "「可办事项」的圆形新建按钮改为专用编辑器：只填标题与备注，保存即进可办列表，不再弹日程表单",
-                "离线模式附件存本机：单个 ≤2MB、合计 ≤4MB，随事件一起只留在本地缓存，不走服务器",
-                "精简卡片文案：去掉附件卡片上的尺寸/说明与日程编辑器底部的存储位置说明",
+                "更新弹窗改为动态读取每次发版的最新更新备注，不再显示固定旧文案",
+                "应用 Logo 换用更清透柔和的浅蓝渐变配色",
+                "去除课程表左侧时间条，并在启动/切换时自适应视口宽度、左右精确对齐整数列",
+                "修复桌面小部件账号会话鉴权与今日日程过滤，并将配色与卡片样式统一为课程表同款静谧灰蓝磨砂风格（自动适配深浅色）",
+                "修复新建带持续时间日程偶发失败、延后错位、误入历史归档及 DDL 转日程未迁移开始时间等问题",
             ],
         },
         headers={

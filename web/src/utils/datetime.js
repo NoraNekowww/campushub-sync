@@ -15,7 +15,16 @@ export function toDate(value) {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
   if (typeof value === 'string') {
     // 兼容各类 Android WebView 对 "YYYY-MM-DD HH:mm:ss" 空格未加 T 导致解析 NaN 的缺陷
-    const standardStr = value.includes(' ') && !value.includes('T') ? value.replace(' ', 'T') : value
+    let standardStr = value.trim()
+    if (standardStr.includes(' ') && !standardStr.includes('T')) {
+      standardStr = standardStr.replace(' ', 'T')
+    }
+    // 无时区偏移的日期/时间串统一按 Asia/Shanghai (+08:00) 解释，与后端保持一致
+    if (/^\d{4}-\d{2}-\d{2}$/.test(standardStr)) {
+      standardStr = `${standardStr}T00:00:00+08:00`
+    } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(standardStr)) {
+      standardStr = `${standardStr}+08:00`
+    }
     const parsed = new Date(standardStr)
     return Number.isNaN(parsed.getTime()) ? null : parsed
   }
@@ -23,9 +32,21 @@ export function toDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
+/** Format a Date or date-string as `YYYY-MM-DDTHH:mm:ss+08:00` (Asia/Shanghai). */
+export function formatShanghaiIso(value) {
+  const date = toDate(value)
+  if (!date) return ''
+  // Asia/Shanghai is permanently UTC+8 (no DST since 1991)
+  const shifted = new Date(date.getTime() + 8 * 3600000)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}T${pad(
+    shifted.getUTCHours(),
+  )}:${pad(shifted.getUTCMinutes())}:${pad(shifted.getUTCSeconds())}+08:00`
+}
+
 export function timeLabel(value) {
   const date = toDate(value)
-  return date ? dateFmt({ hour: '2-digit', minute: '2-digit', hour12: false }).format(date) : ''
+  return date ? dateFmt({ hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date) : ''
 }
 
 export function weekdayLabel(value) {
@@ -37,8 +58,17 @@ export function weekdayLabel(value) {
 const dayKeyCache = new Map()
 export function dayKey(value) {
   if (!value) return ''
-  if (typeof value === 'string' && value.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(value)) {
-    return value.slice(0, 10)
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    // 只有纯日期、无时区或已经带 +08:00 时，前 10 位才是上海日历日；带 Z 或其他时区必须走时区换算
+    const hasTz = /[Zz]$|[+-]\d{2}:?\d{2}$/.test(trimmed)
+    const isShanghaiTz = /\+08:?00$/.test(trimmed)
+    if (
+      /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ||
+      (/^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}/.test(trimmed) && (!hasTz || isShanghaiTz))
+    ) {
+      return trimmed.slice(0, 10)
+    }
   }
   const date = toDate(value)
   if (!date) return ''
@@ -102,23 +132,28 @@ export function dayDiff(keyA, keyB) {
 export function minutesOfDay(value) {
   if (!value) return null
   if (typeof value === 'string') {
-    // 快速精确提取 HH:mm，杜绝任何 Intl 或格式兼容问题导致返回 null
-    const match = value.match(/[T\s](\d{1,2}):(\d{2})/)
-    if (match) {
-      const h = parseInt(match[1], 10)
-      const m = parseInt(match[2], 10)
-      if (!Number.isNaN(h) && !Number.isNaN(m)) {
-        return h * 60 + m
+    const trimmed = value.trim()
+    // 只有无时区偏移或已经带 +08:00 时，才能直接从字符串抽 HH:mm；带 Z 或其他时区必须转成 Asia/Shanghai
+    const hasTz = /[Zz]$|[+-]\d{2}:?\d{2}$/.test(trimmed)
+    const isShanghaiTz = /\+08:?00$/.test(trimmed)
+    if (!hasTz || isShanghaiTz) {
+      const match = trimmed.match(/[T\s](\d{1,2}):(\d{2})/)
+      if (match) {
+        const h = parseInt(match[1], 10)
+        const m = parseInt(match[2], 10)
+        if (!Number.isNaN(h) && !Number.isNaN(m)) {
+          return h * 60 + m
+        }
       }
     }
     // 针对纯日期（全天日程/DDL 未指定具体分钟），兜底为网格 08:00 (480 分钟)，绝不静默丢失
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
       return 8 * 60
     }
   }
   const date = toDate(value)
   if (!date) return null
-  const parts = dateFmt({ hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(date)
+  const parts = dateFmt({ hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date)
   const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? 0)
   const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? 0)
   return hour * 60 + minute
@@ -205,24 +240,29 @@ export function groupByDay(events) {
     .sort((a, b) => a.key.localeCompare(b.key))
     .map((bucket) => ({
       ...bucket,
-      events: bucket.events.sort((a, b) => String(a.start_time).localeCompare(String(b.start_time))),
+      events: bucket.events.sort(
+        (a, b) => (toDate(a.start_time)?.getTime() || 0) - (toDate(b.start_time)?.getTime() || 0),
+      ),
     }))
 }
 
 /** 判断一个课程是否已经结束。DDL 不算课程（走自己的 deadline/completed 逻辑）。 */
+const endTsCache = new Map()
 export function isEventEnded(event, now = Date.now()) {
   if (!event || event.is_deadline) return false
   const end = event.end_time || event.start_time
   if (!end) return false
-  if (event._endTs !== undefined) {
-    return event._endTs <= now
+  if (typeof end === 'string' && endTsCache.has(end)) {
+    return endTsCache.get(end) <= now
   }
-  const ts = new Date(end).getTime()
-  if (Number.isFinite(ts)) {
-    event._endTs = ts
-    return ts <= now
+  const parsed = toDate(end)
+  if (!parsed) return false
+  const ts = parsed.getTime()
+  if (typeof end === 'string') {
+    if (endTsCache.size > 500) endTsCache.clear()
+    endTsCache.set(end, ts)
   }
-  return false
+  return ts <= now
 }
 
 /** Monday-based week window (Asia/Shanghai) used by the week grid + fetches. */

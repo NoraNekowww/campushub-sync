@@ -86,14 +86,18 @@
           <div class="my-4 rounded-xl bg-slate-50 p-3.5 text-xs text-slate-600 dark:bg-slate-800/50 dark:text-slate-300 space-y-2">
             <div class="font-medium text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
               <Sparkles :size="14" class="text-amber-500" />
-              <span>{{ latestRelease?.title || '体验与性能全面升级' }}</span>
+              <span>{{ latestRelease?.title || '本次更新内容' }}</span>
             </div>
-            <ul class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
-              <li>底栏右侧全新增设「历史日程完成归档」一栏，随时回溯历史。</li>
-              <li>设置挪至右上角轻量 icon，释放屏幕空间。</li>
-              <li>底层代码与响应式调度深度优化，低性能设备更加丝滑省电。</li>
-              <li>支持原生网络新版弹窗直达推送与一键下载。</li>
+            <ul
+              v-if="latestRelease?.features?.length"
+              class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed"
+              data-testid="update-modal-features"
+            >
+              <li v-for="(feat, idx) in latestRelease.features" :key="idx">{{ feat }}</li>
             </ul>
+            <p v-else class="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
+              体验与稳定性优化，推荐更新到最新版本。
+            </p>
           </div>
 
           <div class="flex items-center justify-between gap-2.5 pt-1">
@@ -134,7 +138,7 @@ import { computed, onMounted, ref } from 'vue'
 import { BellOff, Download, Rocket, Sparkles, X } from 'lucide-vue-next'
 import { API_BASE, api } from '../api'
 
-const CURRENT_VERSION = '2.9.0'
+const CURRENT_VERSION = '2.9.2'
 const DISMISSED_KEY = 'campushub.dismissed_update'
 const POPUP_SEEN_KEY = 'campushub.popup_seen_version'
 
@@ -254,6 +258,7 @@ async function checkLatestVersion() {
     let version = ''
     let title = ''
     let apkUrl = ''
+    let features = []
 
     // 通道 1：优先请求官方 API_BASE /version，移动端走绝对域名直达，网页端正常穿透
     try {
@@ -262,6 +267,9 @@ async function checkLatestVersion() {
         version = String(vData.version || '').replace(/^v/i, '')
         title = vData.title || ''
         apkUrl = vData.download_url || vData.github_download_url || ''
+        if (Array.isArray(vData.features)) {
+          features = vData.features.map((f) => String(f || '').trim()).filter(Boolean)
+        }
       }
     } catch {
       // 忽略，fallback 到通道 2
@@ -280,6 +288,12 @@ async function checkLatestVersion() {
         title = data.name || ''
         const apkAsset = data.assets?.find((a) => a.name === 'CampusHub.apk')
         apkUrl = apkAsset?.browser_download_url || ''
+        if (typeof data.body === 'string' && data.body.trim()) {
+          features = data.body
+            .split(/\r?\n/)
+            .map((line) => line.replace(/^\s*[-*•]\s*/, '').replace(/\*\*/g, '').trim())
+            .filter((line) => line && !line.startsWith('#'))
+        }
       }
     }
 
@@ -293,6 +307,7 @@ async function checkLatestVersion() {
       version,
       title,
       apkUrl: apkUrl || 'https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk',
+      features,
     }
 
     // 网络检测到有新版本时，自动弹出居中弹窗推送（每个新版本主动弹一次，避免反复打扰）
