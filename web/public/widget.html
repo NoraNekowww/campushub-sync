@@ -389,18 +389,18 @@
       }
 
       listWrap.innerHTML = items.slice(0, 4).map(item => {
-        const isDdl = item.type === 'deadline' || !item.end_time;
-        const loc = item.location ? item.location : '';
+        const isDdl = item.type === 'deadline'
+        const loc = item.location ? item.location : ''
         return `
           <div class="item-row">
             <div class="item-left">
               <div class="item-title">${item.title}</div>
-              <div class="item-time">${item.time} ${isDdl ? '· DDL' : ''}</div>
+              <div class="item-time">${item.time}${isDdl ? ' · DDL' : ''}</div>
             </div>
             ${loc ? `<div class="item-loc">${loc}</div>` : ''}
           </div>
-        `;
-      }).join('');
+        `
+      }).join('')
     }
 
     loadData();
