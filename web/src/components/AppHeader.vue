@@ -66,6 +66,13 @@
           >
             <WifiOff :size="11" /> 离线
           </span>
+          <span
+            v-else-if="state.offlineMode"
+            class="chip border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-700/70 dark:bg-slate-800 dark:text-slate-300"
+            title="离线模式：仅本机存储，仍可联网导入课表"
+          >
+            本地
+          </span>
         </div>
 
         <button

@@ -30,15 +30,16 @@ _STARTED_AT = time.time()
 async def app_version() -> JSONResponse:
     return JSONResponse(
         content={
-            "version": "2.9.4",
-            "tag": "v2.9.4",
-            "title": "CampusHub Android v2.9.4",
+            "version": "2.9.5",
+            "tag": "v2.9.5",
+            "title": "CampusHub Android v2.9.5",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
             "features": [
-                "可办事项接入与日程一致的最后修改时间对齐（Last-Write-Wins）与离线队列合并，划掉后不再被云端旧状态刷回",
-                "修复完成态切换及在途新建事件划掉时的时间戳对齐与后端 LWW 时区返回问题",
+                "修复新用户注册图形验证码在 Cloudflare IP 切换、缓存及离线态下偶发无法加载或校验失败的问题，并移除首号成管理员的提示语",
+                "重构离线模式联网课表导入：保留真实网络状态并接入 Android 手机本机直连教务与本地 .ics 导入，同时修复服务端超时报 500 异常",
+                "全面核验并重构内置图床壁纸库，移除 404 与图文不符条目，确保所有浅色/深色壁纸与中文描述精准一致",
             ],
         },
         headers={

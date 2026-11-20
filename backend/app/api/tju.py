@@ -42,6 +42,7 @@ from ..connectors.jw_eams import (
 )
 from ..connectors.tju_api import KIND_MESSAGES, TjuApiClient, TjuApiError
 from ..connectors.tju_cas import fetch_classes as cas_fetch_classes
+from ..connectors.tju_cas import parse_eams_local_payload as cas_parse_local_payload
 from ..connectors.tju_cas import start_captcha as cas_start_captcha
 from ..connectors.tju_schedule import MODE_KEY, SEMESTER_KEY, TERM_START_KEY, TjuScheduleConnector
 from ..db import KVStore
@@ -579,32 +580,19 @@ def _stateful_event(ev: Any) -> dict[str, Any]:
     return EventOut.from_event(ev).model_dump(mode="json")
 
 
-@router.post("/jw/local/import", response_model=SimpleResult)
-async def jw_local_import(body: JwImportIn, request: Request) -> SimpleResult:
-    """离线模式（无账号、纯本机）的课表导入：只解析，不落库。
+class JwLocalParseIn(BaseModel):
+    courses_html: str = Field(..., min_length=10, description="EAMS 课表页面 HTML")
+    calendar_raw: Optional[str] = Field(default=None, description="EAMS 学期日历原始响应")
+    term: Optional[str] = None
+    week: Optional[int] = Field(default=None, ge=1, le=30)
+    total_weeks: Optional[int] = Field(default=None, ge=1, le=30)
 
-    服务器仍然负责 CAS 登录与课表抓取（教务只对公网开放到服务器这一层，且
-    浏览器跨站会被拦），但**不保存任何东西**：凭据用完即弃，课表转成事件数组
-    回给手机端，由本机自己存。这样离线用户也能联网导课表，而云端一份数据都没有。
-    """
-    _local_guard(request)
-    username = (body.username or "").strip()
-    password = body.password or ""
-    if not username or not password:
-        raise HTTPException(status_code=422, detail="请填写学号和教务密码")
 
-    try:
-        raw, cas_meta = await cas_fetch_classes(
-            username,
-            password,
-            code=body.captcha,
-            captcha_id=body.captcha_id,
-            on_login=None,
-            week=body.week,
-        )
-    except JwEamsError as exc:
-        raise _jw_http_error(exc) from exc
-
+def _convert_local_classtable_result(
+    raw: dict[str, Any],
+    cas_meta: dict[str, Any],
+    requested_total_weeks: Optional[int],
+) -> SimpleResult:
     try:
         payload = jw_convert_classtable(
             raw,
@@ -619,7 +607,7 @@ async def jw_local_import(body: JwImportIn, request: Request) -> SimpleResult:
 
     connector = _connector()
     settings = get_settings()
-    used_weeks = int(body.total_weeks) if body.total_weeks else int(connector.semester.total_weeks)
+    used_weeks = int(requested_total_weeks) if requested_total_weeks else int(connector.semester.total_weeks)
     if total := _max_week(raw):
         used_weeks = max(used_weeks, total)
     try:
@@ -666,6 +654,7 @@ async def jw_local_import(body: JwImportIn, request: Request) -> SimpleResult:
         message=f"课表已换算成本机事件：{parsed.summary().get('courses', len(names))} 门课 / {len(events)} 节课",
         detail={
             "events": [_stateful_event(ev) for ev in events],
+            "raw_payload": payload,
             "courses": parsed.summary().get("courses", len(names)),
             "course_names": names[:40],
             "semester": semester.summary(),
@@ -673,6 +662,47 @@ async def jw_local_import(body: JwImportIn, request: Request) -> SimpleResult:
             "total_weeks": used_weeks,
         },
     )
+
+
+@router.post("/jw/local/import", response_model=SimpleResult)
+async def jw_local_import(body: JwImportIn, request: Request) -> SimpleResult:
+    """离线模式（无账号、纯本机）的课表导入：只解析，不落库。"""
+    _local_guard(request)
+    username = (body.username or "").strip()
+    password = body.password or ""
+    if not username or not password:
+        raise HTTPException(status_code=422, detail="请填写学号和教务密码")
+
+    try:
+        raw, cas_meta = await cas_fetch_classes(
+            username,
+            password,
+            code=body.captcha,
+            captcha_id=body.captcha_id,
+            on_login=None,
+            week=body.week,
+        )
+    except JwEamsError as exc:
+        raise _jw_http_error(exc) from exc
+
+    return _convert_local_classtable_result(raw, cas_meta, body.total_weeks)
+
+
+@router.post("/jw/local/parse", response_model=SimpleResult)
+async def jw_local_parse(body: JwLocalParseIn) -> SimpleResult:
+    """无状态课表 HTML 解析：客户端（如 Android 本机）直连教务抓回 HTML 后交给服务端换算，无需服务器访问校内网也不传密码。"""
+    try:
+        raw, cas_meta = cas_parse_local_payload(
+            body.courses_html,
+            calendar_raw=body.calendar_raw or "",
+            week=body.week,
+        )
+        if body.term and not cas_meta.get("term"):
+            cas_meta["term"] = body.term
+    except JwEamsError as exc:
+        raise _jw_http_error(exc) from exc
+
+    return _convert_local_classtable_result(raw, cas_meta, body.total_weeks)
 
 
 @router.get("/jw/status", response_model=SimpleResult, dependencies=[Depends(require_read)])

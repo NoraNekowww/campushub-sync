@@ -92,6 +92,23 @@
       </div>
     </div>
 
+    <div class="flex flex-wrap items-center gap-2 pt-0.5">
+      <label class="btn-ghost cursor-pointer !py-1.5 text-xs">
+        <Upload :size="13" /> 从本地 .ics 导入课表
+        <input
+          ref="icsInput"
+          type="file"
+          accept=".ics,text/calendar"
+          class="hidden"
+          data-testid="tju-ics-input"
+          @change="onIcsFileSelected"
+        />
+      </label>
+      <span class="text-[11px] text-slate-400 dark:text-slate-500">
+        {{ offline ? '离线模式支持直选本地 .ics 导入' : '也可上传 .ics 日历文件' }}
+      </span>
+    </div>
+
     <!-- ------------------------------------------------ advanced / escape hatches -->
     <details class="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/50">
       <summary class="cursor-pointer text-[11px] font-semibold">
@@ -153,11 +170,12 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { GraduationCap, RefreshCw, Trash2 } from 'lucide-vue-next'
+import { GraduationCap, RefreshCw, Trash2, Upload } from 'lucide-vue-next'
 import { api, isOfflineMode } from '../api'
 import {
   clearLocalTimetable,
   forgetJw,
+  importLocalEventsBatch,
   jwImport,
   jwImportLocal,
   loadConfig,
@@ -165,6 +183,12 @@ import {
   notify,
   runSync,
 } from '../store'
+import { parseIcsText } from '../utils/icsParser'
+import {
+  hasNativeTjuBridge,
+  nativeFetchCaptcha,
+  nativeFetchEamsHtml,
+} from '../utils/tjuNativeClient'
 
 const props = defineProps({
   tju: { type: Object, default: () => ({}) },
@@ -178,7 +202,8 @@ const form = reactive({ username: '', password: '' })
 /* 服务器上的教务凭据状态（credentials_saved / username / last_import），来自 /tju/jw/status。 */
 const jw = ref({})
 /* 教务系统的图形验证码：服务器 OCR 认不出来时才用得上。 */
-const captcha = reactive({ image: '', code: '', id: '' })
+const captcha = reactive({ image: '', code: '', id: '', isNative: false })
+const icsInput = ref(null)
 
 const credentials = computed(() => props.tju?.credentials || {})
 const meta = computed(() => props.tju?.import_meta || {})
@@ -220,13 +245,57 @@ const offline = computed(() => isOfflineMode())
 /** 服务器 OCR 没认出验证码时，取一张真图让用户手填。 */
 async function loadCaptchaImage() {
   try {
+    if (hasNativeTjuBridge()) {
+      const nat = await nativeFetchCaptcha()
+      captcha.image = nat.image || ''
+      captcha.id = nat.captcha_id || ''
+      captcha.code = ''
+      captcha.isNative = true
+      return
+    }
     const info = isOfflineMode() ? await api.jwLocalCaptcha() : await api.jwCaptcha()
     captcha.image = info?.detail?.image || ''
     captcha.id = info?.detail?.captcha_id || ''
     captcha.code = ''
+    captcha.isNative = false
   } catch (error) {
     say(`验证码拉不下来：${error?.message || '未知错误'}`, 'danger')
   }
+}
+
+async function runNativeImport({ username, password, captchaCode = '', captchaId = '' }) {
+  say('① 正在由手机直连天大统一身份认证与教务系统…', 'warn')
+  const rawHtml = await nativeFetchEamsHtml({
+    username,
+    password,
+    captcha: captchaCode,
+    captchaId,
+  })
+  say('② 课表已取回，正在换算课程时段…', 'warn')
+  const parsedRes = await api.jwLocalParse({
+    courses_html: rawHtml.courses_html,
+    calendar_raw: rawHtml.calendar_raw,
+    term: rawHtml.term,
+    week: props.semester?.current_week || null,
+  })
+  const detail = parsedRes?.detail || {}
+  if (isOfflineMode()) {
+    importLocalEventsBatch(detail.events || [], {
+      courses: detail.courses || 0,
+      source: 'local',
+      semester: detail.semester || {},
+      termStart: detail.term_start || '',
+    })
+    return parsedRes
+  }
+  const importedRes = await api.tjuImport({
+    payload: detail.raw_payload,
+    source: 'jw-native',
+    total_weeks: detail.total_weeks,
+    run_sync: true,
+  })
+  await Promise.all([loadConfig(), runSync()])
+  return importedRes
 }
 
 /** 把教务链路的报错翻成人话，并区分「要验证码」和「账号密码错」。 */
@@ -234,7 +303,7 @@ async function reportJwError(error) {
   const detail = error?.detail || {}
   const kind = detail.kind || ''
   if (kind === 'captcha') {
-    say('教务系统要求验证码：服务器自动识别没通过，下面这张图填一下就能继续。', 'warn')
+    say('教务系统要求验证码：自动识别没通过，下面这张图填一下就能继续。', 'warn')
     await loadCaptchaImage()
     return
   }
@@ -242,12 +311,66 @@ async function reportJwError(error) {
     say('学号或密码不对 —— 这里要的是「教务系统 / 统一身份认证」的密码，不是微北洋的。', 'danger')
     return
   }
+  if (kind === 'network') {
+    say(detail.message || error?.message || '服务器暂无法直连天大教务，可使用 Android 客户端直连导入或下方本地 .ics 导入', 'danger')
+    return
+  }
   say(detail.message || error?.message || '导入失败', 'danger')
 }
 
-/** 真·导入：离线模式走匿名换算（结果只落本机），在线模式走服务器落库。 */
+/** 真·导入：Android 客户端优先走手机直连教务；离线模式写本机，在线模式写云端。 */
 async function runImport(payload) {
-  return isOfflineMode() ? jwImportLocal(payload) : jwImport(payload)
+  if (hasNativeTjuBridge() && (isOfflineMode() || captcha.isNative)) {
+    return runNativeImport({
+      username: payload.username,
+      password: payload.password,
+      captchaCode: payload.captcha || '',
+      captchaId: payload.captcha_id || '',
+    })
+  }
+  try {
+    return await (isOfflineMode() ? jwImportLocal(payload) : jwImport(payload))
+  } catch (err) {
+    if (hasNativeTjuBridge() && err?.detail?.kind === 'network') {
+      return runNativeImport({
+        username: payload.username,
+        password: payload.password,
+        captchaCode: payload.captcha || '',
+        captchaId: payload.captcha_id || '',
+      })
+    }
+    throw err
+  }
+}
+
+async function onIcsFileSelected(e) {
+  const file = e.target?.files?.[0]
+  if (!file) return
+  busy.value = true
+  try {
+    if (isOfflineMode()) {
+      const text = await file.text()
+      const events = parseIcsText(text)
+      if (!events.length) {
+        say('这个 .ics 文件里没有解析到有效课程事件', 'warn')
+        return
+      }
+      const uniqueTitles = new Set(events.map((ev) => ev.title))
+      importLocalEventsBatch(events, { courses: uniqueTitles.size, source: 'ics' })
+      say(`已从本地 .ics 导入 ${uniqueTitles.size} 门课 / ${events.length} 个时段`, 'ok')
+      notify(`本地课表已导入：${events.length} 个时段`, 'ok')
+    } else {
+      const res = await api.uploadIcs(file)
+      say(res?.message || '已从 .ics 导入课表', 'ok')
+      notify(res?.message || '已从 .ics 导入课表', 'ok')
+      await Promise.all([refreshConfig(), runSync()])
+    }
+  } catch (error) {
+    fail(error, '导入 .ics 失败')
+  } finally {
+    busy.value = false
+    if (icsInput.value) icsInput.value.value = ''
+  }
 }
 
 function importedCount(result) {

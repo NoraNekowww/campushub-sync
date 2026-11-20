@@ -36,9 +36,12 @@ log = logging.getLogger("campushub.api.accounts")
 
 
 def _client_ip(request: Request) -> Optional[str]:
-    """Caller IP, trusting ``X-Real-IP`` only when the peer is our own proxy."""
+    """Caller IP, preferring Cloudflare's real-client header when behind localhost proxy."""
     peer = getattr(request.client, "host", None)
     if peer in {"127.0.0.1", "::1", "localhost"}:
+        cf_ip = request.headers.get("cf-connecting-ip")
+        if cf_ip:
+            return cf_ip.split(",")[0].strip()
         forwarded = request.headers.get("x-real-ip")
         if forwarded:
             return forwarded.split(",")[0].strip()
@@ -58,12 +61,14 @@ def _accounts_meta() -> dict[str, Any]:
 
 
 @router.get("/captcha", summary="Fresh image challenge for the sign-up form")
-def issue_captcha(request: Request) -> dict[str, Any]:
+def issue_captcha(request: Request, response: Response) -> dict[str, Any]:
     """Public on purpose: a stranger needs it *before* they have an account.
 
     Nothing sensitive is returned — the answer only exists inside the signed
     token — and the payload is never cached (a replayed challenge must expire).
     """
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
     settings = get_settings()
     if not app_settings.captcha_enabled(settings):
         return {"enabled": False}

@@ -80,11 +80,11 @@ export function toggleImportantEvent(event) {
 function readInitialBackgroundConfig() {
   const defaults = {
     enabled: true, // 默认开启深空摄影背景图与通透微晶磨砂深度融合
-    // 默认分类：真正的深空摄影（韦伯/哈勃深场、超新星与星系）
+    // 默认分类：深空天文与轨道摄影
     category: 'astronomy',
-    lightUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=85',
-    darkUrl: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1920&q=85',
-    wallpaperTitle: '宇宙深场与微光星系',
+    lightUrl: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=1920&q=85',
+    darkUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=85',
+    wallpaperTitle: '轨道地球与夜色灯火',
     opacity: 35, // 0 - 100%
     blur: 0,    // 0 - 20px
   }
@@ -962,10 +962,10 @@ export async function bootstrap() {
     window.__autoExpireTimer = setInterval(autoExpireEndedCustomTasks, 60000)
   }
 
-  // 离线模式：只吃本机闪存，绝不联网（隐私优先）
+  // 离线模式：不登录、不做云同步，但保留真实的物理网络状态以支持联网导课表
   if (state.offlineMode) {
     state.accountsReady = true
-    state.online = false
+    state.online = typeof navigator === 'undefined' ? true : navigator.onLine
     return
   }
 
@@ -988,13 +988,13 @@ export async function bootstrap() {
 /* --------------------------------------------------------------- accounts */
 
 /**
- * 离线模式（本地账号）：不登录、不联网，所有数据只写在本机 localStorage。
- * 账号栏显示「本地账号」，云同步 / 教务抓取 / 微软待办全部停用。
+ * 离线模式（本地账号）：不登录云端账号、不做云端日程同步，所有数据写在本机 localStorage；
+ * 物理网络保持真实在线状态，仍可导入课表与检查更新。
  */
 export function enableOfflineMode() {
   persistOfflineMode(true)
   state.offlineMode = true
-  state.online = false
+  state.online = typeof navigator === 'undefined' ? true : navigator.onLine
   state.authRequired = false
   state.forceAuth = false
   state.authError = ''
@@ -1003,7 +1003,7 @@ export function enableOfflineMode() {
   state.loading = false
   closeCustomEditor()
   saveEventsCache(state.events, state.total)
-  notify('已进入离线模式：数据只保存在本机', 'ok')
+  notify('已进入离线模式：日程保存在本机', 'ok')
 }
 
 /** 退出离线模式，重新连接云端（需要登录才能同步）。 */
@@ -1014,6 +1014,10 @@ export async function disableOfflineMode() {
   notify('已退出离线模式，正在连接云端', 'info')
   try {
     await fetchSession()
+    if (!state.user && !hasToken()) {
+      openAuthGate()
+      return
+    }
     await Promise.all([refresh({ silent: true }), loadStatus(), loadConfig()])
   } catch (error) {
     /* 离线队列会兜底，不打断用户 */
@@ -1074,6 +1078,12 @@ export const signInRequired = () => {
 
 /** Show the login gate even though the timeline happens to be readable. */
 export function openAuthGate() {
+  if (state.offlineMode) {
+    persistOfflineMode(false)
+    state.offlineMode = false
+    state.online = typeof navigator === 'undefined' ? true : navigator.onLine
+    fetchSession().catch(() => {})
+  }
   state.forceAuth = true
   state.authError = ''
 }
@@ -1805,30 +1815,55 @@ export async function jwImport(payload) {
  * 离线模式导入课表：服务器只负责「登录教务 + 抓课表 + 换算成事件」，
  * 解析结果原样回到本机、由本机自己存 —— 云端不建账号、不落库、不保存密码。
  */
-export async function jwImportLocal(payload) {
-  const result = await api.jwLocalImport(payload)
-  const detail = result?.detail || {}
-  const fresh = Array.isArray(detail.events) ? detail.events : []
+export function importLocalEventsBatch(fresh, { courses = 0, source = 'local', semester = {}, termStart = '' } = {}) {
+  const incoming = Array.isArray(fresh) ? fresh : []
   const keep = (state.events || []).filter((event) => event.source !== 'tju_schedule')
-  state.events = [...keep, ...fresh]
+  state.events = [...keep, ...incoming]
   state.total = state.events.length
 
-  const semester = detail.semester || {}
   state.config = {
     ...(state.config || {}),
     tju_schedule: {
       ...(state.config?.tju_schedule || {}),
-      semester: { ...semester, start_date: semester.start_date || detail.term_start || '' },
+      semester: { ...(state.config?.tju_schedule?.semester || {}), ...semester, start_date: semester.start_date || termStart || state.config?.tju_schedule?.semester?.start_date || '' },
       import_meta: {
-        courses: detail.courses || 0,
+        courses,
         imported_at: new Date().toISOString(),
-        source: 'local',
+        source,
       },
     },
   }
 
   saveConfigCache(state.config)
   saveEventsCache(state.events, state.total)
+  return { courses, count: incoming.length }
+}
+
+export function saveLocalSemester(semesterPatch) {
+  state.config = {
+    ...(state.config || {}),
+    tju_schedule: {
+      ...(state.config?.tju_schedule || {}),
+      semester: {
+        ...(state.config?.tju_schedule?.semester || {}),
+        ...semesterPatch,
+      },
+    },
+  }
+  saveConfigCache(state.config)
+}
+
+export async function jwImportLocal(payload) {
+  const result = await api.jwLocalImport(payload)
+  const detail = result?.detail || {}
+  const fresh = Array.isArray(detail.events) ? detail.events : []
+  const semester = detail.semester || {}
+  importLocalEventsBatch(fresh, {
+    courses: detail.courses || 0,
+    source: 'local',
+    semester,
+    termStart: detail.term_start || '',
+  })
   notify(`课表已存入本机：${detail.courses || 0} 门课`, 'ok')
   return result
 }

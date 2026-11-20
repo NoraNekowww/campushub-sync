@@ -369,15 +369,15 @@
       </p>
       <button
         type="button"
-        class="btn-ghost !py-1.5 text-xs"
+        class="btn-primary !py-1.5 text-xs"
         data-testid="offline-exit"
         @click="exitOffline"
       >
-        退出离线模式（连接云端）
+        退出离线模式（登录 / 注册云端账号）
       </button>
     </section>
 
-    <section v-if="accountsEnabled" class="card space-y-3 p-4" data-testid="account-section">
+    <section v-if="accountsEnabled && !state.offlineMode" class="card space-y-3 p-4" data-testid="account-section">
       <header class="flex items-center gap-2">
         <UserRound :size="15" class="text-brand-600 dark:text-brand-400" />
         <h2 class="text-sm font-semibold">账号</h2>
@@ -940,6 +940,7 @@ import {
   refresh,
   runSync,
   saveBackgroundConfig,
+  saveLocalSemester,
   saveRegistrationSettings,
   setFrostedGlassMode,
   setTheme,
@@ -981,7 +982,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.8.8'
+  return '2.9.5'
 })
 
 const appVersionDisplay = clientAppVersion
@@ -1446,6 +1447,15 @@ async function saveSemester() {
   }
   busy.value = true
   try {
+    if (state.offlineMode) {
+      saveLocalSemester({
+        name: semesterForm.name || null,
+        start_date: semesterForm.start_date,
+        total_weeks: Number(semesterForm.total_weeks) || 16,
+      })
+      notify('学期已保存在本机', 'ok')
+      return
+    }
     const result = await api.putSemester({
       name: semesterForm.name || null,
       start_date: semesterForm.start_date,

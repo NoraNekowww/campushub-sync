@@ -227,13 +227,19 @@ async def _submit_login(
     raise JwEamsError(f"CAS 登录失败：{message}", kind=kind, detail=_strip_tags(html)[:200])
 
 
-async def start_captcha(*, timeout: float = 20.0) -> tuple[dict[str, Any], bytes]:
+async def start_captcha(*, timeout: float = 12.0) -> tuple[dict[str, Any], bytes]:
     """开一个登录会话并把验证码图片要回来（给用户手动填）。"""
     _prune_pending()
-    async with _client(timeout) as client:
-        execution, lt = await _open_login(client)
-        image = await _captcha_image(client)
-        cookies = _snapshot_cookies(client)
+    try:
+        async with _client(timeout) as client:
+            execution, lt = await _open_login(client)
+            image = await _captcha_image(client)
+            cookies = _snapshot_cookies(client)
+    except httpx.HTTPError as exc:
+        raise JwEamsError(
+            f"连接天大统一身份认证超时或网络不可达：{type(exc).__name__}（服务器位于海外时学校节点可能拒绝连接，请使用手机端直连导入或 .ics 文件导入）",
+            kind="network",
+        ) from exc
     pending = PendingCaptcha(execution, lt, cookies, image)
     _PENDING[pending.id] = pending
     return {"captcha_id": pending.id, "expires_in": int(PENDING_TTL)}, image
@@ -298,6 +304,12 @@ async def _login(
                 if exc.kind != "captcha" or index == limit - 1:
                     break
                 logger.info("CAS 验证码第 %s 次识别被拒，换一张重试", index + 1)
+    except httpx.HTTPError as exc:
+        await client.aclose()
+        raise JwEamsError(
+            f"连接天大统一身份认证超时或网络不可达：{type(exc).__name__}（服务器位于海外时学校节点可能拒绝连接，请使用手机端直连导入或 .ics 文件导入）",
+            kind="network",
+        ) from exc
     except Exception:
         await client.aclose()
         raise
@@ -825,6 +837,11 @@ async def fetch_classes(
                 courses.extend(parsed)
                 notes.setdefault("project_ids", []).append(project_id)
                 break  # 学分制课表在 projectId=1；研究生(22)只在 1 空时兜底
+    except httpx.HTTPError as exc:
+        raise JwEamsError(
+            f"拉取天大教务课表超时或网络不可达：{type(exc).__name__}",
+            kind="network",
+        ) from exc
     finally:
         await client.aclose()
 
@@ -839,8 +856,29 @@ async def fetch_classes(
             detail=json.dumps(notes.get("semesters") or [], ensure_ascii=False)[:300],
         )
 
-    term = f'{semester["schoolYear"]} {semester["name"]}'
-    week = notes.get("current_week")
+    return _assemble_cas_payload(
+        courses=courses,
+        semester=semester,
+        semesters=semesters,
+        calendar_raw=calendar_raw,
+        week=notes.get("current_week"),
+        notes=notes,
+        diagnostics=diagnostics,
+    )
+
+
+def _assemble_cas_payload(
+    *,
+    courses: list[dict[str, Any]],
+    semester: dict[str, Any],
+    semesters: list[dict[str, Any]],
+    calendar_raw: str,
+    week: Optional[int],
+    notes: Optional[dict[str, Any]] = None,
+    diagnostics: bool = False,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    notes = dict(notes or {})
+    term = f'{semester.get("schoolYear", "")} {semester.get("name", "")}'.strip() or str(semester.get("term") or "")
     # 开学日: 先看学期日历里有没有日期字段 —— 实测这一版教务**没有**（只有学年/学期的
     # HTML 条），所以这一步几乎总是 None，只能靠调用方给的「第 N 周」反推。
     # 无论哪种都要在 meta 里如实标出来源，否则用户会把推算值当成教务的权威值。
@@ -895,6 +933,28 @@ async def fetch_classes(
     return payload, meta
 
 
+def parse_eams_local_payload(
+    courses_html: str,
+    *,
+    calendar_raw: str = "",
+    week: Optional[int] = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Parse EAMS HTML fetched directly by a client device (zero TJU network calls)."""
+    courses = _parse_course_html(courses_html or "")
+    if not courses:
+        raise JwEamsError("教务登录成功，但未解析到课程数据（可能本学期还没排课）", kind="empty")
+    semesters = _parse_semesters(calendar_raw or "") if calendar_raw else []
+    semester = pick_semester(semesters) if semesters else {"id": "", "schoolYear": "", "name": ""}
+    return _assemble_cas_payload(
+        courses=courses,
+        semester=semester,
+        semesters=semesters,
+        calendar_raw=calendar_raw or "",
+        week=week,
+        notes={"week_source": "客户端直连抓取"},
+    )
+
+
 def _find_date(raw: str) -> Optional[int]:
     """从教务返回里找学期开始日期（epoch 秒）。找不到就 None，交给设置里的值。"""
     for pattern in (
@@ -918,6 +978,7 @@ __all__ = [
     "PendingCaptcha",
     "fetch_classes",
     "ocr_captcha",
+    "parse_eams_local_payload",
     "pick_semester",
     "start_captcha",
 ]

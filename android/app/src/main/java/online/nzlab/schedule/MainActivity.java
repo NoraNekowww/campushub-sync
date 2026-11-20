@@ -35,12 +35,25 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import androidx.webkit.WebViewAssetLoader;
 
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.CookiePolicy;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import android.util.Base64;
+import org.json.JSONObject;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -55,6 +68,8 @@ public class MainActivity extends AppCompatActivity {
     private SharedPreferences prefs;
     private WebViewAssetLoader assetLoader;
     private ValueCallback<Uri[]> fileUploadCallback;
+    private final ExecutorService nativeHttpExecutor = Executors.newCachedThreadPool();
+    private final ConcurrentHashMap<String, java.net.CookieManager> casCookieJars = new ConcurrentHashMap<>();
 
     private final ActivityResultLauncher<Intent> fileChooserLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -411,6 +426,171 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public class AuthBridge {
+        private boolean isAllowedTjuHost(String urlStr) {
+            try {
+                String host = URI.create(urlStr).getHost();
+                return host != null && (
+                        host.equals("sso.tju.edu.cn")
+                        || host.equals("classes.tju.edu.cn")
+                        || host.equals("learning.twt.edu.cn")
+                        || host.equals("api.twt.edu.cn")
+                );
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        private byte[] readAllBytes(InputStream is) throws Exception {
+            if (is == null) return new byte[0];
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buf = new byte[4096];
+            int n;
+            while ((n = is.read(buf)) != -1) {
+                bos.write(buf, 0, n);
+            }
+            return bos.toByteArray();
+        }
+
+        private void resolveNativeHttp(String reqId, JSONObject payload) {
+            if (webView == null) return;
+            String arg = JSONObject.quote(payload.toString());
+            String idQuoted = JSONObject.quote(reqId);
+            webView.post(() -> {
+                if (webView != null) {
+                    webView.evaluateJavascript(
+                            "window.__nativeHttpResolve && window.__nativeHttpResolve(" + idQuoted + ", " + arg + ");",
+                            null
+                    );
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void nativeHttpClose(String sessionId) {
+            if (sessionId != null) {
+                casCookieJars.remove(sessionId);
+            }
+        }
+
+        @JavascriptInterface
+        public void nativeHttpRequest(String reqId, String sessionId, String method, String urlStr, String formBody, boolean followRedirects) {
+            nativeHttpExecutor.execute(() -> {
+                JSONObject res = new JSONObject();
+                try {
+                    if (!isAllowedTjuHost(urlStr)) {
+                        res.put("ok", false);
+                        res.put("error", "不允许的域名请求");
+                        resolveNativeHttp(reqId, res);
+                        return;
+                    }
+                    java.net.CookieManager jar = casCookieJars.computeIfAbsent(sessionId,
+                            k -> new java.net.CookieManager(null, CookiePolicy.ACCEPT_ALL));
+
+                    String curUrl = urlStr;
+                    String curMethod = method != null ? method.toUpperCase() : "GET";
+                    String curBody = formBody;
+                    HttpURLConnection conn = null;
+                    int status = 0;
+
+                    for (int hop = 0; hop < 8; hop++) {
+                        URL u = new URL(curUrl);
+                        conn = (HttpURLConnection) u.openConnection();
+                        conn.setInstanceFollowRedirects(false);
+                        conn.setConnectTimeout(12000);
+                        conn.setReadTimeout(15000);
+                        conn.setRequestMethod(curMethod);
+                        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
+                        conn.setRequestProperty("Accept-Language", "zh-CN,zh;q=0.9");
+
+                        Map<String, List<String>> cookieHeaders = jar.get(u.toURI(), new HashMap<>());
+                        List<String> cookieList = cookieHeaders.get("Cookie");
+                        if (cookieList != null && !cookieList.isEmpty()) {
+                            conn.setRequestProperty("Cookie", String.join("; ", cookieList));
+                        }
+
+                        if ("POST".equals(curMethod) && curBody != null && !curBody.isEmpty()) {
+                            conn.setDoOutput(true);
+                            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+                            byte[] outBytes = curBody.getBytes(StandardCharsets.UTF_8);
+                            try (OutputStream os = conn.getOutputStream()) {
+                                os.write(outBytes);
+                            }
+                        }
+
+                        status = conn.getResponseCode();
+                        jar.put(u.toURI(), conn.getHeaderFields());
+
+                        String loc = conn.getHeaderField("Location");
+                        if (followRedirects && (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) && loc != null && !loc.isEmpty()) {
+                            URL nextUrl = new URL(u, loc);
+                            if (!isAllowedTjuHost(nextUrl.toString())) break;
+                            curUrl = nextUrl.toString();
+                            curMethod = (status == 307 || status == 308) ? curMethod : "GET";
+                            curBody = (status == 307 || status == 308) ? curBody : null;
+                            conn.disconnect();
+                            continue;
+                        }
+                        break;
+                    }
+
+                    InputStream stream = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+                    byte[] bytes = readAllBytes(stream);
+                    res.put("ok", true);
+                    res.put("status", status);
+                    res.put("finalUrl", curUrl);
+                    res.put("location", conn.getHeaderField("Location") != null ? conn.getHeaderField("Location") : "");
+                    res.put("bodyBase64", Base64.encodeToString(bytes, Base64.NO_WRAP));
+                } catch (Exception e) {
+                    try {
+                        res.put("ok", false);
+                        res.put("error", e.getClass().getSimpleName() + ": " + (e.getMessage() != null ? e.getMessage() : "网络异常"));
+                    } catch (Exception ignored) {}
+                }
+                resolveNativeHttp(reqId, res);
+            });
+        }
+
+        @JavascriptInterface
+        public void nativeUploadOcr(String reqId, String urlStr, String imageBase64) {
+            nativeHttpExecutor.execute(() -> {
+                JSONObject res = new JSONObject();
+                try {
+                    if (!isAllowedTjuHost(urlStr)) {
+                        res.put("ok", false);
+                        res.put("error", "不允许的 OCR 地址");
+                        resolveNativeHttp(reqId, res);
+                        return;
+                    }
+                    String boundary = "----CampusHubBoundary" + System.currentTimeMillis();
+                    byte[] imgBytes = Base64.decode(imageBase64, Base64.DEFAULT);
+                    URL u = new URL(urlStr);
+                    HttpURLConnection conn = (HttpURLConnection) u.openConnection();
+                    conn.setConnectTimeout(10000);
+                    conn.setReadTimeout(12000);
+                    conn.setRequestMethod("POST");
+                    conn.setDoOutput(true);
+                    conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+                    try (OutputStream os = conn.getOutputStream()) {
+                        String head = "--" + boundary + "\r\nContent-Disposition: form-data; name=\"image\"; filename=\"123.png\"\r\nContent-Type: image/jpeg\r\n\r\n";
+                        os.write(head.getBytes(StandardCharsets.UTF_8));
+                        os.write(imgBytes);
+                        os.write(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+                    }
+                    int status = conn.getResponseCode();
+                    byte[] bytes = readAllBytes(status >= 400 ? conn.getErrorStream() : conn.getInputStream());
+                    res.put("ok", true);
+                    res.put("status", status);
+                    res.put("bodyBase64", Base64.encodeToString(bytes, Base64.NO_WRAP));
+                } catch (Exception e) {
+                    try {
+                        res.put("ok", false);
+                        res.put("error", e.getMessage());
+                    } catch (Exception ignored) {}
+                }
+                resolveNativeHttp(reqId, res);
+            });
+        }
+
         @JavascriptInterface
         public void syncToken(String token) {
             if (token != null && !token.isEmpty()) {

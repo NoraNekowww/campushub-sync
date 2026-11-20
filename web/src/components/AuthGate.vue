@@ -115,7 +115,11 @@
               <!-- The challenge is an SVG string we render ourselves, so there is
                    no third-party script (and no reCAPTCHA-style DNS that fails
                    behind the GFW). -->
-              <span v-if="captchaSvg" class="block h-[52px] w-[148px]" v-html="captchaSvg" />
+              <span
+                v-if="captchaSvg"
+                class="block h-[52px] w-[148px] bg-[#eef2f7] [&>svg]:block [&>svg]:h-full [&>svg]:w-full"
+                v-html="captchaSvg"
+              />
               <span
                 v-else
                 class="flex h-[52px] w-[148px] items-center justify-center text-xs text-slate-500"
@@ -155,9 +159,6 @@
           </button>
         </template>
         <template v-else>注册已关闭，请联系站主开通</template>
-      </p>
-      <p v-else class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">
-        第一个注册的账号将成为管理员
       </p>
     </form>
 
@@ -221,19 +222,24 @@ const captchaHint = computed(
  * 失败不能把图留空：一次网络抖动（校园网切换、服务端 5xx、切前台）就自动重试一次，
  * 仍然失败才提示，并把原因写进提示里 —— 否则用户看到的是「有输入框、没有图」。
  */
+let captchaSeq = 0
+
 async function refreshCaptcha(attempt = 0) {
+  const seq = attempt === 0 ? ++captchaSeq : captchaSeq
   captchaLoading.value = true
   captchaError.value = ''
-  captchaAnswer.value = ''
+  if (attempt === 0) captchaAnswer.value = ''
   try {
     const payload = await loadCaptcha()
+    if (seq !== captchaSeq) return
     if (payload?.svg) {
       captchaSvg.value = payload.svg
       captchaToken.value = payload.token || ''
       return
     }
-    if (attempt < 1) {
-      await new Promise((resolve) => setTimeout(resolve, 600))
+    if (attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 450 * (attempt + 1)))
+      if (seq !== captchaSeq) return
       return await refreshCaptcha(attempt + 1)
     }
     captchaSvg.value = ''
@@ -243,22 +249,26 @@ async function refreshCaptcha(attempt = 0) {
       captchaError.value = `验证码加载失败${why}，点图重试 · 或换个窗口打开`
     }
   } catch (error) {
-    if (attempt < 1) {
-      await new Promise((resolve) => setTimeout(resolve, 600))
+    if (seq !== captchaSeq) return
+    if (attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 450 * (attempt + 1)))
+      if (seq !== captchaSeq) return
       return await refreshCaptcha(attempt + 1)
     }
     captchaSvg.value = ''
     captchaToken.value = ''
     if (captchaRequired.value) captchaError.value = '验证码加载失败，点图重试 · 或换个窗口打开'
   } finally {
-    captchaLoading.value = false
+    if (seq === captchaSeq) {
+      captchaLoading.value = false
+    }
   }
 }
 
-// `state.accounts` usually lands after mount (it comes from /auth/session), so
-// the challenge is fetched when the flag shows up rather than on mount alone.
-watch(captchaRequired, (on) => {
-  if (on && !captchaToken.value) refreshCaptcha()
+watch([captchaRequired, mode], ([on, m]) => {
+  if (on && m === 'register' && (!captchaSvg.value || !captchaToken.value) && !captchaLoading.value) {
+    refreshCaptcha()
+  }
 })
 onMounted(() => {
   if (captchaRequired.value) refreshCaptcha()
@@ -268,7 +278,7 @@ function setMode(next) {
   mode.value = next
   localError.value = ''
   state.authError = ''
-  if (next === 'register' && captchaRequired.value) refreshCaptcha()
+  if (next === 'register' && captchaRequired.value && !captchaSvg.value) refreshCaptcha()
 }
 
 async function submit() {

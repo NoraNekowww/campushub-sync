@@ -28,9 +28,8 @@ export function setOfflineMode(value) {
   }
 }
 
-/* 离线模式下仍要联网的少数几个接口：版本检查（更新提示）、健康探针，
-   以及「教务课表换算」——它只把课表抓回来交给本机，不存服务器、不建账号。 */
-const OFFLINE_ALLOWED = ['/version', '/health', '/tju/jw/local']
+/* 离线模式下仍允许的公共/本地换算与鉴权探针接口 */
+const OFFLINE_ALLOWED = ['/version', '/health', '/tju/jw/local', '/auth/captcha', '/auth/session']
 
 export function getSessionToken() {
   try {
@@ -241,7 +240,15 @@ export const api = {
   me: () => request('/auth/me'),
   login: (payload) => request('/auth/login', { method: 'POST', body: payload }),
   register: (payload) => request('/auth/register', { method: 'POST', body: payload }),
-  captcha: () => request('/auth/captcha'),
+  captcha: () =>
+    request(`/auth/captcha?_t=${Date.now()}`, {
+      cache: 'no-store',
+      retries: 2,
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
+    }),
   registration: () => request('/auth/registration'),
   updateRegistration: (payload) => request('/auth/registration', { method: 'PUT', body: payload }),
   logout: () => request('/auth/logout', { method: 'POST' }),
@@ -303,6 +310,8 @@ export const api = {
   jwLocalImport: (payload) =>
     request('/tju/jw/local/import', { method: 'POST', body: payload, timeoutMs: 90000 }),
   jwLocalCaptcha: () => request('/tju/jw/local/captcha', { method: 'POST' }),
+  jwLocalParse: (payload) =>
+    request('/tju/jw/local/parse', { method: 'POST', body: payload, timeoutMs: 30000 }),
   jwRefresh: () => request('/tju/jw/refresh', { method: 'POST' }),
   jwForget: () => request('/tju/jw/credentials', { method: 'DELETE' }),
 }
