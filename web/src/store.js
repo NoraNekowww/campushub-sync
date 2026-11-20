@@ -7,6 +7,15 @@ import { api, ApiError, getSessionToken, getToken, isAuthError, isOfflineMode, s
 import { dayKey, formatShanghaiIso, isEventEnded, toDate, todayKey } from './utils/datetime'
 import { applyThemeColor, getSavedThemeColor } from './utils/themeColors'
 import { dedupeEvents } from './utils/dedupe'
+import {
+  mergeServerEventWithLocal,
+  mergeSyncedCreateResult,
+  parseEventModifiedMs,
+  parseTimestampMs,
+  shouldApplySyncedPatchResult,
+} from './utils/lww'
+
+const nowClientIso = () => new Date().toISOString()
 
 const THEME_KEY = 'campushub.theme'
 const GRID_STYLE_KEY = 'campushub.week_grid_style'
@@ -357,14 +366,35 @@ function fetchParams() {
 export async function fetchHistoryEvents() {
   if (state.offlineMode) return
   try {
-    const res = await api.events({ status: 'completed', limit: 800 })
-    const historyItems = res.items || []
+    const [datedRes, undatedRes] = await Promise.all([
+      api.events({ status: 'completed', limit: 800 }),
+      api.events({ status: 'completed', undated: true, limit: 800 }).catch((err) => {
+        if (isAuthError(err)) throw err
+        return { items: [] }
+      }),
+    ])
+    const historyMap = new Map()
+    for (const item of [...(datedRes?.items || []), ...(undatedRes?.items || [])]) {
+      if (item?.id) historyMap.set(item.id, item)
+    }
+    const historyItems = [...historyMap.values()]
     if (!historyItems.length) return
     const deletedMap = getDeletedEventIds()
+    const completedOverrides = getCompletedOverrides()
+    const pendingIds = getPendingSyncIdSet()
     const eventMap = new Map((state.events || []).map((e) => [e.id, e]))
     historyItems.forEach((item) => {
       if (deletedMap[item.id]) return
-      eventMap.set(item.id, { ...item, status: 'completed' })
+      const local = eventMap.get(item.id)
+      const merged = mergeServerEventWithLocal(
+        { ...item, status: 'completed' },
+        local,
+        {
+          hasPendingSync: pendingIds.has(item.id),
+          completedOverride: completedOverrides[item.id] || null,
+        },
+      )
+      eventMap.set(item.id, merged)
     })
     state.events = [...eventMap.values()]
     saveEventsCache(state.events, state.total)
@@ -380,13 +410,17 @@ export async function fetchHistoryEvents() {
  */
 export function autoExpireEndedCustomTasks() {
   const nowTs = Date.now()
+  const nowIso = nowClientIso()
   const toPatch = []
   ;(state.events || []).forEach((ev) => {
     // 排除教务课表原生课程，仅针对个人安排的自定义日程与任务；无截止待办没有「结束」概念
     if (ev.source !== 'tju_schedule' && ev.status !== 'completed' && !ev.is_undated) {
       if (isEventEnded(ev, nowTs)) {
         ev.status = 'completed'
-        recordCompletedOverride(ev.id, 'completed')
+        ev.completed_at = ev.completed_at || nowIso
+        ev.updated_at = nowIso
+        ev.client_updated_at = nowIso
+        recordCompletedOverride(ev.id, 'completed', nowTs)
         toPatch.push(ev.id)
       }
     }
@@ -394,8 +428,20 @@ export function autoExpireEndedCustomTasks() {
   if (toPatch.length > 0) {
     saveEventsCache(state.events, state.total)
     toPatch.forEach((id) => {
-      appendSyncQueue({ type: 'patch', id, payload: { status: 'completed' } })
-      if (!state.offlineMode) api.patchEvent(id, { status: 'completed' }).catch(() => {})
+      const qid = appendSyncQueue({ type: 'patch', id, payload: { status: 'completed', client_updated_at: nowIso } })
+      if (!state.offlineMode && !String(id).startsWith('local_')) {
+        api.patchEvent(id, { status: 'completed', client_updated_at: nowIso })
+          .then((updated) => {
+            removeSyncQueueItem(qid)
+            const cur = (state.events || []).find((e) => e.id === id)
+            if (cur && updated && shouldApplySyncedPatchResult(cur, nowIso)) {
+              Object.assign(cur, updated, { client_updated_at: updated.updated_at || nowIso })
+              unrecordCompletedOverride(id)
+              saveEventsCache(state.events, state.total)
+            }
+          })
+          .catch(() => {})
+      }
     })
   }
 }
@@ -544,10 +590,10 @@ function getCompletedOverrides() {
   }
 }
 
-function recordCompletedOverride(id, status) {
+function recordCompletedOverride(id, status, timestamp = Date.now()) {
   try {
     const map = getCompletedOverrides()
-    map[id] = { status, timestamp: Date.now() }
+    map[id] = { status, timestamp }
     localStorage.setItem(COMPLETED_OVERRIDES_KEY, JSON.stringify(map))
   } catch {}
 }
@@ -573,13 +619,41 @@ function getSyncQueue() {
 function appendSyncQueue(action) {
   try {
     const queue = getSyncQueue()
+    const _qid = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     queue.push({
       ...action,
-      _qid: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      _qid,
       timestamp: Date.now(),
     })
     localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue))
+    return _qid
+  } catch {
+    return ''
+  }
+}
+
+function removeSyncQueueItem(qid) {
+  if (!qid) return
+  try {
+    const next = getSyncQueue().filter((q) => q._qid !== qid)
+    if (next.length) localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(next))
+    else clearSyncQueue()
   } catch {}
+}
+
+function getPendingSyncIdSet(queue = getSyncQueue()) {
+  const ids = new Set()
+  for (const q of queue) {
+    if (!q) continue
+    if (q.id) ids.add(q.id)
+    if (q.temp_id) ids.add(q.temp_id)
+    if (Array.isArray(q.temp_ids)) {
+      for (const tid of q.temp_ids) {
+        if (tid) ids.add(tid)
+      }
+    }
+  }
+  return ids
 }
 
 function clearSyncQueue() {
@@ -641,8 +715,19 @@ export async function flushSyncQueue() {
                 } else if (res.id) {
                   tempIdMap.set(item.temp_id, res.id)
                   const idx = state.events.findIndex((e) => e.id === item.temp_id)
+                  const overridesSnapshot = getCompletedOverrides()
+                  const tempOverride = overridesSnapshot[item.temp_id] || null
+                  const localBefore = idx >= 0 ? state.events[idx] : null
+                  const mergedCreated = mergeSyncedCreateResult(res, localBefore, {
+                    createClientUpdatedAt: item.payload?.client_updated_at,
+                    completedOverride: tempOverride,
+                  })
+                  if (tempOverride?.status) {
+                    recordCompletedOverride(res.id, tempOverride.status, tempOverride.timestamp)
+                    unrecordCompletedOverride(item.temp_id)
+                  }
                   if (idx >= 0) {
-                    state.events.splice(idx, 1, res)
+                    state.events.splice(idx, 1, mergedCreated)
                     saveEventsCache(state.events, state.total)
                   }
                 }
@@ -652,9 +737,20 @@ export async function flushSyncQueue() {
                 remaining.push(item)
                 continue
               }
-              await api.patchEvent(resolvedId, item.payload)
-              // 服务器确认成功写入后，移除本地覆盖保护
-              if (item.payload?.status) {
+              const serverEv = await api.patchEvent(resolvedId, item.payload)
+              const idx = state.events.findIndex((e) => e.id === resolvedId || e.id === item.id)
+              const localCurrent = idx >= 0 ? state.events[idx] : null
+              const canApplyResult = !localCurrent || shouldApplySyncedPatchResult(localCurrent, item.payload?.client_updated_at)
+              if (idx >= 0 && serverEv && canApplyResult) {
+                state.events.splice(idx, 1, {
+                  ...localCurrent,
+                  ...serverEv,
+                  client_updated_at: serverEv.updated_at || item.payload?.client_updated_at || localCurrent.client_updated_at,
+                })
+                saveEventsCache(state.events, state.total)
+              }
+              // 只有在没有更新的本地改动覆盖时，才安全移除本地完成态保护
+              if (item.payload?.status && canApplyResult) {
                 unrecordCompletedOverride(resolvedId)
                 unrecordCompletedOverride(item.id)
               }
@@ -717,48 +813,66 @@ export async function refresh({ silent = false } = {}) {
     state.loading = true
   }
   try {
-    const payload = await api.events(fetchParams())
+    const [payload, undatedPayload] = await Promise.all([
+      api.events(fetchParams()),
+      api.events({
+        undated: true,
+        limit: 1000,
+        source: state.source === 'all' ? undefined : state.source,
+      }).catch((err) => {
+        if (isAuthError(err)) throw err
+        return { items: [] }
+      }),
+    ])
     const deletedMap = getDeletedEventIds()
     const completedOverrides = getCompletedOverrides()
-    const rawItems = payload.items || []
+    const queuedSnapshot = getSyncQueue()
+    const pendingIds = getPendingSyncIdSet(queuedSnapshot)
+    const rawMap = new Map()
+    for (const it of [...(payload?.items || []), ...(undatedPayload?.items || [])]) {
+      if (it?.id) rawMap.set(it.id, it)
+    }
+    const rawItems = [...rawMap.values()]
 
     // 1. 过滤掉本地已显式删除的事件（墓碑机制）
-    // 2. 强保护：若本地有尚未被服务器覆盖确认的完成状态（如刚刚划掉的任务），坚决以本地操作为准，彻底杜绝回光返照
-    // 3. 冲突解决：客户端后改动优先 (Last-Write-Wins)，若本地事件的修改时间比服务器返回的更新，则保留本地最新数据
+    // 2. 强保护：若本地有待提交操作或尚未确认的完成态（如刚刚划掉的可办事项），以最后修改时间对齐裁决，绝不回光返照
+    // 3. 冲突解决：Last-Write-Wins，本地最后修改时间严格晚于服务器（或有待同步队列/完成态覆盖）时保留本地版本
     const localEventMap = new Map((state.events || []).map((e) => [e.id, e]))
     const serverIdSet = new Set(rawItems.map((it) => it.id))
     const mergedServerItems = rawItems
       .filter((it) => !deletedMap[it.id])
-      .map((it) => {
-        const local = localEventMap.get(it.id)
-        if (local && local.client_updated_at && it.updated_at) {
-          const localTs = new Date(local.client_updated_at).getTime()
-          const serverTs = new Date(it.updated_at).getTime()
-          if (localTs > serverTs + 1000) {
-            return local
+      .map((it) =>
+        mergeServerEventWithLocal(it, localEventMap.get(it.id), {
+          hasPendingSync: pendingIds.has(it.id),
+          completedOverride: completedOverrides[it.id] || null,
+        }),
+      )
+
+    // 4. 本地日程优先保留：云端没有返回但本地依然存在的未删除日程（同步队列尚未落库或超出查询窗口）
+    const localList = Array.isArray(state.events) ? state.events : []
+    const preservedLocalItems = localList
+      .filter((local) => {
+        if (!local || !local.id) return false
+        if (deletedMap[local.id]) return false
+        if (serverIdSet.has(local.id)) return false
+        return true
+      })
+      .map((local) => {
+        const override = completedOverrides[local.id]
+        if (override?.status && parseTimestampMs(override.timestamp) >= parseEventModifiedMs(local)) {
+          return {
+            ...local,
+            status: override.status,
+            client_updated_at: new Date(parseTimestampMs(override.timestamp)).toISOString(),
           }
         }
-        const override = completedOverrides[it.id]
-        if (override && override.status) {
-          return { ...it, status: override.status }
-        }
-        return it
+        return local
       })
-
-    // 4. 本地日程优先保留：云端没有返回但本地依然存在的未删除日程，优先保留绝不冲刷丢失
-    const localList = Array.isArray(state.events) ? state.events : []
-    const preservedLocalItems = localList.filter((local) => {
-      if (!local || !local.id) return false
-      if (deletedMap[local.id]) return false
-      if (serverIdSet.has(local.id)) return false
-      return true
-    })
 
     // 5. 内容去重：同一节课如果被同步器和直连导入各建了一次（两个 id），这里只留一份
     state.events = dedupeEvents([...preservedLocalItems, ...mergedServerItems])
 
     // 对本地未同步至云端的自建/临时日程自动加入补推同步队列
-    const queuedSnapshot = getSyncQueue()
     for (const local of preservedLocalItems) {
       if (local.id && String(local.id).startsWith('local_')) {
         const alreadyQueued = queuedSnapshot.some(
@@ -1107,7 +1221,7 @@ export async function saveCustomEvent(payload) {
   const existing = state.customEditor.event
   const isExisting = Boolean(existing && !existing.is_draft && existing.id)
   const isMobile = isMobileNativeApp() || state.offlineMode
-  const nowIso = formatShanghaiIso(new Date()) || new Date().toISOString()
+  const nowIso = nowClientIso()
   const payloadWithMeta = { ...payload, client_updated_at: nowIso }
 
   // 1. 移动端 / 离线模式秒存：纯本地立即生成或更新内存与闪存，无需等待服务器返回
@@ -1529,36 +1643,63 @@ export async function runSync() {
 export async function toggleCompleted(event) {
   const next = event.status === 'completed' ? 'pending' : 'completed'
   const previous = event.status
+  const prevCompletedAt = event.completed_at ?? null
+  const prevUpdatedAt = event.updated_at
+  const prevClientUpdatedAt = event.client_updated_at
+  const nowIso = nowClientIso()
+  const nowMs = parseTimestampMs(nowIso) || Date.now()
 
-  // 1. 乐观更新内存状态（0ms 响应）
+  // 1. 乐观更新内存状态并记录最后修改时间（0ms 响应 + LWW 对齐）
   event.status = next
+  event.completed_at = next === 'completed' ? nowIso : null
+  event.updated_at = nowIso
+  event.client_updated_at = nowIso
 
-  // 2. 强保护：写入本地完成态覆盖记录与闪存缓存，彻底杜绝被服务器旧数据冲刷导致「回光返照」
-  recordCompletedOverride(event.id, next)
+  // 2. 强保护：写入本地完成态覆盖记录（含修改时间戳）与闪存缓存，彻底杜绝云端旧数据冲刷
+  recordCompletedOverride(event.id, next, nowMs)
   saveEventsCache(state.events, state.total)
 
   // 离线模式：完成态只记在本机，不回传服务器
   if (state.offlineMode) return
 
-  // 3. 打入离线同步队列双重保险
-  appendSyncQueue({ type: 'patch', id: event.id, payload: { status: next } })
+  const patchPayload = { status: next, client_updated_at: nowIso }
 
-  // 4. 立即向服务器发起 PATCH 写入落盘（计入服务器历史归档与完成态持久化）
+  // 3. 打入离线同步队列双重保险
+  const qid = appendSyncQueue({ type: 'patch', id: event.id, payload: patchPayload })
+
+  // 临时本地 id 尚未落库时，走队列串行等待 create 返回真实 id 后再回写 PATCH
+  if (String(event.id || '').startsWith('local_')) {
+    setTimeout(() => {
+      flushSyncQueue().catch(() => {})
+    }, 300)
+    return
+  }
+
+  // 4. 立即向服务器发起 PATCH 写入落盘（带 client_updated_at 防止旧状态倒流）
   try {
-    const updated = await api.patchEvent(event.id, { status: next })
-    Object.assign(event, updated)
-    // 提交成功，安全释放本地覆盖记录
-    unrecordCompletedOverride(event.id)
+    const updated = await api.patchEvent(event.id, patchPayload)
+    removeSyncQueueItem(qid)
+    // 只有期间没有更新的本地再次操作时，才用服务器权威时间戳对齐本地状态
+    if (shouldApplySyncedPatchResult(event, nowIso)) {
+      Object.assign(event, updated)
+      event.client_updated_at = updated?.updated_at || nowIso
+      unrecordCompletedOverride(event.id)
+      saveEventsCache(state.events, state.total)
+    }
   } catch (error) {
     // 仅在明确遇到未登录/权限拒绝（401/403）时才回滚状态
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+      removeSyncQueueItem(qid)
       event.status = previous
+      event.completed_at = prevCompletedAt
+      event.updated_at = prevUpdatedAt
+      event.client_updated_at = prevClientUpdatedAt
       unrecordCompletedOverride(event.id)
       saveEventsCache(state.events, state.total)
       state.authRequired = true
       notify('请先登录账号后再操作', 'warn')
     } else {
-      // 网络慢或临时离线：坚决保留用户的划掉状态，等待离线队列自动重试同步，绝不回光返照！
+      // 网络慢或临时离线：坚决保留用户的划掉状态与最新时间戳，等待离线队列自动重试同步
       console.warn('离线暂存完成态，稍后自动重试同步:', error.message)
       setTimeout(() => {
         flushSyncQueue().catch(() => {})

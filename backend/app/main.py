@@ -149,17 +149,15 @@ def create_app() -> FastAPI:
     async def app_version() -> JSONResponse:
         return JSONResponse(
             content={
-                "version": "2.9.3",
-                "tag": "v2.9.3",
-                "title": "CampusHub Android v2.9.3",
+                "version": "2.9.4",
+                "tag": "v2.9.4",
+                "title": "CampusHub Android v2.9.4",
                 "download_url": "https://nzlab.online/schedule/CampusHub.apk",
                 "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
                 "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
                 "features": [
-                    "全局搜索现已支持过滤「历史归档」与「可办事项（无截止）」列表中的内容",
-                    "修复搜索栏输入文字后出现两个清除按钮（×）的问题",
-                    "精确对齐课程表正在进行中课程的已过时间斜线蒙层分界线与红色当前时间指示线",
-                    "全新焕亮重构应用图标与多端 Launcher / Web 图标设计，明快天青渐变搭配课表日程与完成徽章",
+                    "可办事项接入与日程一致的最后修改时间对齐（Last-Write-Wins）与离线队列合并，划掉后不再被云端旧状态刷回",
+                    "修复完成态切换及在途新建事件划掉时的时间戳对齐与后端 LWW 时区返回问题",
                 ],
             },
             headers={
