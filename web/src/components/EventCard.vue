@@ -295,6 +295,7 @@ import { api } from '../api'
 import { countdown, durationLabel, periodLabel, periodsShort, timeLabel } from '../utils/datetime'
 import { splitNoteLocation } from '../utils/note'
 import { isImportantEvent, openCustomEditor, toggleImportantEvent } from '../store'
+import { useBackHandler } from '../utils/backNavigation'
 
 function formatAttachmentSize(size) {
   if (!size) return '0 B'
@@ -346,6 +347,9 @@ function handleToggle() {
 // 待办那类卡片本来就是要做的事，信息一行就够，不折腾。
 const collapsible = computed(() => props.event.source === 'tju_schedule' && !props.event.is_deadline)
 const expanded = ref(false)
+useBackHandler(expanded, () => {
+  expanded.value = false
+})
 
 function toggleExpanded() {
   if (!collapsible.value) return

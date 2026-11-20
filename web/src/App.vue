@@ -73,7 +73,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import AppHeader from './components/AppHeader.vue'
 import AuthGate from './components/AuthGate.vue'
 import BottomNav from './components/BottomNav.vue'
@@ -90,6 +90,7 @@ import {
   applyBackgroundClass,
   autoRefreshTju,
   bootstrap,
+  closeAuthGate,
   fetchSession,
   initConnectivity,
   initFrostedGlass,
@@ -97,6 +98,7 @@ import {
   signInRequired,
   state,
 } from './store'
+import { dispatchAppBack, setBackFallback } from './utils/backNavigation'
 
 /* The login wall only appears when the server says "accounts are on", the
    visitor has no session *and* no shared token, and an API call was refused —
@@ -141,7 +143,44 @@ async function runToastAction() {
   if (action?.run) await action.run()
 }
 
+let lastMainView = 'agenda'
+watch(
+  () => state.view,
+  (next, prev) => {
+    if (prev && prev !== 'settings' && prev !== 'history') {
+      lastMainView = prev
+    }
+    if (next && next !== 'settings' && next !== 'history') {
+      lastMainView = next
+    }
+  },
+  { immediate: true },
+)
+
+setBackFallback(() => {
+  if (state.forceAuth) {
+    closeAuthGate()
+    return true
+  }
+  if (state.view === 'settings') {
+    state.view = lastMainView || 'agenda'
+    return true
+  }
+  if (state.view === 'history') {
+    state.view = 'agenda'
+    return true
+  }
+  return false
+})
+
+function onGlobalKeydown(e) {
+  if (e.key === 'Escape' && !e.isComposing && dispatchAppBack()) {
+    e.preventDefault()
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener('keydown', onGlobalKeydown)
   initTheme()
   initFrostedGlass()
   applyBackgroundClass()
@@ -150,5 +189,9 @@ onMounted(async () => {
   bootstrap()
   // 打开 App 时静默续一次课表（本机记住了微北洋令牌、且上次抓取超过 6 小时才会真的发请求）。
   autoRefreshTju()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onGlobalKeydown)
 })
 </script>

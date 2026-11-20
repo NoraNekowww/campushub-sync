@@ -68,6 +68,7 @@ public class MainActivity extends AppCompatActivity {
     private SharedPreferences prefs;
     private WebViewAssetLoader assetLoader;
     private ValueCallback<Uri[]> fileUploadCallback;
+    private long lastBackPressMs = 0L;
     private final ExecutorService nativeHttpExecutor = Executors.newCachedThreadPool();
     private final ConcurrentHashMap<String, java.net.CookieManager> casCookieJars = new ConcurrentHashMap<>();
 
@@ -230,16 +231,33 @@ public class MainActivity extends AppCompatActivity {
             swipeRefresh.setRefreshing(false);
         });
 
-        // 监听系统后退手势
+        // 监听系统后退手势：优先映射到关闭卡片/弹窗/搜索/设置等操作，仅无浮层时再按一次退出应用
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                if (webView != null && webView.canGoBack()) {
-                    webView.goBack();
-                } else {
-                    setEnabled(false);
-                    getOnBackPressedDispatcher().onBackPressed();
+                if (webView == null) {
+                    finish();
+                    return;
                 }
+                webView.evaluateJavascript(
+                        "(function(){ try { return typeof window.__campushubHandleBack === 'function' ? Boolean(window.__campushubHandleBack()) : false; } catch(e) { return false; } })();",
+                        value -> {
+                            if ("true".equals(value)) {
+                                return;
+                            }
+                            if (webView.canGoBack()) {
+                                webView.goBack();
+                                return;
+                            }
+                            long now = System.currentTimeMillis();
+                            if (now - lastBackPressMs < 2000L) {
+                                finish();
+                            } else {
+                                lastBackPressMs = now;
+                                Toast.makeText(MainActivity.this, "再按一次退出应用", Toast.LENGTH_SHORT).show();
+                            }
+                        }
+                );
             }
         });
 

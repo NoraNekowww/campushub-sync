@@ -59,12 +59,14 @@
 import { nextTick, ref, watch } from 'vue'
 import { ListTodo, X } from 'lucide-vue-next'
 import { closeTodoQuickAdd, saveQuickTodo, state } from '../store'
+import { useBackHandler } from '../utils/backNavigation'
 
 const title = ref('')
 const notes = ref('')
 const busy = ref(false)
 const error = ref('')
 const titleInput = ref(null)
+useBackHandler(() => state.todoQuickAdd.open, closeTodoQuickAdd)
 
 watch(
   () => state.todoQuickAdd.open,

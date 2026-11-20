@@ -169,6 +169,7 @@ import { computed, ref } from 'vue'
 import { Clock, FileText, MapPin, Paperclip, Pencil, Star, X } from 'lucide-vue-next'
 import { api } from '../api'
 import { isImportantEvent, openCustomEditor, removeEvent, toggleImportantEvent } from '../store'
+import { useBackHandler } from '../utils/backNavigation'
 import { splitNoteMeta } from '../utils/note'
 
 const isImportant = computed(() => isImportantEvent(props.event))
@@ -265,6 +266,8 @@ const removeLabel = computed(() => {
 function close() {
   emit('close')
 }
+
+useBackHandler(() => Boolean(props.event), close)
 
 function edit() {
   const event = props.event

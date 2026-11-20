@@ -107,6 +107,7 @@
 import { computed, nextTick, ref } from 'vue'
 import { ArrowLeft, RefreshCw, Search, Settings, WifiOff, X } from 'lucide-vue-next'
 import { state, runSync } from '../store'
+import { useBackHandler } from '../utils/backNavigation'
 
 const searching = ref(false)
 const searchInput = ref(null)
@@ -146,6 +147,8 @@ function openSearch() {
 function closeSearch() {
   searching.value = false
 }
+
+useBackHandler(searching, closeSearch)
 
 function toggleSettings() {
   if (state.view === 'settings') {

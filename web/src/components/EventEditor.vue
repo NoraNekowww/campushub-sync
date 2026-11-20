@@ -349,10 +349,12 @@ import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { Clock, FileText, GraduationCap, Paperclip, Pencil, RotateCcw, Sparkles, Upload, X } from 'lucide-vue-next'
 import { api } from '../api'
 import { closeCustomEditor, removeCustomEvent, saveCustomEvent, state } from '../store'
+import { useBackHandler } from '../utils/backNavigation'
 import { dayKey, timeLabel, toDate, todayKey } from '../utils/datetime'
 import { parseScheduleText } from '../utils/parseScheduleText'
 
 const busy = ref(false)
+useBackHandler(() => state.customEditor.open, closeCustomEditor)
 const uploadingFile = ref(false)
 const error = ref('')
 /* 粘贴自动识别：长文本（>10 字）时露出「自动识别」按钮 */

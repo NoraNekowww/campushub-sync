@@ -137,8 +137,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { BellOff, Download, Rocket, Sparkles, X } from 'lucide-vue-next'
 import { API_BASE, api } from '../api'
+import { useBackHandler } from '../utils/backNavigation'
 
-const CURRENT_VERSION = '2.9.5'
+const CURRENT_VERSION = '2.9.6'
 const DISMISSED_KEY = 'campushub.dismissed_update'
 const POPUP_SEEN_KEY = 'campushub.popup_seen_version'
 
@@ -220,6 +221,8 @@ function openModal() {
 function closeModal() {
   showModal.value = false
 }
+
+useBackHandler(showModal, closeModal)
 
 function startDownloadAndInstall() {
   closeModal()

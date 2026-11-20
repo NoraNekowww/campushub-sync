@@ -149,16 +149,14 @@ def create_app() -> FastAPI:
     async def app_version() -> JSONResponse:
         return JSONResponse(
             content={
-                "version": "2.9.5",
-                "tag": "v2.9.5",
-                "title": "CampusHub Android v2.9.5",
+                "version": "2.9.6",
+                "tag": "v2.9.6",
+                "title": "CampusHub Android v2.9.6",
                 "download_url": "https://nzlab.online/schedule/CampusHub.apk",
                 "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
                 "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
                 "features": [
-                    "修复新用户注册图形验证码在 Cloudflare IP 切换、缓存及离线态下偶发无法加载或校验失败的问题，并移除首号成管理员的提示语",
-                    "重构离线模式联网课表导入：保留真实网络状态并接入 Android 手机本机直连教务与本地 .ics 导入，同时修复服务端超时报 500 异常",
-                    "全面核验并重构内置图床壁纸库，移除 404 与图文不符条目，确保所有浅色/深色壁纸与中文描述精准一致",
+                    "Android 系统返回手势与 Esc 键优先关闭课程详情卡片、编辑/快捷新建弹窗、更新弹窗、搜索栏、展开的日程详情与设置页，仅在主界面连按两次才退出应用",
                 ],
             },
             headers={
