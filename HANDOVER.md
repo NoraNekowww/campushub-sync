@@ -4,8 +4,8 @@
 >
 > | 项 | 值 |
 > |---|---|
-> | 当前版本 | `v2.9.2`（Android `versionCode 94`，`sw.js` `campushub-v94`） |
-> | 下一版 | `v2.9.3`（versionCode `95`） |
+> | 当前版本 | `v2.9.3`（Android `versionCode 95`，`sw.js` `campushub-v95`） |
+> | 下一版 | `v2.9.4`（versionCode `96`） |
 > | 生产地址 | `https://nzlab.online/schedule/` |
 > | APK 直链 | `https://nzlab.online/schedule/CampusHub.apk` |
 > | 源码仓库 | `https://github.com/NoraNekowww/campushub-sync`（分支 `main`） |

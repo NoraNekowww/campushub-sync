@@ -9,8 +9,10 @@
       class="card flex flex-col items-center justify-center p-12 text-center text-slate-400 dark:text-slate-500"
     >
       <CheckCircle2 :size="36" class="mb-2.5 opacity-30 text-emerald-500" />
-      <p class="text-sm font-medium">暂无已完成的历史日程</p>
-      <p class="text-xs opacity-75 mt-1">在日程列表勾选完成的个人待办和日程会在此倒序归档</p>
+      <p class="text-sm font-medium">{{ state.query.trim() ? '未找到匹配的历史日程' : '暂无已完成的历史日程' }}</p>
+      <p class="text-xs opacity-75 mt-1">
+        {{ state.query.trim() ? '换个关键词试试，或清空搜索查看全部归档' : '在日程列表勾选完成的个人待办和日程会在此倒序归档' }}
+      </p>
     </div>
 
     <!-- 按日期分组的历史日程（动态分批按需渲染，从近到久倒序排列） -->
@@ -61,7 +63,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { CheckCircle2 } from 'lucide-vue-next'
 import EventCard from './EventCard.vue'
 import SkeletonList from './SkeletonList.vue'
-import { fetchHistoryEvents, removeEvent, state, toggleCompleted } from '../store'
+import { fetchHistoryEvents, matchesQuery, removeEvent, state, toggleCompleted } from '../store'
 import { dedupeEvents } from '../utils/dedupe'
 import { dayDiff, dayKey, dayLabel, isEventEnded, toDate, todayKey } from '../utils/datetime'
 
@@ -87,7 +89,8 @@ const completedEvents = computed(() => {
 
       const isTicked = event.status === 'completed'
       const isEnded = !event.is_undated && isEventEnded(event, nowTs)
-      return isTicked || isEnded
+      if (!isTicked && !isEnded) return false
+      return matchesQuery(event)
     })
     .sort((a, b) => {
       const tA = toDate(a.end_time || a.start_time)?.getTime() || 0

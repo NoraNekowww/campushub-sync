@@ -15,9 +15,11 @@
         <input
           ref="searchInput"
           v-model="state.query"
-          type="search"
+          type="text"
+          inputmode="search"
+          enterkeyhint="search"
           data-testid="search-input"
-          placeholder="搜课程 / 老师 / 地点"
+          placeholder="搜日程 / 课程 / 老师 / 地点 / 备注"
           class="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-slate-400"
         />
         <button

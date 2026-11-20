@@ -58,11 +58,11 @@
                   />
                 </template>
               </template>
-              <!-- 当前时间线（仅今天且在 08:00–22:00 内展示，呼吸闪烁） -->
+              <!-- 当前时间线（仅今天且在 08:00–22:00 内展示，呼吸闪烁，垂直居中精准对齐物理时刻） -->
               <div
                 v-if="day.isToday && isNowVisible"
                 data-testid="current-time-line"
-                class="pointer-events-none absolute inset-x-0 z-30 flex items-center animate-pulse"
+                class="pointer-events-none absolute inset-x-0 z-30 flex -translate-y-1/2 items-center animate-pulse"
                 :style="{ top: `${nowPct}%` }"
               >
                 <div class="-ml-1 h-2 w-2 rounded-full bg-rose-500 shadow-sm shadow-rose-500/50" />
@@ -106,11 +106,11 @@
                   >
                     {{ formatShortLocation(item.event.location) }}
                   </span>
-                  <!-- 已经过去部分的灰度斜纹覆盖层（上一半就把上过的部分变灰+斜纹） -->
+                  <!-- 已经过去部分的灰度斜纹覆盖层（分界线与当前红线物理位置精确齐平） -->
                   <div
                     v-if="getItemPastProgress(day.key, item) > 0"
                     class="class-past-overlay"
-                    :style="{ height: `${getItemPastProgress(day.key, item)}%` }"
+                    :style="pastOverlayStyle(day.key, item)"
                   />
                 </button>
 
@@ -495,11 +495,27 @@ function getItemPastProgress(dayKeyVal, item) {
   if (dayKeyVal < today) return 100
   if (dayKeyVal > today) return 0
   if (item.end === null) return 0
+  const startMin = Math.min(Math.max(item.start, DAY_START), DAY_END)
+  let endMin = Math.min(Math.max(item.end, DAY_START), DAY_END)
+  if (endMin <= startMin) endMin = Math.min(startMin + LINE_MINUTES, DAY_END)
   const cur = nowMinutes.value
-  if (cur >= item.end) return 100
-  if (cur <= item.start) return 0
-  const pctVal = ((cur - item.start) / (item.end - item.start)) * 100
-  return Math.min(100, Math.max(0, Math.round(pctVal)))
+  if (cur >= endMin) return 100
+  if (cur <= startMin) return 0
+  const pctVal = ((cur - startMin) / (endMin - startMin)) * 100
+  return Math.min(100, Math.max(0, Number(pctVal.toFixed(2))))
+}
+
+function pastOverlayStyle(dayKeyVal, item) {
+  const pctVal = getItemPastProgress(dayKeyVal, item)
+  if (pctVal >= 100) {
+    return { top: '-1px', height: 'calc(100% + 2px)' }
+  }
+  // class-block 上下各有 1px 边框，padding-box 比 border-box 短 2px；从 -1px 起补齐边框占比，使灰纹分界线与当前时间红线完全重合
+  const borderCompPx = ((2 * pctVal) / 100).toFixed(2)
+  return {
+    top: '-1px',
+    height: `calc(${pctVal}% + ${borderCompPx}px)`,
+  }
 }
 
 function isItemPastEntirely(dayKeyVal, item) {
