@@ -700,6 +700,12 @@ async def jw_local_parse(body: JwLocalParseIn) -> SimpleResult:
         if body.term and not cas_meta.get("term"):
             cas_meta["term"] = body.term
     except JwEamsError as exc:
+        logger.warning(
+            "jw_local_parse failed (%s): html_len=%d cal_len=%d",
+            exc.kind,
+            len(body.courses_html or ""),
+            len(body.calendar_raw or ""),
+        )
         raise _jw_http_error(exc) from exc
 
     return _convert_local_classtable_result(raw, cas_meta, body.total_weeks)

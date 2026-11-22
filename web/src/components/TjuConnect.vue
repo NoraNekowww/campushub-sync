@@ -181,6 +181,7 @@ import {
   loadConfig,
   loadJwStatus,
   notify,
+  refresh,
   runSync,
 } from '../store'
 import { parseIcsText } from '../utils/icsParser'
@@ -288,13 +289,14 @@ async function runNativeImport({ username, password, captchaCode = '', captchaId
     })
     return parsedRes
   }
+  say('③ 课表解析完成，正在同步到云端账号…', 'warn')
   const importedRes = await api.tjuImport({
     payload: detail.raw_payload,
     source: 'jw-native',
     total_weeks: detail.total_weeks,
     run_sync: true,
   })
-  await Promise.all([loadConfig(), runSync()])
+  await Promise.all([loadConfig(), refresh({ silent: true })])
   return importedRes
 }
 
@@ -318,9 +320,9 @@ async function reportJwError(error) {
   say(detail.message || error?.message || '导入失败', 'danger')
 }
 
-/** 真·导入：Android 客户端优先走手机直连教务；离线模式写本机，在线模式写云端。 */
+/** 真·导入：Android 客户端无论离线或在线一律优先走手机直连教务；网页端按离线/在线走服务端接口。 */
 async function runImport(payload) {
-  if (hasNativeTjuBridge() && (isOfflineMode() || captcha.isNative)) {
+  if (hasNativeTjuBridge()) {
     return runNativeImport({
       username: payload.username,
       password: payload.password,
@@ -328,19 +330,7 @@ async function runImport(payload) {
       captchaId: payload.captcha_id || '',
     })
   }
-  try {
-    return await (isOfflineMode() ? jwImportLocal(payload) : jwImport(payload))
-  } catch (err) {
-    if (hasNativeTjuBridge() && err?.detail?.kind === 'network') {
-      return runNativeImport({
-        username: payload.username,
-        password: payload.password,
-        captchaCode: payload.captcha || '',
-        captchaId: payload.captcha_id || '',
-      })
-    }
-    throw err
-  }
+  return isOfflineMode() ? jwImportLocal(payload) : jwImport(payload)
 }
 
 async function onIcsFileSelected(e) {

@@ -96,6 +96,14 @@ function makeError(message, kind = 'protocol') {
   return err
 }
 
+function stripTags(html) {
+  return String(html || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function extractLoginError(html) {
   const span = /id="errormsghide"[^>]*>(.*?)<\/span>/is.exec(html) || /<div[^>]*id="msg"[^>]*>(.*?)<\/div>/is.exec(html)
   if (span) {
@@ -106,6 +114,72 @@ function extractLoginError(html) {
     if (html.includes(phrase)) return phrase
   }
   return ''
+}
+
+/** Parse semesters from EAMS semesterCalendar JSON or JS literal (matches backend tju_cas._parse_semesters). */
+export function parseSemesters(raw) {
+  const found = []
+  const text = String(raw || '')
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item)
+      return
+    }
+    if ('id' in node && 'schoolYear' in node && (String(node.name) === '1' || String(node.name) === '2')) {
+      found.push({
+        id: String(node.id),
+        schoolYear: String(node.schoolYear),
+        name: String(node.name),
+      })
+      return
+    }
+    for (const val of Object.values(node)) walk(val)
+  }
+
+  try {
+    walk(JSON.parse(text))
+  } catch {}
+
+  if (!found.length) {
+    for (const m of text.matchAll(/id:\s*(\d+)\s*,\s*schoolYear:\s*"(\d+)-(\d+)"\s*,\s*name:\s*"(1|2)"/g)) {
+      found.push({ id: m[1], schoolYear: `${m[2]}-${m[3]}`, name: m[4] })
+    }
+  }
+  if (!found.length) {
+    for (const m of text.matchAll(/\{"id":\s*(\d+)[^{}]*?"schoolYear":\s*"(\d+)-(\d+)"[^{}]*?"name":\s*"(1|2)"/g)) {
+      found.push({ id: m[1], schoolYear: `${m[2]}-${m[3]}`, name: m[4] })
+    }
+  }
+
+  const seen = new Set()
+  return found.filter((item) => {
+    const key = `${item.id}|${item.schoolYear}|${item.name}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/** Pick current academic semester (matches backend tju_cas.pick_semester). */
+export function pickSemester(semesters, today = new Date()) {
+  if (!semesters || !semesters.length) return null
+  const month = today.getMonth() + 1
+  const year = today.getFullYear()
+  let wantYear
+  let wantName
+  if (month > 7) {
+    wantYear = `${year}-${year + 1}`
+    wantName = '1'
+  } else if (month < 2) {
+    wantYear = `${year - 1}-${year}`
+    wantName = '1'
+  } else {
+    wantYear = `${year - 1}-${year}`
+    wantName = '2'
+  }
+  const exact = semesters.find((item) => item.schoolYear === wantYear && item.name === wantName)
+  return exact || semesters[semesters.length - 1]
 }
 
 export async function nativeFetchCaptcha() {
@@ -133,7 +207,9 @@ export async function nativeFetchEamsHtml({ username, password, captcha = '', ca
   const pass = String(password || '')
   if (!user || !pass) throw makeError('请填写学号和教务系统密码', 'auth_required')
 
-  let sessionId = captchaId && pendingSessions.has(captchaId) ? captchaId : `cas_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  const sessionId = captchaId && pendingSessions.has(captchaId)
+    ? captchaId
+    : `cas_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
   let sessionMeta = captchaId ? pendingSessions.get(captchaId) : null
   if (captchaId) pendingSessions.delete(captchaId)
 
@@ -143,7 +219,9 @@ export async function nativeFetchEamsHtml({ username, password, captcha = '', ca
 
   try {
     for (let i = 0; i < attempts; i++) {
-      let execution, lt, imgB64
+      let execution
+      let lt
+      let imgB64
       if (sessionMeta) {
         execution = sessionMeta.execution
         lt = sessionMeta.lt
@@ -217,7 +295,7 @@ export async function nativeFetchEamsHtml({ username, password, captcha = '', ca
       throw lastErr || makeError('CAS 登录失败', 'protocol')
     }
 
-    // 1. EAMS handshake
+    // 1. EAMS handshake (302 -> CAS service ticket -> EAMS JSESSIONID)
     await nativeHttp({
       sessionId,
       method: 'POST',
@@ -226,7 +304,7 @@ export async function nativeFetchEamsHtml({ username, password, captcha = '', ca
       followRedirects: true,
     })
 
-    // 2. Semester calendar
+    // 2. Semester calendar -> pick CURRENT semester
     const calRes = await nativeHttp({
       sessionId,
       method: 'POST',
@@ -235,50 +313,53 @@ export async function nativeFetchEamsHtml({ username, password, captcha = '', ca
       followRedirects: true,
     })
     const calendarRaw = b64ToText(calRes?.bodyBase64)
-    const semMatches = [...calendarRaw.matchAll(/id:(\d+),schoolYear:"(\d+)-(\d+)",name:"(1|2)"/g)]
-    const semJsonMatches = [...calendarRaw.matchAll(/\{"id":\s*(\d+)[^{}]*?"schoolYear":\s*"(\d+)-(\d+)"[^{}]*?"name":\s*"(1|2)"/g)]
-    const semesters = [...semMatches, ...semJsonMatches].map((m) => ({
-      id: m[1],
-      schoolYear: `${m[2]}-${m[3]}`,
-      name: m[4],
-    }))
-
-    // Pick latest matching semester (fallback to current calendar response)
-    const picked = semesters.sort((a, b) => b.schoolYear.localeCompare(a.schoolYear) || Number(b.name) - Number(a.name))[0]
+    const semesters = parseSemesters(calendarRaw)
+    if (!semesters.length && (calendarRaw.includes('本次会话已经被过期') || stripTags(calendarRaw).includes('登录'))) {
+      throw makeError('教务会话未建立成功，请重试一次', 'session')
+    }
+    const picked = pickSemester(semesters)
     const semesterId = picked?.id || ''
 
-    // 3. innerIndex -> ids
-    const idxRes = await nativeHttp({
-      sessionId,
-      method: 'GET',
-      url: `${EAMS_BASE}/courseTableForStd!innerIndex.action`,
-      followRedirects: true,
-    })
-    const idxHtml = b64ToText(idxRes?.bodyBase64)
-    const idsMatch = /"ids","([^"]+)"/.exec(idxHtml)
-    const ids = idsMatch ? idsMatch[1] : ''
-
-    // 4. Fetch courseTable HTML
+    // 3. Per projectId (1 = 本科生, 22 = 研究生): index -> innerIndex -> courseTable
     let coursesHtml = ''
-    for (const projectId of ['1', '22']) {
+    for (const projectId of [1, 22]) {
+      await nativeHttp({
+        sessionId,
+        method: 'GET',
+        url: `${EAMS_BASE}/courseTableForStd!index.action?projectId=${projectId}`,
+        followRedirects: true,
+      })
+      const idxRes = await nativeHttp({
+        sessionId,
+        method: 'GET',
+        url: `${EAMS_BASE}/courseTableForStd!innerIndex.action?projectId=${projectId}`,
+        followRedirects: true,
+      })
+      const idxHtml = b64ToText(idxRes?.bodyBase64)
+      const idsMatch = /"ids","([^"]+)"/.exec(idxHtml)
+      if (!idsMatch) continue
+      const ids = idsMatch[1]
+
       const tblRes = await nativeHttp({
         sessionId,
         method: 'POST',
         url: `${EAMS_BASE}/courseTableForStd!courseTable.action`,
         form: {
           ignoreHead: '1',
-          settingKind: 'std',
+          'setting.kind': 'std',
           startWeek: '',
           'semester.id': semesterId,
-          'project.id': projectId,
           ids,
         },
         followRedirects: true,
       })
       const html = b64ToText(tblRes?.bodyBase64)
-      if (html && /activity\s*=\s*new\s+TaskActivity|课表|courseTable/.test(html)) {
+      if (html && /TaskActivity/.test(html)) {
         coursesHtml = html
-        if (/TaskActivity/.test(html)) break
+        break
+      }
+      if (html && !coursesHtml) {
+        coursesHtml = html
       }
     }
 

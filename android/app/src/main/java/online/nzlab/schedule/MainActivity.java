@@ -510,7 +510,7 @@ public class MainActivity extends AppCompatActivity {
                     HttpURLConnection conn = null;
                     int status = 0;
 
-                    for (int hop = 0; hop < 8; hop++) {
+                    for (int hop = 0; hop < 12; hop++) {
                         URL u = new URL(curUrl);
                         conn = (HttpURLConnection) u.openConnection();
                         conn.setInstanceFollowRedirects(false);

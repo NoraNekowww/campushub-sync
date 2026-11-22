@@ -149,14 +149,14 @@ def create_app() -> FastAPI:
     async def app_version() -> JSONResponse:
         return JSONResponse(
             content={
-                "version": "2.9.6",
-                "tag": "v2.9.6",
-                "title": "CampusHub Android v2.9.6",
+                "version": "2.9.7",
+                "tag": "v2.9.7",
+                "title": "CampusHub Android v2.9.7",
                 "download_url": "https://nzlab.online/schedule/CampusHub.apk",
                 "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
                 "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
                 "features": [
-                    "Android 系统返回手势与 Esc 键优先关闭课程详情卡片、编辑/快捷新建弹窗、更新弹窗、搜索栏、展开的日程详情与设置页，仅在主界面连按两次才退出应用",
+                    "修复离线与在线模式下 Android 手机直连天大教务抓课表的 EAMS 表单字段/学期选择与在线直连路由问题",
                 ],
             },
             headers={

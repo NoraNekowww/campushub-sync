@@ -91,7 +91,7 @@ def _take_pending(captcha_id: str) -> Optional[PendingCaptcha]:
 
 def _client(timeout: float, cookies: Optional[httpx.Cookies] = None) -> httpx.AsyncClient:
     kwargs: dict[str, Any] = {
-        "timeout": timeout,
+        "timeout": httpx.Timeout(timeout, connect=min(8.0, float(timeout))),
         "follow_redirects": False,
         "headers": {"User-Agent": UA, "Accept-Language": "zh-CN,zh;q=0.9"},
     }

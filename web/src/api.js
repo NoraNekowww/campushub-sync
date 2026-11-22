@@ -304,8 +304,8 @@ export const api = {
   tjuClearImport: () => request('/tju/import', { method: 'DELETE' }),
   /* --------------------------------------------- 教务系统（CAS 直连，主路径）*/
   jwStatus: () => request('/tju/jw/status'),
-  jwImport: (payload) => request('/tju/jw/import', { method: 'POST', body: payload }),
-  jwCaptcha: () => request('/tju/jw/captcha', { method: 'POST' }),
+  jwImport: (payload) => request('/tju/jw/import', { method: 'POST', body: payload, timeoutMs: 90000 }),
+  jwCaptcha: () => request('/tju/jw/captcha', { method: 'POST', timeoutMs: 25000 }),
   /* 离线模式的课表换算：匿名、不落库，只把解析好的事件数组还给本机 */
   jwLocalImport: (payload) =>
     request('/tju/jw/local/import', { method: 'POST', body: payload, timeoutMs: 90000 }),
