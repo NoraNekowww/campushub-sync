@@ -8,26 +8,49 @@
     >
       <div
         class="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-3xl p-5 shadow-2xl transition-all
-               border border-white/60 bg-white/80 dark:border-white/10 dark:bg-slate-900/85
+               border border-white/60 bg-white/85 dark:border-white/10 dark:bg-slate-900/90
                backdrop-blur-2xl [transform:translateZ(0)]"
       >
         <header class="flex items-start gap-2">
           <div class="min-w-0 flex-1">
-            <!-- 格子里只能挤下一行标题，这里放开：点一下就是为了看清楚 -->
+            <!-- DDL 状态与倒计时徽章 -->
+            <div v-if="event.is_deadline" class="mb-2 flex flex-wrap items-center gap-1.5">
+              <span
+                class="chip border-transparent bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200 text-[11px] font-semibold"
+              >
+                截止任务 · DDL
+              </span>
+              <span
+                v-if="ddlCountdown"
+                class="chip border-transparent text-[11px] font-semibold"
+                :class="
+                  ddlCountdown.tone === 'danger'
+                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'
+                    : ddlCountdown.tone === 'warn'
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+                      : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                "
+              >
+                {{ ddlCountdown.text }}
+              </span>
+            </div>
+
             <p class="text-xl font-bold leading-snug text-slate-900 dark:text-white" data-testid="class-detail-title">
               {{ event.title }}
             </p>
 
-            <!-- 时间展示：字号加大加粗，配胶囊底色更清晰醒目 -->
+            <!-- 时间展示 -->
             <div
               class="mt-3 flex items-center gap-2.5 rounded-2xl bg-slate-100/80 px-3.5 py-2.5 text-base font-bold text-slate-800 dark:bg-slate-800/60 dark:text-slate-100 border border-slate-200/60 dark:border-slate-700/40"
               data-testid="class-detail-time"
             >
               <Clock :size="18" class="shrink-0 text-brand-600 dark:text-brand-400" />
-              <span class="tracking-tight font-mono">{{ timeRange }}</span>
+              <span class="tracking-tight font-mono">
+                {{ event.is_deadline && !event.end_time ? `截止：${timeRange}` : timeRange }}
+              </span>
             </div>
 
-            <!-- 地点展示：更大字号并带高亮底衬，一眼看清教室与校区（待办 DDL 无地点，不显示） -->
+            <!-- 地点展示 -->
             <div
               v-if="event.location"
               class="mt-2.5 flex items-center gap-2.5 rounded-2xl bg-brand-50/90 px-3.5 py-2.5 text-[15px] font-bold text-brand-900 dark:bg-brand-950/50 dark:text-brand-200 border border-brand-200/80 dark:border-brand-500/30"
@@ -63,7 +86,6 @@
           </div>
         </dl>
 
-        <!-- 备注：老师、地点这些能编进 description 的都在这里；地点行已经被上层摘走了 -->
         <p
           v-if="noteText"
           class="mt-3 whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs leading-relaxed dark:bg-slate-800/50"
@@ -72,7 +94,7 @@
           {{ noteText }}
         </p>
 
-        <!-- 附件列表（支持点击直接下载/在线预览） -->
+        <!-- 附件列表 -->
         <div
           v-if="event.attachments && event.attachments.length"
           class="mt-3 space-y-1.5 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-800/50"
@@ -100,8 +122,9 @@
           </div>
         </div>
 
-        <!-- 附带开始时 DDL 独立点击卡片（卡片化入口，点击自动预填课程时刻并进入 DDL 设定） -->
+        <!-- 附带开始时 DDL 独立点击卡片（仅课程与活动显示；已是 DDL 的条目不重复显示） -->
         <button
+          v-if="!event.is_deadline"
           type="button"
           class="mt-3.5 flex w-full items-center justify-between gap-3 rounded-2xl border border-brand-200/90
                  bg-brand-50/70 p-3 text-left transition-all hover:border-brand-400 hover:bg-brand-50
@@ -118,7 +141,7 @@
                 附带课程开始时 DDL
               </p>
               <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                在课程开始时刻（{{ timeRange.split(' - ')[0] || '上课时' }}）设置截止提醒
+                在课程开始时刻（{{ timeRange.split('–')[0] || '上课时' }}）设置截止提醒
               </p>
             </div>
           </div>
@@ -137,27 +160,47 @@
             <span>{{ isImportant ? '取消重点' : '标为重点' }}</span>
           </button>
           <button
-            class="btn-ghost !text-rose-600 dark:!text-rose-400"
+            class="btn-ghost !text-rose-600 dark:!text-rose-400 text-xs"
             :disabled="busy"
             data-testid="class-detail-remove"
             @click="remove"
           >
             {{ removeLabel }}
           </button>
-          <!-- 课表来源的课不给编辑：教务每次同步都会把本地改动盖回去（用户原话
-               「编辑了没地方显示」）。要改就在教务/微软那边改。 -->
-          <button
-            v-if="editable"
-            class="btn-primary ml-auto"
-            data-testid="class-detail-edit"
-            @click="edit"
-          >
-            <Pencil :size="14" />
-            编辑
-          </button>
-          <p v-else class="ml-auto text-[11px] text-slate-400" data-testid="class-detail-locked">
-            课表同步来的课不可编辑
-          </p>
+
+          <div class="ml-auto flex items-center gap-2">
+            <!-- 个人 DDL 与自定义日程支持直接在课表详情弹窗中一键划掉完成 -->
+            <button
+              v-if="editable"
+              type="button"
+              class="btn !py-2 !px-3 text-xs font-semibold transition-colors"
+              :class="
+                event.status === 'completed'
+                  ? 'border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                  : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs'
+              "
+              :disabled="busy"
+              data-testid="class-detail-complete"
+              @click="completeTask"
+            >
+              <CheckCircle2 :size="14" />
+              <span>{{ event.status === 'completed' ? '恢复未完成' : '划掉完成' }}</span>
+            </button>
+
+            <button
+              v-if="editable"
+              type="button"
+              class="btn-primary !py-2 !px-3 text-xs"
+              data-testid="class-detail-edit"
+              @click="edit"
+            >
+              <Pencil :size="14" />
+              <span>编辑</span>
+            </button>
+            <p v-else class="text-[11px] text-slate-400" data-testid="class-detail-locked">
+              课表同步来的课不可编辑
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -166,26 +209,12 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { Clock, FileText, MapPin, Paperclip, Pencil, Star, X } from 'lucide-vue-next'
+import { CheckCircle2, Clock, FileText, MapPin, Paperclip, Pencil, Star, X } from 'lucide-vue-next'
 import { api } from '../api'
-import { isImportantEvent, openCustomEditor, removeEvent, toggleImportantEvent } from '../store'
+import { isImportantEvent, notify, openCustomEditor, removeEvent, toggleCompleted, toggleImportantEvent } from '../store'
 import { useBackHandler } from '../utils/backNavigation'
+import { countdown } from '../utils/datetime'
 import { splitNoteMeta } from '../utils/note'
-
-const isImportant = computed(() => isImportantEvent(props.event))
-
-function toggleStar() {
-  if (props.event) {
-    toggleImportantEvent(props.event)
-  }
-}
-
-function formatAttachmentSize(size) {
-  if (!size) return '0 B'
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`
-}
 
 const props = defineProps({
   event: { type: Object, default: null },
@@ -193,10 +222,15 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const busy = ref(false)
+const isImportant = computed(() => isImportantEvent(props.event))
+const ddlCountdown = computed(() => (props.event?.is_deadline ? countdown(props.event.start_time) : null))
 
-const pad = (value) => String(value).padStart(2, '0')
+function toggleStar() {
+  if (props.event) {
+    toggleImportantEvent(props.event)
+  }
+}
 
-/** `2026-10-13T18:30:00` -> `18:30`；只有日期的时间（00:00）不写具体钟点。 */
 function clock(value) {
   if (!value) return ''
   const text = String(value)
@@ -205,7 +239,6 @@ function clock(value) {
   return hhmm === '00:00' ? '' : hhmm
 }
 
-/** 只给日期的条目（微软待办常见）不显示「00:00」，免得看着像半夜的任务。 */
 const dateText = computed(() => {
   const start = props.event?.start_time || ''
   const ymd = start.slice(0, 10)
@@ -224,8 +257,6 @@ const timeRange = computed(() => {
 })
 
 const periodText = computed(() => {
-  // periods 是**扁平的一对**起止节次，如 [4, 5]（一节课就是 [4]）——
-  // 别写成 spans.map(([a, b]) => ...)，那会去解构数字 4。
   const spans = props.event?.periods
   if (Array.isArray(spans) && spans.length) {
     const from = spans[0]
@@ -239,7 +270,7 @@ const periodText = computed(() => {
 const sourceText = computed(() => {
   const source = props.event?.source
   if (source === 'tju_schedule') return '天津大学课表'
-  return '个人日程'
+  return props.event?.is_deadline ? '个人待办 / DDL' : '个人日程'
 })
 
 const reminderText = computed(() => {
@@ -251,10 +282,7 @@ const reminderText = computed(() => {
   return `提前 ${Number.isInteger(hours) ? hours : hours.toFixed(1)} 小时`
 })
 
-/** 备注里除了地点行，还有「时长」那行也是我们自己写进去的，不往回显示。 */
 const noteText = computed(() => splitNoteMeta(props.event?.description || '').note)
-
-// 课表来源的课不给编辑：教务每次同步都会把本地改动盖回去（用户原话「编辑了没地方显示」）。
 const editable = computed(() => props.event?.source !== 'tju_schedule')
 
 const removeLabel = computed(() => {
@@ -275,11 +303,25 @@ function edit() {
   openCustomEditor(event)
 }
 
+async function completeTask() {
+  const event = props.event
+  if (!event) return
+  const wasCompleted = event.status === 'completed'
+  const title = event.title
+  busy.value = true
+  try {
+    close()
+    await toggleCompleted(event)
+    notify(wasCompleted ? `已恢复「${title}」为未完成` : `已划掉「${title}」`, 'ok')
+  } finally {
+    busy.value = false
+  }
+}
+
 function attachClassStartDdl() {
   const event = props.event
   if (!event) return
   close()
-  // 构建在课程开始时刻的 DDL 预填对象，隐藏重复任务选项，走标准 DDL 生成通道
   const draftDdl = {
     title: `[课前] ${event.title}`,
     start_time: event.start_time,
@@ -301,7 +343,4 @@ async function remove() {
   busy.value = false
   close()
 }
-
-/* pad 目前只在日期拼接里用到，留着方便以后加「星期几」*/
-void pad
 </script>

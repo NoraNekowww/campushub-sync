@@ -102,6 +102,18 @@ def query_events(
     return list(session.exec(stmt).all()), int(total or 0)
 
 
+def effective_updated_at(client_dt: Optional[datetime] = None) -> datetime:
+    """Monotonic server/client Last-Write-Wins timestamp (clamped to +5m to guard clock skew)."""
+    now = utcnow()
+    if client_dt is None:
+        return now
+    aware = as_aware(client_dt)
+    if aware is None:
+        return now
+    ceiling = now + timedelta(minutes=5)
+    return min(max(now, aware), ceiling)
+
+
 def patch_event(
     session: Session,
     event_id: str,
@@ -111,12 +123,15 @@ def patch_event(
     description: Optional[str] = None,
     location: Optional[str] = None,
     reminder_minutes: Optional[int] = None,
+    priority: Optional[int] = None,
+    is_deadline: Optional[bool] = None,
     hidden: Optional[bool] = None,
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
     clear_end_time: bool = False,
     attachments: Optional[str] = None,
     is_undated: Optional[bool] = None,
+    client_updated_at: Optional[datetime] = None,
 ) -> Optional[Event]:
     """User edits are sticky: ``local_override`` stops the next sync clobbering them.
 
@@ -129,9 +144,14 @@ def patch_event(
         return None
     changed = False
     if status is not None:
-        event.status = EventStatus(status).value
-        event.completed_at = utcnow() if event.status == EventStatus.completed.value else None
-        changed = True
+        next_status = EventStatus(status).value
+        if event.status != next_status:
+            event.status = next_status
+            event.completed_at = utcnow() if next_status == EventStatus.completed.value else None
+            changed = True
+        elif next_status == EventStatus.completed.value and event.completed_at is None:
+            event.completed_at = utcnow()
+            changed = True
     for field, value in (
         ("title", title),
         ("description", description),
@@ -141,10 +161,18 @@ def patch_event(
         if value is not None and getattr(event, field) != value:
             setattr(event, field, value)
             changed = True
+    if priority is not None:
+        clamped_prio = max(1, min(9, int(priority)))
+        if event.priority != clamped_prio:
+            event.priority = clamped_prio
+            changed = True
+    if is_deadline is not None and bool(is_deadline) != bool(event.is_deadline):
+        event.is_deadline = bool(is_deadline)
+        changed = True
     if start_time is not None:
         value = as_aware(start_time)
-        if event.start_time != value:
-            event.start_time = value
+        if as_aware(event.start_time) != value:
+            event.start_time = value  # type: ignore[assignment]
             changed = True
     if clear_end_time:
         if event.end_time is not None:
@@ -152,26 +180,34 @@ def patch_event(
             changed = True
     elif end_time is not None:
         value = as_aware(end_time)
-        if event.end_time != value:
+        if as_aware(event.end_time) != value:
             event.end_time = value
             changed = True
     if hidden is not None and bool(hidden) != bool(event.hidden):
         event.hidden = bool(hidden)
         changed = True
-    if attachments is not None:
+    if attachments is not None and event.attachments != attachments:
         event.attachments = attachments
         changed = True
     if is_undated is not None and bool(is_undated) != bool(event.is_undated):
         event.is_undated = bool(is_undated)
         changed = True
-    if changed:
+
+    target_ts = effective_updated_at(client_updated_at)
+    if changed or (client_updated_at is not None and as_aware(event.updated_at) < target_ts):
         event.local_override = True
-        event.updated_at = utcnow()
+        event.updated_at = target_ts
         session.add(event)
     return event
 
 
-def set_hidden(session: Session, event_id: str, hidden: bool = True) -> Optional[Event]:
+def set_hidden(
+    session: Session,
+    event_id: str,
+    hidden: bool = True,
+    *,
+    client_updated_at: Optional[datetime] = None,
+) -> Optional[Event]:
     """软删除 / 恢复。
 
     「删除」对来源是外部的事件（课表、微软待办）不能真删 —— 下一次同步会把它原样
@@ -179,7 +215,7 @@ def set_hidden(session: Session, event_id: str, hidden: bool = True) -> Optional
     ``sync_engine.upsert_events``），于是它从时间线和订阅日历里消失，并且同步
     也再不会把它挖出来。用户后悔时 ``set_hidden(..., False)`` 就恢复。
     """
-    return patch_event(session, event_id, hidden=hidden)
+    return patch_event(session, event_id, hidden=hidden, client_updated_at=client_updated_at)
 
 
 def event_counts(session: Session, user_id: Optional[int] = None) -> dict[str, int]:

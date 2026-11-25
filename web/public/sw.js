@@ -2,6 +2,8 @@
  *
  * Strategy
  *   • app shell / hashed assets → cache-first (they are immutable per build)
+ *   • wallpapers (same-origin & cross-origin Unsplash/CDN) → persistent cache-first
+ *     across SW versions (`campushub-wallpapers-v1`), ensuring instant 0ms background paint
  *   • navigation              → network-first, fall back to the cached shell
  *   • api/events|status|config (GET) → network-first with a stale fallback so the
  *     agenda still renders offline; everything else under the API is passthrough.
@@ -9,9 +11,10 @@
  * Every path is derived from the registration scope, so one bundle works both
  * at `/` (local, Docker) and at `/schedule/` (nzlab.online).
  */
-const VERSION = 'campushub-v99'
+const VERSION = 'campushub-v100'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
+const WALLPAPER_CACHE = 'campushub-wallpapers-v1'
 
 const BASE = new URL(self.registration.scope).pathname // '/', '/schedule/'
 const SHELL = [
@@ -22,6 +25,8 @@ const SHELL = [
   `${BASE}manifest.webmanifest`,
   `${BASE}widgets/today-template.json`,
   `${BASE}icons/icon-192.png`,
+  `${BASE}wallpapers/default-light.jpg`,
+  `${BASE}wallpapers/default-dark.jpg`,
 ]
 const API_PREFIX = `${BASE}api/`
 const CACHEABLE_API = ['events', 'status', 'config', 'widgets']
@@ -30,8 +35,6 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(SHELL_CACHE)
-      // Precache each entry on its own: one missing optional file must not
-      // abort the whole install (a failed install silently disables offline).
       .then((cache) => Promise.allSettled(SHELL.map((url) => cache.add(url))))
       .then(() => self.skipWaiting()),
   )
@@ -41,7 +44,11 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys()
-      await Promise.all(keys.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k)))
+      await Promise.all(
+        keys
+          .filter((k) => !k.startsWith(VERSION) && k !== WALLPAPER_CACHE)
+          .map((k) => caches.delete(k)),
+      )
       await self.clients.claim()
     })(),
   )
@@ -65,7 +72,9 @@ async function cacheFirst(request, cacheName) {
   const cached = await cache.match(request)
   if (cached) return cached
   const response = await fetch(request)
-  if (response && response.ok) cache.put(request, response.clone())
+  if (response && (response.ok || response.type === 'opaque')) {
+    cache.put(request, response.clone())
+  }
   return response
 }
 
@@ -74,7 +83,14 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return
 
   const url = new URL(request.url)
-  if (url.origin !== self.location.origin) return
+
+  // Cross-origin wallpaper image requests: persist in long-lived WALLPAPER_CACHE
+  if (url.origin !== self.location.origin) {
+    if (request.destination === 'image' || url.hostname.includes('unsplash.com')) {
+      event.respondWith(cacheFirst(request, WALLPAPER_CACHE))
+    }
+    return
+  }
 
   if (request.mode === 'navigate') {
     event.respondWith(
@@ -91,6 +107,11 @@ self.addEventListener('fetch', (event) => {
         }
       })(),
     )
+    return
+  }
+
+  if (url.pathname.startsWith(`${BASE}wallpapers/`)) {
+    event.respondWith(cacheFirst(request, WALLPAPER_CACHE))
     return
   }
 

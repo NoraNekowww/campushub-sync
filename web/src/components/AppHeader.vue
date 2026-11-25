@@ -84,7 +84,12 @@
           <Search :size="15" />
         </button>
 
-        <button class="btn-primary !h-8 !py-0 px-2.5 flex items-center justify-center gap-1.5 text-xs" :disabled="state.syncing" @click="runSync()">
+        <button
+          class="btn-primary !h-8 !py-0 px-2.5 flex items-center justify-center gap-1.5 text-xs"
+          data-testid="header-sync-btn"
+          :disabled="state.syncing"
+          @click="runSync()"
+        >
           <RefreshCw :size="13" :class="state.syncing ? 'animate-spin' : ''" />
           <span class="hidden sm:inline">{{ state.syncing ? '同步中' : '同步' }}</span>
         </button>

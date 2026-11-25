@@ -209,6 +209,10 @@ class EventCreateIn(BaseModel):
     repeat_interval: int = 1
     repeat_count: int = 1
     attachments: Optional[list[dict[str, Any]]] = None
+    #: 客户端生成的确定性 source_id（单条或重复系列），保证客户端与服务端从创建起共享唯一确定性主键
+    client_id: Optional[str] = Field(default=None, max_length=128)
+    client_ids: Optional[list[str]] = None
+    client_updated_at: Optional[datetime] = None
 
 
 class EventPatchIn(BaseModel):
@@ -217,6 +221,8 @@ class EventPatchIn(BaseModel):
     description: Optional[str] = None
     location: Optional[str] = None
     reminder_minutes: Optional[int] = None
+    priority: Optional[int] = None
+    is_deadline: Optional[bool] = None
     #: 软删除开关：``true`` = 从日历里拿掉（等同 DELETE），``false`` = 恢复（撤销）
     hidden: Optional[bool] = None
     #: 改时间（本地墙钟或带时区的 ISO 都行）。``None`` = 这一项不动。

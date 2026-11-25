@@ -11,6 +11,19 @@ const USER_SESSION_TOKEN_KEY = 'campushub.userSessionToken'
 /* 离线模式：不登录、不联网、数据只存在本机（隐私优先）。 */
 const OFFLINE_KEY = 'campushub.offlineMode'
 
+/** 服务端与本机时钟偏差估计（ms）：serverTime - Date.now()，消除手机时钟慢导致的 LWW 倒流 */
+let serverClockOffsetMs = 0
+export function getServerClockOffsetMs() {
+  return serverClockOffsetMs
+}
+export function noteServerTime(raw) {
+  if (!raw) return
+  const parsed = new Date(raw).getTime()
+  if (Number.isFinite(parsed) && parsed > 1700000000000) {
+    serverClockOffsetMs = parsed - Date.now()
+  }
+}
+
 export function isOfflineMode() {
   try {
     return localStorage.getItem(OFFLINE_KEY) === '1'
@@ -204,6 +217,10 @@ async function request(path, { method = 'GET', body, headers = {}, raw = false, 
         : `请求失败 (${response.status})`
     )
   }
+  try {
+    const dateHdr = response.headers.get('date')
+    if (dateHdr) noteServerTime(dateHdr)
+  } catch (e) {}
   if (raw) return response
   if (response.status === 204) return null
   const contentType = response.headers.get('content-type') || ''

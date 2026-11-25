@@ -1,15 +1,14 @@
 /**
- * 课程/日程去重。
+ * 课程/日程去重（ID 优先 + 外部课表源内容去重）。
  *
- * 病根：服务器上并排存着两套 id 体系 ——
- *   · 学期同步建立的 `hash(tju_schedule + "…w9:d2:p3-4:A202")`
- *   · 教务直连导入建立的 `hash(tju_schedule + "学期:课程:…")`
- * 同一节课于是有两个不同的 event id；一次 refresh 从 `/api/events` 拉回来两条，
- * 当日同步又写回本地缓存，列表里就出现两次。谁先清缓存谁看不到它。
- * 服务器现在已经只建一种 id，但老数据还在，前端再兜一层内容去重。
- *
- * 判重键、优先级、合并方式都放在这里，事件列表与周课表共用同一套。
+ * 原则：
+ * 1. 同一主键 `event.id` 永远只保留最后修改时间最新（LWW）的那一份，绝不并存新旧两份；
+ * 2. 外部课表源（`tju_schedule`）因历史两套 hash 可能产生不同 id，按 `start|title|location` 内容去重；
+ * 3. 用户自建日程（`source === 'custom'`）若都拥有正式服务器主键（非 `local_` 临时主键）且 `id` 不同，
+ *    视为两条独立日程，绝不按标题误合并吞没；仅当其中一条是旧版遗留 `local_` 临时项时才合并至正式主键。
  */
+
+import { parseEventModifiedMs } from './lww.js'
 
 /** 判断一条事件在「同一时刻、同一标题」下是否算同一条。 */
 export function duplicateKey(event) {
@@ -17,54 +16,92 @@ export function duplicateKey(event) {
   const start = String(event.start_time || '').slice(0, 16)
   const title = String(event.title || '').trim().toLowerCase()
   if (!start || !title) return ''
-  // 课表按「同一天同标题同地点」合并；DDL 没有地点概念，按「同标题同截止」合并
   const place = event.is_deadline ? '' : String(event.location || '').trim().toLowerCase()
   return `${start}|${title}|${place}`
 }
 
-/** 合并时字段的取舍顺序：课表来源、用户改过的、服务器 id 的优先。 */
 function rank(event) {
   if (!event) return -1
   let score = 0
-  // 课表来源比手抄的优先展示（有周次、地点、老师）
   if (event.source === 'tju_schedule') score += 4
-  // 用户改过/划过的必须留下，否则会「一刷新又变回未完成」
+  if (event.id && !String(event.id).startsWith('local_')) score += 3
   if (event.local_override) score += 2
   if (event.status === 'completed') score += 1
   return score
 }
 
-/**
- * 按内容去重，保留信息最全的那一条，同时把「完成」状态带过去。
- * 传入数组本身不被修改，返回新数组且保持原有顺序。
- */
+function mergeTwoEvents(a, b) {
+  const modA = parseEventModifiedMs(a)
+  const modB = parseEventModifiedMs(b)
+  // 同一 ID 时严格以最后修改时间（LWW）更新者为准
+  if (a.id && b.id && a.id === b.id) {
+    return modB >= modA ? { ...a, ...b } : { ...b, ...a }
+  }
+  const winner = rank(b) > rank(a) || (rank(b) === rank(a) && modB > modA) ? b : a
+  const loser = winner === b ? a : b
+  const merged = { ...loser, ...winner }
+  // 若两者中修改时间严格更新的一方改过完成态，或同分时有一方已划掉，保留最新完成状态
+  if (modA !== modB) {
+    const newer = modB > modA ? b : a
+    if (newer.status) {
+      merged.status = newer.status
+      merged.completed_at = newer.status === 'completed' ? newer.completed_at || merged.completed_at : null
+    }
+  } else if (loser.status === 'completed' && winner.status !== 'completed') {
+    merged.status = 'completed'
+    merged.completed_at = loser.completed_at || merged.completed_at
+  }
+  if (loser.attachments && loser.attachments.length && !(winner.attachments || []).length) {
+    merged.attachments = loser.attachments
+  }
+  return merged
+}
+
+function shouldContentDedupe(prev, curr) {
+  if (!prev || !curr) return false
+  if (prev.id && curr.id && prev.id === curr.id) return true
+  const prevTemp = String(prev.id || '').startsWith('local_')
+  const currTemp = String(curr.id || '').startsWith('local_')
+  if (prevTemp || currTemp) return true
+  // 两条都有正式不同 ID 的个人自定义日程绝不互相吞并
+  if (prev.source === 'custom' && curr.source === 'custom') return false
+  return true
+}
+
 export function dedupeEvents(events = []) {
   const list = Array.isArray(events) ? events : []
+  // 第一趟：按主键 id 严格归一（保证每个 id 全局唯一且处于最新修改状态）
+  const byId = new Map()
+  const noId = []
+  for (const ev of list) {
+    if (!ev || ev.hidden) continue
+    if (!ev.id) {
+      noId.push(ev)
+      continue
+    }
+    const prev = byId.get(ev.id)
+    byId.set(ev.id, prev ? mergeTwoEvents(prev, ev) : ev)
+  }
+
+  // 第二趟：针对外部课表源及遗留 local_ 临时项做内容去重
   const slots = new Map()
-  list.forEach((event, index) => {
+  let uniqSeq = 0
+  for (const event of [...byId.values(), ...noId]) {
     const key = duplicateKey(event)
     if (!key) {
-      // 无法判定（缺标题或缺时间）的条目一律保留，宁多勿丢
-      slots.set(`__raw__${index}`, event)
-      return
+      slots.set(`__raw__${uniqSeq++}`, event)
+      continue
     }
     const prev = slots.get(key)
     if (!prev) {
       slots.set(key, event)
-      return
+      continue
     }
-    const winner = rank(event) > rank(prev) ? event : prev
-    const loser = winner === event ? prev : event
-    const merged = { ...loser, ...winner }
-    // 被划掉的一条即便信息更少，也要把完成状态带过去
-    if (loser.status === 'completed' && winner.status !== 'completed') {
-      merged.status = 'completed'
-      merged.completed_at = loser.completed_at || merged.completed_at
+    if (shouldContentDedupe(prev, event)) {
+      slots.set(key, mergeTwoEvents(prev, event))
+    } else {
+      slots.set(`${key}#${event.id || uniqSeq++}`, event)
     }
-    if (loser.attachments && loser.attachments.length && !(winner.attachments || []).length) {
-      merged.attachments = loser.attachments
-    }
-    slots.set(key, merged)
-  })
+  }
   return [...slots.values()]
 }

@@ -152,7 +152,7 @@ import EmptyState from '../components/EmptyState.vue'
 import ArchiveList from '../components/ArchiveList.vue'
 import EventCard from '../components/EventCard.vue'
 import SkeletonList from '../components/SkeletonList.vue'
-import { filterEvents, notify, openCustomEditor, refresh, removeEvent, state, toggleCompleted } from '../store'
+import { filterEvents, notify, openCustomEditor, openSettingsSubpage, refresh, removeEvent, state, toggleCompleted } from '../store'
 import { dedupeEvents } from '../utils/dedupe'
 import { groupByDay, todayKey, dayKey } from '../utils/datetime'
 
@@ -275,6 +275,10 @@ const hasConnected = computed(() => {
 })
 
 function goToSection(anchorId) {
+  if (anchorId === 'tju-section') {
+    openSettingsSubpage('timetable')
+    return
+  }
   state.view = 'settings'
   setTimeout(() => {
     const el = document.getElementById(anchorId)

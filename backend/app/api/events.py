@@ -64,6 +64,7 @@ def list_events(
     status: Optional[str] = Query(default=None, pattern="^(pending|completed)$"),
     is_deadline: Optional[bool] = Query(default=None),
     undated: bool = Query(default=False, description="true = 只取「无截止时间待办」（可办事项）"),
+    include_hidden: bool = Query(default=False, description="true = 一并返回软删除墓碑供客户端按 ID + 时间戳同步"),
     search: Optional[str] = Query(default=None, max_length=120),
     limit: int = Query(default=500, ge=1, le=2000),
     offset: int = Query(default=0, ge=0),
@@ -99,6 +100,7 @@ def list_events(
         limit=limit,
         offset=offset,
         user_id=user.id,
+        include_hidden=include_hidden,
         undated_only=undated,
     )
     tz = settings.timezone
@@ -123,6 +125,68 @@ def get_event(
     return EventOut.from_event(event, tz=get_settings().timezone)
 
 
+def _upsert_custom_event(
+    session: Session,
+    *,
+    user_id: Optional[int],
+    sid: str,
+    payload: EventCreateIn,
+    cur_start: datetime,
+    cur_end: Optional[datetime],
+    eff_updated: datetime,
+    raw_json: str,
+) -> Event:
+    ev_id = make_event_id(Source.custom, sid)
+    existing = session.get(Event, ev_id)
+    if existing is not None and existing.user_id != user_id:
+        sid = f"{sid}-u{user_id}"
+        ev_id = make_event_id(Source.custom, sid)
+        existing = session.get(Event, ev_id)
+
+    attachments_json = json.dumps(payload.attachments, ensure_ascii=False) if payload.attachments else None
+    if existing is not None:
+        # 幂等去重 + LWW：重试队列重复投递同一 client_id 时，按最后修改时间裁决而不重复插新行
+        if as_aware(existing.updated_at) <= eff_updated:
+            existing.title = payload.title.strip()
+            existing.description = payload.description
+            existing.start_time = cur_start
+            existing.end_time = cur_end
+            existing.is_deadline = payload.is_deadline
+            existing.is_undated = payload.is_undated
+            existing.location = payload.location
+            existing.priority = max(1, min(9, payload.priority))
+            existing.reminder_minutes = payload.reminder_minutes
+            existing.attachments = attachments_json
+            existing.local_override = True
+            existing.updated_at = eff_updated
+            session.add(existing)
+        return existing
+
+    ev = Event(
+        id=ev_id,
+        source=Source.custom.value,
+        source_id=sid,
+        user_id=user_id,
+        title=payload.title.strip(),
+        description=payload.description,
+        start_time=cur_start,
+        end_time=cur_end,
+        is_deadline=payload.is_deadline,
+        is_undated=payload.is_undated,
+        location=payload.location,
+        status=EventStatus.pending.value,
+        priority=max(1, min(9, payload.priority)),
+        reminder_minutes=payload.reminder_minutes,
+        local_override=True,  # locally authored — sync must never touch it
+        attachments=attachments_json,
+        updated_at=eff_updated,
+        created_at=eff_updated,
+        raw=raw_json,
+    )
+    session.add(ev)
+    return ev
+
+
 @router.post(
     "",
     response_model=Union[EventOut, EventCreateResultOut],
@@ -143,12 +207,14 @@ def create_event(
     repeat_count = max(1, min(100, payload.repeat_count or 1))
 
     events_to_create: list[Event] = []
+    eff_updated = event_service.effective_updated_at(payload.client_updated_at)
     base_ts = utcnow().timestamp()
     duration = (end - start) if end else None
     series_uuid = uuid4().hex[:8]
     rec_group_id = f"rec-{int(base_ts * 1000)}-{series_uuid[:6]}"
 
     if repeat_freq in ("day", "week", "month") and repeat_count > 1:
+        provided_ids = payload.client_ids if isinstance(payload.client_ids, list) else []
         for i in range(repeat_count):
             if repeat_freq == "day":
                 cur_start = start + timedelta(days=i * repeat_interval)
@@ -158,28 +224,17 @@ def create_event(
                 cur_start = _add_months(start, i * repeat_interval)
             cur_end = (cur_start + duration) if duration else None
 
-            # 采用毫秒戳 + 系列随机后缀，同一系列内索引唯一，彻底杜绝主键冲突
-            sid = f"custom-{int(base_ts * 1000)}-{series_uuid}-{i+1}"
-            ev = Event(
-                id=make_event_id(Source.custom, sid),
-                source=Source.custom.value,
-                source_id=sid,
+            raw_cid = str(provided_ids[i]).strip()[:120] if i < len(provided_ids) and provided_ids[i] else ""
+            sid = raw_cid or f"custom-{int(base_ts * 1000)}-{series_uuid}-{i+1}"
+            ev = _upsert_custom_event(
+                session,
                 user_id=user.id,
-                title=payload.title.strip(),
-                description=payload.description,
-                start_time=cur_start,
-                end_time=cur_end,
-                is_deadline=payload.is_deadline,
-                is_undated=payload.is_undated,
-                location=payload.location,
-                status=EventStatus.pending.value,
-                priority=max(1, min(9, payload.priority)),
-                reminder_minutes=payload.reminder_minutes,
-                local_override=True,  # locally authored — sync must never touch it
-                attachments=json.dumps(payload.attachments, ensure_ascii=False) if payload.attachments else None,
-                updated_at=utcnow(),
-                created_at=utcnow(),
-                raw=json.dumps(
+                sid=sid,
+                payload=payload,
+                cur_start=cur_start,
+                cur_end=cur_end,
+                eff_updated=eff_updated,
+                raw_json=json.dumps(
                     {
                         "origin": "api",
                         "recurrence": {
@@ -193,33 +248,20 @@ def create_event(
                     ensure_ascii=False,
                 ),
             )
-            session.add(ev)
             events_to_create.append(ev)
     else:
-        # 采用毫秒戳 + 随机后缀，彻底杜绝主键碰撞
-        sid = f"custom-{int(base_ts * 1000)}-{series_uuid}"
-        ev = Event(
-            id=make_event_id(Source.custom, sid),
-            source=Source.custom.value,
-            source_id=sid,
+        raw_cid = (payload.client_id or "").strip()[:120]
+        sid = raw_cid or f"custom-{int(base_ts * 1000)}-{series_uuid}"
+        ev = _upsert_custom_event(
+            session,
             user_id=user.id,
-            title=payload.title.strip(),
-            description=payload.description,
-            start_time=start,
-            end_time=end,
-            is_deadline=payload.is_deadline,
-            is_undated=payload.is_undated,
-            location=payload.location,
-            status=EventStatus.pending.value,
-            priority=max(1, min(9, payload.priority)),
-            reminder_minutes=payload.reminder_minutes,
-            local_override=True,  # locally authored — sync must never touch it
-            attachments=json.dumps(payload.attachments, ensure_ascii=False) if payload.attachments else None,
-            updated_at=utcnow(),
-            created_at=utcnow(),
-            raw=json.dumps({"origin": "api"}, ensure_ascii=False),
+            sid=sid,
+            payload=payload,
+            cur_start=start,
+            cur_end=end,
+            eff_updated=eff_updated,
+            raw_json=json.dumps({"origin": "api"}, ensure_ascii=False),
         )
-        session.add(ev)
         events_to_create.append(ev)
 
     session.commit()
@@ -424,8 +466,7 @@ async def update_event(
     if payload.client_updated_at and owned.updated_at:
         client_ts = as_aware(payload.client_updated_at)
         server_ts = as_aware(owned.updated_at)
-        # 若客户端修改时间比当前服务端的还旧（早于 1 秒以上），不接受旧改动覆盖
-        if client_ts < server_ts - timedelta(seconds=1):
+        if client_ts and server_ts and client_ts < server_ts:
             return EventOut.from_event(owned, tz=get_settings().timezone)
 
     start = as_stored(payload.start_time, assume=get_tz()) if payload.start_time else None
@@ -474,10 +515,13 @@ async def update_event(
                 description=payload.description,
                 location=payload.location,
                 reminder_minutes=payload.reminder_minutes,
+                priority=payload.priority,
+                is_deadline=payload.is_deadline,
                 hidden=payload.hidden,
                 start_time=sib_start,
                 end_time=sib_end,
                 clear_end_time=payload.clear_end_time,
+                client_updated_at=payload.client_updated_at,
             )
         session.commit()
         session.refresh(owned)
@@ -491,12 +535,15 @@ async def update_event(
         description=payload.description,
         location=payload.location,
         reminder_minutes=payload.reminder_minutes,
+        priority=payload.priority,
+        is_deadline=payload.is_deadline,
         hidden=payload.hidden,
         start_time=start,
         end_time=end,
         clear_end_time=payload.clear_end_time,
         attachments=json.dumps(payload.attachments, ensure_ascii=False) if payload.attachments is not None else None,
         is_undated=payload.is_undated,
+        client_updated_at=payload.client_updated_at,
     )
     if event is None:
         raise HTTPException(status_code=404, detail="event not found")
@@ -526,6 +573,7 @@ async def update_event(
 async def delete_event(
     event_id: str,
     apply_scope: str = Query(default="single", pattern="^(single|all|future)$"),
+    client_updated_at: Optional[datetime] = Query(default=None),
     session: Session = Depends(get_session),
     user: User = Depends(timeline_owner),
 ) -> EventOut:
@@ -534,6 +582,12 @@ async def delete_event(
     if owned is None or owned.user_id != user.id:
         raise HTTPException(status_code=404, detail="event not found")
 
+    if client_updated_at and owned.updated_at:
+        c_ts = as_aware(client_updated_at)
+        s_ts = as_aware(owned.updated_at)
+        if c_ts and s_ts and c_ts < s_ts:
+            return EventOut.from_event(owned, tz=get_settings().timezone)
+
     group_id = _recurrence_group_of(owned)
     if apply_scope in ("all", "future") and group_id:
         all_user_events = session.exec(select(Event).where(Event.user_id == user.id)).all()
@@ -541,25 +595,16 @@ async def delete_event(
         if apply_scope == "future":
             siblings = [ev for ev in siblings if ev.start_time >= owned.start_time]
         for sib in siblings:
-            event_service.patch_event(session, sib.id, hidden=True)
+            event_service.patch_event(session, sib.id, hidden=True, client_updated_at=client_updated_at)
         session.commit()
         session.refresh(owned)
         return EventOut.from_event(owned, tz=get_settings().timezone)
-    """删除一条日程。
 
-    本地对任何来源都走「软删除」（隐藏 + ``local_override``）：时间线、统计、
-    订阅日历里立刻消失，同步也不会再把它拉回来，用户还能撤销（``PATCH
-    {"hidden": false}``）。
-
-    微软待办来源的额外**真删**远端那条 —— 用户明确要求「删除日程同步删微软」。
-    远端删除不可逆，所以响应里带上 ``ms_sync``，前端据此把「撤销」换掉：本地能
-    恢复，微软那边恢复不了。远端失败不影响本地删除，只在 ``ms_sync`` 里报错。
-    """
     event = session.get(Event, event_id)
     if event is None or event.user_id != user.id:
         raise HTTPException(status_code=404, detail="event not found")
     ms_sync = await push_ms_delete(event)
-    event_service.set_hidden(session, event_id, True)
+    event_service.set_hidden(session, event_id, True, client_updated_at=client_updated_at)
     session.commit()
     session.refresh(event)
     out = EventOut.from_event(event, tz=get_settings().timezone)

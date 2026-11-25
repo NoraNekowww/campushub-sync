@@ -106,11 +106,9 @@ html.has-custom-bg #app {
   will-change: transform, opacity;
 }
 
-/* 视口外网格列延迟渲染 (Containment & Content-Visibility) */
+/* 视口外网格列渲染隔离（支持 00:00–24:00 动态全天高度） */
 .week-day-col {
   contain: layout paint;
-  content-visibility: auto;
-  contain-intrinsic-size: 54px 540px;
 }
 
 /* 划掉任务时的轻量流畅动效：纯 GPU 合成层 scaleX 动画，零重排重绘 */

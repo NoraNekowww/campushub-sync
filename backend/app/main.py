@@ -149,14 +149,19 @@ def create_app() -> FastAPI:
     async def app_version() -> JSONResponse:
         return JSONResponse(
             content={
-                "version": "2.9.7",
-                "tag": "v2.9.7",
-                "title": "CampusHub Android v2.9.7",
+                "version": "2.9.8",
+                "tag": "v2.9.8",
+                "title": "CampusHub Android v2.9.8",
                 "download_url": "https://nzlab.online/schedule/CampusHub.apk",
                 "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
                 "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
                 "features": [
-                    "修复离线与在线模式下 Android 手机直连天大教务抓课表的 EAMS 表单字段/学期选择与在线直连路由问题",
+                    "壁纸自动写入软件本地缓存并内置默认高清壁纸，进入应用首帧即刻呈现背景图",
+                    "课表取消外层卡片改为全屏沉浸渲染，背景启用全高斯模糊；默认把「今天」放在第二列（可在设置切换按自然周）",
+                    "课表保持 8:00–21:00 默认可视范围，上下滑动可自由拓展浏览 0:00–24:00 全天时段",
+                    "课表内支持直接点击 DDL 截止线打开详情卡片，一键编辑或划掉完成",
+                    "设置页升级为二级菜单架构，并对已导入课表用户自动隐藏新手接入引导",
+                    "重构日程数据库同步引擎：客户端与云端共享确定性主键与单调时间戳（LWW + 软删除墓碑），彻底根治日程消失、划掉复活及修改后新老并存问题",
                 ],
             },
             headers={

@@ -1,37 +1,45 @@
 <template>
   <div class="relative min-h-full">
-    <!-- 全局背景图渲染层（图床按主题动态联动 + 遮罩与模糊度控制，与磨砂玻璃深度融合） -->
+    <!-- 全局背景图渲染层（首屏 0ms 读本地软件缓存/内置壁纸，课表视图全屏高斯模糊） -->
+    <div
+      v-if="state.backgroundConfig?.enabled && activeBgUrl"
+      class="pointer-events-none fixed inset-0 z-0 overflow-hidden"
+      data-testid="global-bg-layer"
+      aria-hidden="true"
+    >
+      <img
+        :src="activeBgUrl"
+        alt=""
+        class="absolute inset-0 h-full w-full object-cover transition-[filter,transform] duration-300 ease-out"
+        :style="bgLayerStyle"
+        referrerpolicy="no-referrer"
+        loading="eager"
+        decoding="sync"
+      />
+      <!-- 物理微遮罩层：课表全屏高斯模糊模式下进一步柔化对比度，深浅色均通透清晰 -->
       <div
-        v-if="state.backgroundConfig?.enabled && activeBgUrl"
-        class="pointer-events-none fixed inset-0 z-0 overflow-hidden"
-        aria-hidden="true"
-      >
-        <!-- 双通道加载：img 保证移动端/原生环境对跨域图床直链发起真实网络请求与解码 -->
-        <img
-          :src="activeBgUrl"
-          alt=""
-          class="absolute inset-0 h-full w-full object-cover transition-all duration-700 ease-out"
-          :style="bgLayerStyle"
-          referrerpolicy="no-referrer"
-          crossorigin="anonymous"
-          loading="eager"
-        />
-        <!-- 物理微遮罩层：消除浅色过度泛白，保证深浅色模式下课表文字与排版的高对比度清晰度 -->
-        <div
-          class="absolute inset-0 transition-colors duration-500"
-          :class="state.isDarkTheme ? 'bg-slate-950/35' : 'bg-slate-900/5'"
-        />
-        </div>
+        class="absolute inset-0 transition-colors duration-300"
+        :class="bgOverlayClass"
+      />
+    </div>
+    <!-- 关闭壁纸时，课表全屏模式仍保持柔和弥散高斯底衬 -->
+    <div
+      v-else-if="state.view === 'week'"
+      class="pointer-events-none fixed inset-0 z-0 bg-gradient-to-br from-brand-50/70 via-slate-100/90 to-indigo-50/70 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950/40"
+      aria-hidden="true"
+    />
 
     <AuthGate v-if="showGate" />
 
     <template v-else>
       <UpdateNotification />
-      <!-- 已全面采用账号体系与会话管理，取消全局 TokenBanner 阻断横幅 -->
 
       <AppHeader />
 
-      <main class="relative z-10 mx-auto max-w-3xl pb-28 pt-3">
+      <main
+        class="relative z-10"
+        :class="state.view === 'week' ? 'w-full p-0' : 'mx-auto max-w-3xl pb-28 pt-3'"
+      >
         <AgendaView v-show="state.view === 'agenda'" />
         <WeekView v-show="state.view === 'week'" />
         <TodoView v-show="state.view === 'todo' || state.view === 'history'" />
@@ -40,7 +48,6 @@
 
       <BottomNav />
 
-      <!-- 新建日程挪到右下角悬浮按钮（顶栏那个小 + 手机上够不着） -->
       <FloatingAdd />
 
       <EventEditor />
@@ -79,7 +86,6 @@ import AuthGate from './components/AuthGate.vue'
 import BottomNav from './components/BottomNav.vue'
 import FloatingAdd from './components/FloatingAdd.vue'
 import TodoQuickAdd from './components/TodoQuickAdd.vue'
-// TokenBanner 已停用，全局统一由 AuthGate 与 Session 处理
 import UpdateNotification from './components/UpdateNotification.vue'
 import AgendaView from './views/AgendaView.vue'
 import EventEditor from './components/EventEditor.vue'
@@ -92,6 +98,7 @@ import {
   bootstrap,
   closeAuthGate,
   fetchSession,
+  getCachedActiveBgUrl,
   initConnectivity,
   initFrostedGlass,
   initTheme,
@@ -100,29 +107,31 @@ import {
 } from './store'
 import { dispatchAppBack, setBackFallback } from './utils/backNavigation'
 
-/* The login wall only appears when the server says "accounts are on", the
-   visitor has no session *and* no shared token, and an API call was refused —
-   so an open deployment never sees it. */
 const showGate = computed(() => signInRequired())
 
-const activeBgUrl = computed(() => {
-  const cfg = state.backgroundConfig
-  if (!cfg?.enabled) return ''
-  if (state.isDarkTheme) {
-    return cfg.darkUrl || cfg.lightUrl || ''
-  }
-  return cfg.lightUrl || cfg.darkUrl || ''
-})
+const activeBgUrl = computed(() => getCachedActiveBgUrl())
 
 const bgLayerStyle = computed(() => {
   const cfg = state.backgroundConfig || {}
-  const opacity = (Number(cfg.opacity ?? 35) / 100).toFixed(2)
-  const blurPx = Number(cfg.blur ?? 0)
+  const isWeek = state.view === 'week'
+  const rawOpacity = Number(cfg.opacity ?? 35) / 100
+  const opacity = (isWeek ? Math.max(0.58, rawOpacity) : rawOpacity).toFixed(2)
+  // 课表全屏模式下背景强制启用全高斯模糊（>= 28px），消除卡片边框后依然温润通透不刺眼
+  const blurPx = isWeek ? Math.max(28, Number(cfg.blur ?? 0)) : Number(cfg.blur ?? 0)
   return {
     opacity,
-    filter: blurPx > 0 ? `blur(${blurPx}px)` : undefined,
-    transform: blurPx > 0 ? 'scale(1.05)' : undefined,
+    filter: blurPx > 0 ? `blur(${blurPx}px) saturate(125%)` : undefined,
+    transform: blurPx > 0 ? 'scale(1.08)' : undefined,
   }
+})
+
+const bgOverlayClass = computed(() => {
+  if (state.view === 'week') {
+    return state.isDarkTheme
+      ? 'bg-slate-950/45 backdrop-blur-xl'
+      : 'bg-white/30 backdrop-blur-xl'
+  }
+  return state.isDarkTheme ? 'bg-slate-950/35' : 'bg-slate-900/5'
 })
 
 const toastClass = computed(() => {
@@ -133,17 +142,13 @@ const toastClass = computed(() => {
   return 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
 })
 
-/* 左右滑动切页已移除：课表自己就要横向滚动，手势会打架（用户明确要求删掉）。
-   横向手势只用在日程卡片上：左右拖开 = 露出删除按钮（EventCard.vue）。 */
-
-/* 提示条上的动作按钮（比如删除后的「撤销」）：点一下就跑，然后收起提示。 */
 async function runToastAction() {
   const action = state.toast?.action
   state.toast = null
   if (action?.run) await action.run()
 }
 
-let lastMainView = 'agenda'
+let lastMainView = 'week'
 watch(
   () => state.view,
   (next, prev) => {
@@ -163,7 +168,11 @@ setBackFallback(() => {
     return true
   }
   if (state.view === 'settings') {
-    state.view = lastMainView || 'agenda'
+    if (state.settingsSubpage) {
+      state.settingsSubpage = null
+      return true
+    }
+    state.view = lastMainView || 'week'
     return true
   }
   if (state.view === 'history') {
@@ -187,7 +196,6 @@ onMounted(async () => {
   initConnectivity()
   await fetchSession()
   bootstrap()
-  // 打开 App 时静默续一次课表（本机记住了微北洋令牌、且上次抓取超过 6 小时才会真的发请求）。
   autoRefreshTju()
 })
 
