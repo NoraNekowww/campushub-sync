@@ -37,6 +37,8 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import androidx.webkit.WebViewAssetLoader;
 
 import java.io.InputStream;
@@ -46,12 +48,17 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import android.util.Base64;
 import org.json.JSONObject;
 
@@ -62,6 +69,16 @@ public class MainActivity extends AppCompatActivity {
     private static final String PREF_NAME = "campushub_auth";
     private static final String KEY_ADMIN_TOKEN = "admin_token";
     private static final String KEY_SESSION_TOKEN = "session_token";
+    private static final String KEY_LAST_CACHE_CLEAR_VC = "last_cache_clear_vc";
+    private static final Set<String> ALLOWED_STORE_KEYS = new HashSet<>(Arrays.asList(
+            "events_cache",
+            "sync_queue",
+            "deleted_ids",
+            "completed_overrides",
+            "config_cache",
+            "user_cache",
+            "prefs"
+    ));
 
     private WebView webView;
     private SwipeRefreshLayout swipeRefresh;
@@ -70,6 +87,9 @@ public class MainActivity extends AppCompatActivity {
     private ValueCallback<Uri[]> fileUploadCallback;
     private long lastBackPressMs = 0L;
     private final ExecutorService nativeHttpExecutor = Executors.newCachedThreadPool();
+    private final ExecutorService nativeStoreDiskExecutor = Executors.newSingleThreadExecutor();
+    private final ConcurrentHashMap<String, String> nativeStoreMemCache = new ConcurrentHashMap<>();
+    private File nativeStoreDir;
     private final ConcurrentHashMap<String, java.net.CookieManager> casCookieJars = new ConcurrentHashMap<>();
 
     private final ActivityResultLauncher<Intent> fileChooserLauncher =
@@ -105,6 +125,10 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        nativeStoreDir = new File(getFilesDir(), "campushub_store");
+        if (!nativeStoreDir.exists()) {
+            nativeStoreDir.mkdirs();
+        }
         swipeRefresh = findViewById(R.id.swipeRefresh);
         webView = findViewById(R.id.webView);
 
@@ -121,8 +145,12 @@ public class MainActivity extends AppCompatActivity {
         settings.setDatabaseEnabled(true);
         // 采用标准缓存策略（静态资源由本地 WebViewAssetLoader 闪存 0 延迟秒开，API 动态请求走网络并遵循 HTTP 缓存协议）
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        // 彻底清空过往旧版本残留的 WebView HTTP 磁盘脏缓存，确保动态 API 实时穿透
-        webView.clearCache(true);
+        // 仅在 App 升级（versionCode 变化）后清理一次 WebView HTTP 磁盘缓存，避免每次冷启动反复清空耗时
+        int currentVc = getPackageVersionCodeSafe();
+        if (prefs.getInt(KEY_LAST_CACHE_CLEAR_VC, -1) != currentVc) {
+            webView.clearCache(true);
+            prefs.edit().putInt(KEY_LAST_CACHE_CLEAR_VC, currentVc).apply();
+        }
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         // 允许加载跨域网络图片和各种图床
         settings.setBlockNetworkImage(false);
@@ -160,6 +188,10 @@ public class MainActivity extends AppCompatActivity {
                                          assetPath.endsWith(".js") ? "application/javascript" :
                                          assetPath.endsWith(".css") ? "text/css" :
                                          assetPath.endsWith(".png") ? "image/png" :
+                                         (assetPath.endsWith(".jpg") || assetPath.endsWith(".jpeg")) ? "image/jpeg" :
+                                         assetPath.endsWith(".svg") ? "image/svg+xml" :
+                                         assetPath.endsWith(".webp") ? "image/webp" :
+                                         assetPath.endsWith(".ico") ? "image/x-icon" :
                                          assetPath.endsWith(".json") || assetPath.endsWith(".webmanifest") ? "application/json" :
                                          "application/octet-stream";
 
@@ -358,6 +390,9 @@ public class MainActivity extends AppCompatActivity {
                     }
                     if (subPath.startsWith("icons/")) {
                         return getAssetResponse("web/" + subPath, "image/png");
+                    }
+                    if (subPath.startsWith("wallpapers/")) {
+                        return getAssetResponse("web/" + subPath, "image/jpeg");
                     }
                     if (subPath.equals("manifest.webmanifest")) {
                         return getAssetResponse("web/manifest.webmanifest", "application/manifest+json");
@@ -636,6 +671,67 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
+        public String readNativeStore(String key) {
+            if (key == null || !ALLOWED_STORE_KEYS.contains(key)) return "";
+            String mem = nativeStoreMemCache.get(key);
+            if (mem != null) return mem;
+            try {
+                File f = new File(nativeStoreDir, key + ".json");
+                if (!f.exists() || !f.isFile()) return "";
+                byte[] bytes;
+                try (FileInputStream fis = new FileInputStream(f)) {
+                    bytes = readAllBytes(fis);
+                }
+                String text = new String(bytes, StandardCharsets.UTF_8);
+                nativeStoreMemCache.put(key, text);
+                return text;
+            } catch (Exception e) {
+                Log.w(TAG, "readNativeStore failed for " + key, e);
+                return "";
+            }
+        }
+
+        @JavascriptInterface
+        public boolean writeNativeStore(String key, String value) {
+            if (key == null || !ALLOWED_STORE_KEYS.contains(key)) return false;
+            final String safeVal = value != null ? value : "";
+            nativeStoreMemCache.put(key, safeVal);
+            nativeStoreDiskExecutor.execute(() -> writeStoreFileAtomic(key, safeVal));
+            return true;
+        }
+
+        @JavascriptInterface
+        public void removeNativeStore(String key) {
+            if (key == null || !ALLOWED_STORE_KEYS.contains(key)) return;
+            nativeStoreMemCache.remove(key);
+            nativeStoreDiskExecutor.execute(() -> {
+                try {
+                    File f = new File(nativeStoreDir, key + ".json");
+                    if (f.exists()) f.delete();
+                    File tmp = new File(nativeStoreDir, key + ".json.tmp");
+                    if (tmp.exists()) tmp.delete();
+                } catch (Exception ignored) {}
+            });
+        }
+
+        @JavascriptInterface
+        public void clearNativeStore() {
+            nativeStoreMemCache.clear();
+            nativeStoreDiskExecutor.execute(() -> {
+                try {
+                    if (nativeStoreDir != null && nativeStoreDir.exists()) {
+                        File[] files = nativeStoreDir.listFiles();
+                        if (files != null) {
+                            for (File f : files) {
+                                f.delete();
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {}
+            });
+        }
+
+        @JavascriptInterface
         public String getAppVersion() {
             try {
                 return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
@@ -739,15 +835,66 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private int getPackageVersionCodeSafe() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                return (int) getPackageManager().getPackageInfo(getPackageName(), 0).getLongVersionCode();
+            } else {
+                return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
+            }
+        } catch (Exception e) {
+            return 1;
+        }
+    }
+
+    private void writeStoreFileAtomic(String key, String content) {
+        if (nativeStoreDir == null || key == null) return;
+        File target = new File(nativeStoreDir, key + ".json");
+        File tmp = new File(nativeStoreDir, key + ".json.tmp");
+        try {
+            byte[] data = content.getBytes(StandardCharsets.UTF_8);
+            try (FileOutputStream fos = new FileOutputStream(tmp, false)) {
+                fos.write(data);
+                fos.flush();
+                fos.getFD().sync();
+            }
+            if (!tmp.renameTo(target)) {
+                try (FileOutputStream fos = new FileOutputStream(target, false)) {
+                    fos.write(data);
+                    fos.flush();
+                    fos.getFD().sync();
+                }
+                tmp.delete();
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "writeStoreFileAtomic failed for " + key, e);
+        }
+    }
+
+    private void flushNativeStoreBlocking() {
+        try {
+            Future<?> barrier = nativeStoreDiskExecutor.submit(() -> {});
+            barrier.get(800, TimeUnit.MILLISECONDS);
+        } catch (Exception ignored) {}
+    }
+
     @Override
     protected void onPause() {
         super.onPause();
-        // 退出或切后台时，确保 Cookie 完整落盘保存
+        // 退出或切后台时，强制将 Cookie 与本地原子存储写入磁盘，防止强杀丢失
         CookieManager.getInstance().flush();
+        flushNativeStoreBlocking();
         if (webView != null) {
             webView.onPause();
         }
         TodayWidgetProvider.requestRefresh(this);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        CookieManager.getInstance().flush();
+        flushNativeStoreBlocking();
     }
 
     @Override
@@ -761,6 +908,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         CookieManager.getInstance().flush();
+        flushNativeStoreBlocking();
         if (webView != null) {
             webView.destroy();
         }

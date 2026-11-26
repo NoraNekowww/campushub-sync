@@ -145,10 +145,17 @@ async function request(path, { method = 'GET', body, headers = {}, raw = false, 
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
     const timer = controller ? setTimeout(() => controller.abort(), timeout) : null
 
+    const payloadStr = body && !isForm ? JSON.stringify(body) : undefined
+    const canKeepalive =
+      method !== 'GET' &&
+      !isForm &&
+      (!payloadStr || payloadStr.length <= 48000)
+
     try {
       response = await fetch(`${API_BASE}${path}`, {
         method,
         credentials: 'include',
+        keepalive: canKeepalive || undefined,
         signal: controller?.signal,
         cache: cache || undefined,
         headers: {
@@ -161,7 +168,7 @@ async function request(path, { method = 'GET', body, headers = {}, raw = false, 
           ...(token ? { 'X-Admin-Token': token, 'X-Subscribe-Token': token } : {}),
           ...headers,
         },
-        body: body ? (isForm ? body : JSON.stringify(body)) : undefined,
+        body: isForm ? body : payloadStr,
       })
       if (timer) clearTimeout(timer)
       break

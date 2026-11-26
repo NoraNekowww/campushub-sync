@@ -111,50 +111,6 @@
 
       <!-- --------------------------------- 子页 1：课表与教务导入 -->
       <template v-if="activeSubpage === 'timetable'">
-        <section class="card space-y-3 p-4" data-testid="week-anchor-section">
-          <header class="flex items-center gap-2">
-            <CalendarDays :size="15" class="text-brand-600 dark:text-brand-400" />
-            <h3 class="text-sm font-semibold">课表排列与显示偏好</h3>
-          </header>
-          <p class="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-            课表默认显示 8:00–21:00 核心时段，上下滑动可拓展查看 0:00–24:00 全天日程；下方可切换横向列对齐方式：
-          </p>
-          <div class="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              data-testid="anchor-today-second"
-              class="flex flex-col items-start rounded-xl border p-2.5 text-left transition"
-              :class="
-                state.weekAnchorMode !== 'monday_first'
-                  ? 'border-brand-500 bg-brand-50/70 text-brand-900 dark:bg-brand-500/20 dark:text-brand-100 font-semibold shadow-xs'
-                  : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'
-              "
-              @click="setWeekAnchorMode('today_second')"
-            >
-              <span class="text-xs">今天在第二列（默认）</span>
-              <span class="mt-0.5 text-[10px] font-normal text-slate-500 dark:text-slate-400">
-                首列昨天、次列今天，连看未来 5 天
-              </span>
-            </button>
-            <button
-              type="button"
-              data-testid="anchor-monday-first"
-              class="flex flex-col items-start rounded-xl border p-2.5 text-left transition"
-              :class="
-                state.weekAnchorMode === 'monday_first'
-                  ? 'border-brand-500 bg-brand-50/70 text-brand-900 dark:bg-brand-500/20 dark:text-brand-100 font-semibold shadow-xs'
-                  : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'
-              "
-              @click="setWeekAnchorMode('monday_first')"
-            >
-              <span class="text-xs">按自然周展示</span>
-              <span class="mt-0.5 text-[10px] font-normal text-slate-500 dark:text-slate-400">
-                固定周一在第一列（周一至周日）
-              </span>
-            </button>
-          </div>
-        </section>
-
         <section class="card space-y-3 p-4">
           <header class="flex items-center gap-2">
             <GraduationCap :size="15" class="text-brand-600 dark:text-brand-400" />
@@ -392,6 +348,51 @@
                   重置并清空壁纸
                 </button>
               </div>
+            </div>
+          </div>
+
+          <!-- 默认课表列显示模式 -->
+          <div class="space-y-2 border-t border-slate-100 pt-3 dark:border-slate-800" data-testid="week-anchor-section">
+            <div class="flex items-center justify-between">
+              <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                <CalendarDays :size="13" class="text-brand-500" />
+                <span>默认课表显示模式</span>
+              </label>
+              <span class="text-[10px] text-slate-400">可滑动拓展 0:00–24:00</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                data-testid="anchor-monday-first"
+                class="flex flex-col items-start rounded-xl border p-2.5 text-left transition"
+                :class="
+                  state.weekAnchorMode !== 'today_third'
+                    ? 'border-brand-500 bg-brand-50/70 text-brand-900 dark:bg-brand-500/20 dark:text-brand-100 font-semibold shadow-xs'
+                    : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'
+                "
+                @click="setWeekAnchorMode('monday_first')"
+              >
+                <span class="text-xs">本周视图（默认）</span>
+                <span class="mt-0.5 text-[10px] font-normal text-slate-500 dark:text-slate-400">
+                  固定周一在第一列（周一至周日）
+                </span>
+              </button>
+              <button
+                type="button"
+                data-testid="anchor-today-third"
+                class="flex flex-col items-start rounded-xl border p-2.5 text-left transition"
+                :class="
+                  state.weekAnchorMode === 'today_third'
+                    ? 'border-brand-500 bg-brand-50/70 text-brand-900 dark:bg-brand-500/20 dark:text-brand-100 font-semibold shadow-xs'
+                    : 'border-slate-200 hover:border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300'
+                "
+                @click="setWeekAnchorMode('today_third')"
+              >
+                <span class="text-xs">今天在第三列</span>
+                <span class="mt-0.5 text-[10px] font-normal text-slate-500 dark:text-slate-400">
+                  前天、昨天、今天居第三列，连续浏览
+                </span>
+              </button>
             </div>
           </div>
 
@@ -1084,7 +1085,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '2.9.8'
+  return '3.0.0'
 })
 
 const appVersionDisplay = clientAppVersion
@@ -1096,7 +1097,7 @@ const menuItems = computed(() => [
   {
     key: 'timetable',
     title: '课表与教务导入',
-    desc: `${state.weekAnchorMode === 'monday_first' ? '按自然周展示' : '今天固定在第二列'} · 天大教务直连与本地 .ics 导入`,
+    desc: '天大教务手机直连导入、本地 .ics 导入与学期首周校准',
     badge: hasImportedTimetable.value ? `已导入 ${importedCourseCount.value} 门` : '未导入',
     badgeClass: hasImportedTimetable.value
       ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
@@ -1108,7 +1109,7 @@ const menuItems = computed(() => [
   {
     key: 'appearance',
     title: '外观与壁纸',
-    desc: `${currentThemeColorName.value} · ${bgForm.enabled ? (bgForm.wallpaperTitle || '自定义壁纸') : '纯净底色'} · 网格与深浅模式`,
+    desc: `${currentThemeColorName.value} · ${state.weekAnchorMode === 'today_third' ? '今天在第三列' : '本周视图'} · ${bgForm.enabled ? (bgForm.wallpaperTitle || '自定义壁纸') : '纯净底色'}`,
     badge: '',
     badgeClass: '',
     icon: Palette,

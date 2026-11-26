@@ -1,389 +1,207 @@
-# CampusHub Sync — Agent 交接手册
+# CampusHub Sync — Agent 交接手册（v3.0.0）
 
-> **给接手开发的同学 / Agent**：这份文档是唯一入口。读完最后一节「红线与已知坑」再动手。
+> **给接手开发的同学 / Agent**：这份文档是唯一入口。先确认环境（§0），再按 §4–§6 开发发布，动手前务必读完 §7「红线与已知坑」。
 >
 > | 项 | 值 |
 > |---|---|
-> | 当前版本 | `v2.9.8`（Android `versionCode 100`，`sw.js` `campushub-v100`） |
-> | 下一版 | `v2.9.9`（versionCode `101`） |
+> | 当前版本 | `v3.0.0`（Android `versionCode 101`，`sw.js` `campushub-v101`） |
+> | 下一版 | `v3.0.1`（versionCode `102`） |
 > | 生产地址 | `https://nzlab.online/schedule/` |
 > | APK 直链 | `https://nzlab.online/schedule/CampusHub.apk` |
 > | 源码仓库 | `https://github.com/NoraNekowww/campushub-sync`（分支 `main`） |
 > | 本地工作区 | `E:\Agent_Workspace_Isolated\campussync` |
-> | VPS | `root@108.186.202.38`（**必须直连 IP**，域名套了 Cloudflare，22 端口会超时） |
-> | 交接日期 | 2026-11-17 |
+> | VPS | `root@108.186.202.38`（SSH 若直连失败可走本地 Clash SOCKS5 `127.0.0.1:7897`） |
+> | 更新日期 | 2026-11-26 |
 
 ---
 
-## 0. 先跑起来：三条命令确认环境
+## 0. 先跑起来：四条命令确认环境
 
 ```bash
 cd E:/Agent_Workspace_Isolated/campussync
-git status                       # 应当干净
-git log --oneline -3             # d0fb803 fix: rebuild web assets with schedule base path
-curl -s https://nzlab.online/schedule/api/version   # 应当返回 "version":"2.9.0"
+git status                                          # 应当干净
+curl -s https://nzlab.online/schedule/api/version   # 应当返回 "version":"3.0.0"
+cd web && node scripts/test_v300_scroll_and_persistence.mjs
 ```
-
-三样都通 → 环境正确，可以开工。任一不通 → 见文末「红线与已知坑」。
 
 ---
 
-## 1. 这是什么
+## 1. 系统架构全景（v3.0.0）
 
-面向大学生的**课表 + 日程 + 待办聚合系统**，一套数据三种前端：
+面向大学生的**全屏课表 + 日程 + DDL + 可办事项同步系统**，一套 Vue 前端同时服务 Web/PWA 与 Android 客户端：
 
 ```
-          ┌───────────────────────────┐
-          │ Android APK（Java + WebView）│  离线开屏，assets/web/ 内嵌同一份前端
-          └─────────────┬─────────────┘
-                        │ WebViewAssetLoader → https://appassets.androidplatform.net/schedule/
-          ┌─────────────▼─────────────┐
-          │  Vue 3 SPA / PWA（同一套码）│  https://nzlab.online/schedule/
-          └─────────────┬─────────────┘
-                        │ HTTPS，Cookie + X-Session-Token 双通道鉴权
-          ┌─────────────▼─────────────┐        ┌──────────────────────────┐
-          │ FastAPI (uvicorn :8010)    │───────▶│ 天大 SSO CAS + eams 教务  │
-          │ /var/www/schedule/backend  │        │ sso/classes.tju.edu.cn   │
-          └─────────────┬─────────────┘        └──────────────────────────┘
-                        │
+          ┌─────────────────────────────────────────────────────┐
+          │ Android APK（Java + WebView + WebViewAssetLoader）  │
+          │  • 本地 assets/web 0ms 离线秒开                     │
+          │  • NativeAuthBridge: 手机直连教务 HTTP + 原子落盘存储│
+          │  • 返回手势映射 window.__campushubHandleBack()       │
+          └──────────────────────┬──────────────────────────────┘
+                                 │ https://nzlab.online/schedule/api/* (keepalive + 双通道鉴权)
+          ┌──────────────────────▼──────────────────────────────┐
+          │  Vue 3 + Vite 5 + Tailwind（web/）                  │
+          │  • 课表全屏全高斯模糊 + 单轴锁定滑动 + 0:00-24:00   │
+          │  • 确定性主键（SHA-256 client_id）+ 单调时钟 LWW    │
+          │  • 本地壁纸缓存（Built-in + Snap + CacheStorage）   │
+          └──────────────────────┬──────────────────────────────┘
+                                 │ HTTPS，Cookie + X-Session-Token 双通道
+          ┌──────────────────────▼──────────────────────────────┐        ┌──────────────────────────┐
+          │ FastAPI (uvicorn :8010) /var/www/schedule/backend   │───────▶│ 天大 SSO CAS + EAMS 教务  │
+          │  • /api/events 确定性 upsert + client_updated_at    │        │ sso/classes.tju.edu.cn   │
+          │  • /api/tju/jw/local/parse 手机直连 HTML 离线换算   │        └──────────────────────────┘
+          └──────────────────────┬──────────────────────────────┘
+                                 │
               SQLite /var/www/schedule/data/campushub.db
 ```
 
-**前端只有一份**：`web/`。网页端和 APK 用的是同一套构建产物，只是 APK 把 `web/dist/` 拷进 `android/app/src/main/assets/web/` 里离线打包。所以**改 UI 只需改 `web/`，然后两边各自发布一次**。
-
-技术栈：Vue 3 + Vite 5 + Tailwind（前端）、FastAPI + SQLModel + SQLite（后端）、Java + WebViewAssetLoader（Android）、nginx（反代 + 静态）、systemd（守护）。
-
 ---
 
-## 2. 目录结构（只列要动的）
+## 2. 目录结构与 v3.0.0 核心模块说明
 
 ```
 campussync/
-├─ web/                          ← 前端全部源码，改 UI 只改这里
+├─ web/
 │  ├─ src/
-│  │  ├─ api.js                  API 基址探测 + 离线白名单 + 所有请求方法
-│  │  ├─ store.js                全局状态（最大单体文件，改动前必读）
-│  │  ├─ App.vue                 路由/视图切换（无 vue-router，state.view 手写）
+│  │  ├─ api.js                        API 请求层（自动注入 Session/Admin Token、mutating keepalive:true、Date 响应头时钟偏差估算）
+│  │  ├─ store.js                      全局响应式仓库（双写缓存 + 确定性 client_id + 0ms 立即回写 + 退后台冲刷）
+│  │  ├─ App.vue                       全局背景渲染（0ms 缓存命中）、全屏课表容器、全局高斯模糊、返回键分发
+│  │  ├─ style.css                     纯物理亚克力磨砂样式、45° 过去斜纹、呼吸冲突动画
 │  │  ├─ views/
-│  │  │  ├─ AgendaView.vue       线性日程列表（DDL/日程/含课表/历史归档 四个筛选）
-│  │  │  ├─ WeekView.vue         周课表，网格 + DDL 垂直定位 + 冲突呼吸轮换
-│  │  │  ├─ TodoView.vue         「可办事项」页（无截止待办）
-│  │  │  └─ SettingsView.vue     外观/账号/小部件
+│  │  │  ├─ WeekView.vue               全屏无卡片课表：单轴方向锁定（touch/wheel）、惯性回弹、8:00-21:00 默认锚定、0-24:00 扩展、本周(默认)/今天第三列、DDL 线可点击
+│  │  │  ├─ SettingsView.vue           二级菜单架构（课表与教务/外观与壁纸/账号与云同步/日历订阅/版本维护）；已导课表自动隐藏两步引导；「本周视图/今天在第三列」位于外观设置
+│  │  │  ├─ AgendaView.vue             线性日程列表（仅 DDL / 仅日程 / 含课表 / 历史归档）
+│  │  │  └─ TodoView.vue               无截止「可办事项」独立页
 │  │  ├─ components/
-│  │  │  ├─ AppHeader.vue        顶栏：标题（含计数）、搜索、同步、设置
-│  │  │  ├─ EventEditor.vue      日程/待办编辑器（最大的表单组件）
-│  │  │  ├─ EventCard.vue        列表卡片，左滑删除 / 右滑星标
-│  │  │  ├─ TjuConnect.vue       教务一键导入（在线 / 离线两套分支）
-│  │  │  ├─ TodoQuickAdd.vue     可办事项极简弹层（标题+备注）
-│  │  │  ├─ FilterBar.vue        日程栏筛选胶囊
-│  │  │  └─ AuthGate.vue         登录 / 注册 / 离线模式入口
-│  │  ├─ utils/
-│  │  │  ├─ dedupe.js            课程内容去重（两套 event id 体系的收口）
-│  │  │  ├─ parseScheduleText.js 自然语言识别（「明天下午三点开会」）
-│  │  │  ├─ datetime.js          时间工具（时间轴用）
-│  │  │  ├─ themeColors.js       主题色板（莫兰迪系）
-│  │  │  └─ wallpapers.js        背景图配置
-│  │  └─ composables/            手势 / 长按等复用逻辑
-│  ├─ public/                    sw.js、manifest、icons、widget.html
-│  └─ scripts/                   test_parse.mjs（55 例）、test_dedupe.mjs（10 例）
+│  │  │  ├─ ClassDetail.vue            课程与 DDL 共用详情卡（支持 DDL 倒计时、标星、编辑、直接划掉完成、删除）
+│  │  │  ├─ EventEditor.vue            新建/编辑弹窗（区分待办 DDL 与时段活动日程、重复日程）
+│  │  │  ├─ TjuConnect.vue             Android 在线/离线统一优先走手机直连教务 → /jw/local/parse → 本地或云端同步
+│  │  │  ├─ UpdateNotification.vue     应用内更新检查与 APK 唤起下载
+│  │  │  └─ ...
+│  │  └─ utils/
+│  │     ├─ lww.js                     同步 JS SHA-256 (`makeCustomEventId`)、单调时钟 `computeNextMutationIso`、`reconcileEventCollections` LWW+墓碑对齐引擎
+│  │     ├─ dualStorage.js             Web localStorage + Android `NativeAuthBridge` 原子文件双写与冷启动对账合并
+│  │     ├─ scrollLock.js              单轴意图判定 `resolveScrollAxis` 与水平整数列投影吸附 `projectColumnSnap`
+│  │     ├─ wallpaperCache.js          默认本地壁纸 + localStorage 同步压缩快照 + CacheStorage (`campushub-wallpapers-v1`)
+│  │     ├─ dedupe.js                  按 ID 归一 LWW，仅对外部课表源及遗留 `local_` 项做内容去重（互异正式 ID 的自建日程绝不误合并）
+│  │     ├─ tjuNativeClient.js         手机直连 TJU CAS + EAMS 表单（`setting.kind=std`、`index`→`innerIndex`→`courseTable`、正确学期选择）
+│  │     ├─ backNavigation.js          LIFO 返回栈，供 Android 返回键与桌面 Esc 调用
+│  │     └─ datetime.js / note.js / themeColors.js / wallpapers.js / icsParser.js / parseScheduleText.js
+│  ├─ public/
+│  │  ├─ wallpapers/default-{light,dark}.jpg   内置默认高清壁纸（0ms 首帧命中，随 APK 与 SW 预缓存）
+│  │  └─ sw.js                         Service Worker（跨版本保留 `campushub-wallpapers-v1`，图片 cache-first）
+│  └─ scripts/
+│     ├─ test_parse.mjs                55 项自然语言识别单测
+│     ├─ test_dedupe.mjs               10 项去重单测
+│     ├─ test_lww.mjs                  6 项 LWW 逻辑单测
+│     ├─ test_v295_utils.mjs           3 项工具单测
+│     ├─ test_tju_native.mjs           6 项手机直连 CAS/EAMS 模拟单测
+│     ├─ test_v298_sync_and_cache.mjs  6 项确定性 ID、LWW 墓碑与壁纸缓存单测
+│     └─ test_v300_scroll_and_persistence.mjs  单轴滑动锁定与 Android 双写恢复单测
 │
 ├─ backend/
 │  ├─ app/
-│  │  ├─ main.py                 FastAPI 装配、CORS、多租户 KV 中间件、/api/version
-│  │  ├─ api/                    路由：events / accounts / tju / schedule / sync /
-│  │  │                          attachments / calendar(ICS) / status / widgets / auth_ms
-│  │  ├─ services/               sync_engine、scheduler、ics_export、events
-│  │  ├─ connectors/             tju_cas / jw_eams / tju_schedule（解析）/ ms_todo / demo
-│  │  ├─ models.py schemas.py db.py     SQLModel 模型与 Pydantic 出入参
-│  │  ├─ security.py             会话鉴权、require_write、scope 绑定
-│  │  ├─ captcha.py              SVG 验证码（HMAC 令牌 + KV 一次性 nonce）
-│  │  └─ app_settings.py         KV 里的开关（注册门、邀请码等）
-│  └─ tests/                     pytest，155 项，必须全绿
+│  │  ├─ main.py                       FastAPI 装配、CORS、KV 多租户中间件、/api/version
+│  │  ├─ schemas.py                    EventCreateIn（含 `client_id`/`client_ids`/`client_updated_at`）与 EventPatchIn
+│  │  ├─ api/events.py                 `list_events(include_hidden=...)`、`create_event` 幂等确定性 upsert、`update_event`/`delete_event` LWW 时间戳防倒流
+│  │  ├─ services/events.py            `effective_updated_at` 与受保护字段更新
+│  │  └─ services/sync_engine.py       外部源 upsert 严守 `local_override` 保护字段
+│  └─ tests/
 │
 ├─ android/
-│  ├─ app/src/main/java/online/nzlab/schedule/
-│  │  ├─ MainActivity.java       WebView 容器、资产拦截、原生 JS 桥（版本号/下载安装）
-│  │  └─ TodayWidgetProvider.java 桌面小部件
-│  ├─ app/src/main/assets/web/   前端产物（由 web/dist 拷贝而来，**不要手改**）
-│  └─ app/build.gradle           versionCode / versionName / 签名
+│  ├─ app/src/main/java/online/nzlab/schedule/MainActivity.java
+│  │  ├─ WebViewAssetLoader（`.html/.js/.css/.jpg/.svg/.webp`）
+│  │  ├─ AuthBridge：CAS/EAMS 原生 HTTP、版本查询、APK 下载安装、Tokens 备份
+│  │  └─ **原生原子存储**（`readNativeStore`/`writeNativeStore`/`removeNativeStore`/`clearNativeStore`，写 `.tmp` + `getFD().sync()` + `renameTo`，`onPause`/`onStop`/`onDestroy` 阻塞刷盘至 `filesDir/campushub_store/*.json`）
+│  └─ app/build.gradle                 `versionCode 101` / `versionName "3.0.0"`
 │
-├─ deploy/
-│  ├─ nginx/nzlab.online.schedule.conf   /schedule/ 的 location 片段
-│  └─ systemd/                           campushub-sync.service
-└─ HANDOVER.md                   本文件
+└─ deploy/                             nginx 与 systemd 配置
 ```
 
 ---
 
-## 3. 如何访问
+## 3. 如何本地运行与验证
 
-### 3.1 线上（只读/体验）
-- 网页 / PWA：`https://nzlab.online/schedule/`
-- 健康检查：`https://nzlab.online/schedule/api/health`、`/api/version`
-- API 文档：`https://nzlab.online/schedule/api/docs`（FastAPI 自动生成）
-- APK：`https://nzlab.online/schedule/CampusHub.apk`
-
-### 3.2 本地开发（不需要碰服务器）
+### 3.1 本地跑全套前端单测与编译
 ```bash
 cd E:/Agent_Workspace_Isolated/campussync
+node web/scripts/test_parse.mjs
+node web/scripts/test_dedupe.mjs
+node web/scripts/test_lww.mjs
+node web/scripts/test_v295_utils.mjs
+node web/scripts/test_tju_native.mjs
+node web/scripts/test_v298_sync_and_cache.mjs
+node web/scripts/test_v300_scroll_and_persistence.mjs
 
-# 后端：另开一个终端
-cd backend
-pip install -r requirements.txt              # 首次
+# 构建前端并同步进 Android assets（绝对不能漏 VITE_BASE=/schedule/）
+export VITE_BASE=/schedule/
+npm --prefix web run build
+```
+
+### 3.2 后端开发与校验
+```bash
+cd E:/Agent_Workspace_Isolated/campussync/backend
+python -m py_compile app/main.py app/schemas.py app/api/events.py app/api/status.py app/services/events.py app/services/sync_engine.py
 python -m uvicorn app.main:app --reload --port 8099
-#   → http://127.0.0.1:8099/api/docs
-
-# 前端
-cd web
-npm install                                   # 首次
-npm run dev                                   # → http://127.0.0.1:5173
 ```
 
-`web/vite.config.js` 的 dev 模式把 `/api` 代理到 `VITE_DEV_API`，默认 `http://127.0.0.1:8000`。若后端起在 8099，这样启动：
-
-```bash
-cd web && VITE_DEV_API=http://127.0.0.1:8099 npm run dev
-```
-
-### 3.3 服务器
-```bash
-ssh nzlab.online          # ~/.ssh/config 已配好：直连 IP + 经本地 SOCKS 代理
-# 若报 "Unable to connect to relay host" → 本地 SOCKS 代理没起来，见 §7.1
-```
-
-服务器关键路径：
-| 用途 | 路径 |
-|---|---|
-| 前端静态根 | `/var/www/schedule/frontend/`（nginx alias 到此） |
-| 后端代码 | `/var/www/schedule/backend/app/` |
-| venv | `/var/www/schedule/venv/` |
-| 数据库 | `/var/www/schedule/data/campushub.db` |
-| 环境变量 | `/var/www/schedule/.env`（**含机密，只读不打印**） |
-| APK | `/var/www/schedule/CampusHub.apk` |
-| 服务 | `systemctl {status,restart} campushub-sync`；日志 `journalctl -u campushub-sync -n 100` |
-| nginx 片段 | 已 include 进 `/etc/nginx/sites-enabled/default`；源文件 `deploy/nginx/nzlab.online.schedule.conf` |
-
----
-
-## 4. 如何修改这个网站
-
-### 4.1 改 UI（90% 的需求都在这里）
-1. 改 `web/src/` 下的文件；
-2. `cd web && npm run dev` 看效果；
-3. 跑测试：`node scripts/test_parse.mjs`、`node scripts/test_dedupe.mjs`；
-4. `VITE_BASE=/schedule/ npm run build`；
-5. 按 §5.1 部署。
-
-**只改样式/文案**：一般只碰 `views/*.vue` 的模板与 `class`。项目统一用 Tailwind 原子类 + `dark:` 变体；磨砂玻璃（`backdrop-blur`）默认**关闭**且不在 UI 暴露开关（见 §7 红线）。
-
-### 4.2 改接口
-后端所有路由挂在 `/api` 前缀下（`backend/app/api/__init__.py` 汇总）。加接口：
-1. 在对应 `api/*.py` 里加 `@router.get/post`；
-2. 出入参走 `schemas.py` 的 Pydantic 模型；
-3. 写操作要挂 `Depends(require_write)`（登录会话或 `X-Admin-Token` 均可）；
-4. **多租户**：所有 KV 读写自动按请求方账号隔离（`main.py` 的 `bind_kv_scope` 中间件），新代码照常用 `KVStore()` 即可，不要绕开；
-5. 补测试到 `backend/tests/`，跑 `python -m pytest tests -q`（应 155+ 全绿）。
-
-### 4.3 改数据模型
-`models.py` 加列 → `db.py` 的迁移段补 `ALTER TABLE`（本项目用轻量手写迁移，不用 Alembic）→ 同步改 `schemas.py` 与前端 `store.js`。提交前务必在本地副本 DB 上跑一次启动。
-
-### 4.4 本地调试常用命令
-```bash
-# 后端测试（155 项）
-cd backend && python -m pytest tests -q
-
-# 前端解析/去重单测
-cd web && node scripts/test_parse.mjs && node scripts/test_dedupe.mjs
-
-# 版本号自查（六处必须一致）
-grep -rn "2\.9\.0\|versionCode\|campushub-v" backend/app/main.py backend/app/api/status.py \
-  web/public/sw.js android/app/build.gradle web/src/components/UpdateNotification.vue
-```
-
----
-
-## 5. 构建与部署
-
-### 5.1 只发网页（最常见）
-```bash
-cd E:/Agent_Workspace_Isolated/campussync
-VITE_BASE=/schedule/ npm --prefix web run build     # ⚠ VITE_BASE 绝不能漏，见 §7.2
-
-tar czf /tmp/dist.tar.gz -C web/dist assets index.html sw.js
-scp /tmp/dist.tar.gz root@108.186.202.38:/tmp/
-ssh root@108.186.202.38 '
-  set -e; cd /var/www/schedule
-  rm -rf frontend.new && mkdir frontend.new
-  tar xzf /tmp/dist.tar.gz -C frontend.new
-  rm -rf frontend.old && mv frontend frontend.old && mv frontend.new frontend
-  grep -o "src=\"[^\"]*\"" frontend/index.html'
-```
-
-原子切换（`frontend.new` → `frontend.old` → `frontend`）保证不会出现半截目录导致的 404 白屏。
-
-**同步 Android 内置前端**（只在要发 APK 时才需要）：
-```bash
-rm -rf android/app/src/main/assets/web/assets android/app/src/main/assets/web/index.html
-cp -r web/dist/assets android/app/src/main/assets/web/
-cp web/dist/index.html web/dist/sw.js android/app/src/main/assets/web/
-```
-
-### 5.2 只发后端
-```bash
-tar czf /tmp/be.tar.gz backend/app
-scp /tmp/be.tar.gz root@108.186.202.38:/tmp/
-ssh root@108.186.202.38 'tar xzf /tmp/be.tar.gz -C /var/www/schedule && systemctl restart campushub-sync'
-# 验证
-curl -s https://nzlab.online/schedule/api/version
-systemctl is-active campushub-sync
-```
-
-改了 `requirements.txt` 还要：`ssh ... '/var/www/schedule/venv/bin/pip install -r /var/www/schedule/backend/requirements.txt'`。
-
-### 5.3 发 APK
+### 3.3 Android 打包
 ```bash
 export JAVA_HOME='E:/Alpha_nz_Files/_toolchain/jdk'
 export ANDROID_HOME='E:/Alpha_nz_Files/_toolchain/android-sdk'
-export PATH="/e/Alpha_nz_Files/_toolchain/jdk/bin:/e/Alpha_nz_Files/_toolchain/android-sdk/platform-tools:$PATH"
-cd android && 'E:/Alpha_nz_Files/_toolchain/gradle-8.7/bin/gradle' assembleRelease --no-daemon
-
-cd .. && cp android/app/build/outputs/apk/release/app-release.apk CampusHub.apk
-# 校验版本号（必须与 build.gradle 一致）
-'E:/Alpha_nz_Files/_toolchain/android-sdk/build-tools/<ver>/aapt2' dump badging CampusHub.apk | head -1
-
-scp CampusHub.apk root@108.186.202.38:/var/www/schedule/CampusHub.apk
-curl -sI https://nzlab.online/schedule/CampusHub.apk | grep -i "content-type\|content-length"
+cd E:/Agent_Workspace_Isolated/campussync/android
+'E:/Alpha_nz_Files/_toolchain/gradle-8.7/bin/gradle.bat' assembleRelease --no-daemon
+cp app/build/outputs/apk/release/app-release.apk ../CampusHub.apk
+'E:/Alpha_nz_Files/_toolchain/android-sdk/build-tools/34.0.0/aapt2.exe' dump badging ../CampusHub.apk | head -n 1
 ```
-
-### 5.4 发版固定顺序（缺一步就会不一致）
-
-```
-1. 改代码 → 测试全绿
-2. 批量升版本号（六处，见 §5.5）
-3. VITE_BASE=/schedule/ 构建前端 → 注入 android assets
-4. gradle assembleRelease → 拷 CampusHub.apk
-5. 部署前端（§5.1）+ 部署后端（§5.2）+ 上传 APK
-6. 线上验证：/api/version 版本号、JS/CSS 200、APK sha256 与服务端一致
-7. git commit + push（§6）
-8. gh release create vX.Y.Z ./CampusHub.apk（§6.3）
-```
-
-### 5.5 版本号六处（必须同时改）
-| 文件 | 内容 |
-|---|---|
-| `backend/app/main.py` | `"version": "2.9.0"` / `"tag"` / `"title"` |
-| `backend/app/api/status.py` | 同上（**容易漏，`/api/version` 实际读这里**） |
-| `web/public/sw.js` | `const VERSION = 'campushub-v92'`（数字独立于版本号，每次 +1） |
-| `android/app/build.gradle` | `versionCode 92` / `versionName "2.9.0"` |
-| `web/src/components/UpdateNotification.vue` | `CURRENT_VERSION = '2.9.0'` |
-| `HANDOVER.md` | 本文件顶部表格 |
-
-同时把两份 `features`（`main.py` 与 `status.py`）换成新版本的更新要点——App 内的更新说明读这里。
 
 ---
 
-## 6. 如何同步 GitHub
+## 4. 部署、发版与 GitHub 同步流程
 
-### 6.1 前置
-- 仓库：`https://github.com/NoraNekowww/campushub-sync`，分支 `main`，`origin` 已配。
-- `gh` 已登录 `NoraNekowww`。
-- **直连 GitHub 不通**，走常开的 Clash Verge（`verge-mihomo`）混合端口 `127.0.0.1:7897`。它开机常驻，**不需要手动拉起**（以前的 v2rayN `30808` 已废弃）。
+### 4.1 必须同步更新的 7 处版本号
+每次发版前统一检索并更新：
+1. `backend/app/main.py`（`/api/version` 的 `version`/`tag`/`title`/`features`）
+2. `backend/app/api/status.py`（`/api/version` Router，线上实际命中这里）
+3. `web/public/sw.js`（`const VERSION = 'campushub-vXXX'`）
+4. `android/app/build.gradle`（`versionCode` + `versionName`）
+5. `web/src/components/UpdateNotification.vue`（`CURRENT_VERSION`）
+6. `web/src/views/SettingsView.vue`（`clientAppVersion` 兜底返回值）
+7. `HANDOVER.md`（顶部版本表）
 
-```bash
-netstat -ano | grep LISTENING | grep 7897    # 有输出=代理在跑
-curl -s -m 10 --proxy socks5h://127.0.0.1:7897 -o /dev/null -w "%{http_code}\n" https://github.com
-```
+### 4.2 服务器部署路径与校验
+- VPS IP：`108.186.202.38`（如直连受阻，加 `-o "ProxyCommand=E:/PlatformIO/git/ucrt64/bin/connect.exe -S 127.0.0.1:7897 %h %p"`）。
+- nginx 对 `/schedule/` 使用 `alias /var/www/schedule/frontend/`（**不是** `/var/www/schedule/web/dist/`！发版时建议同步更新 `/var/www/schedule/frontend/` 与 `/var/www/schedule/web/dist/`，同时绝不要把 `CampusHub.apk` 留在 `frontend/` 下）。
+- APK 精确路径：`/var/www/schedule/CampusHub.apk`。
+- 后端目录：`/var/www/schedule/backend/app/`；重启命令：`systemctl restart campushub-sync && systemctl is-active campushub-sync`。
+- **绝对红线**：永远不要读取、打印或写入 `/var/www/schedule/.env` 的真实密钥！
 
-### 6.2 提交与推送
-```bash
-cd E:/Agent_Workspace_Isolated/campussync
-git add -A
-git commit -m "feat: xxx (v2.9.1)"
-git -c http.proxy=socks5h://127.0.0.1:7897 \
-    -c https.proxy=socks5h://127.0.0.1:7897 push origin main
-```
-
-### 6.3 发 Release（挂 APK）
-```bash
-HTTPS_PROXY=socks5h://127.0.0.1:7897 HTTP_PROXY=socks5h://127.0.0.1:7897 \
-  gh release create v2.9.1 ./CampusHub.apk \
-  --title "CampusHub v2.9.1 — <一句话主题>" --notes-file /tmp/notes.md
-
-gh release view v2.9.1 --json assets -q '.assets[] | "\(.name) \(.size)"'
-```
-
-> 注意：`CampusHub.apk` 在 `.gitignore` 里（`*.apk`），**不会进 git**，只挂在 Release 资产上；线上直链由 `scp` 单独推送到 VPS。
-
-### 6.4 会被提交的东西
-- ✅ `web/`、`backend/`、`android/`（含 `android/app/src/main/assets/web/` 的前端产物）、`deploy/`、文档
-- ❌ `.env`、`*.apk`、`web/dist/`、`venv/`、`data/*.db`
-- ⚠️ `android/app/src/main/assets/web/` 是**构建产物但要提交**，否则 APK 会打进旧页面。
+### 4.3 GitHub 推送与 Release
+- 若直连 GitHub 超时，配置环境代理 `ALL_PROXY=socks5h://127.0.0.1:7897` / `HTTPS_PROXY` / `HTTP_PROXY`。
+- `CampusHub.apk` 在 `.gitignore` 内不进 git，作为 `gh release create vX.Y.Z ./CampusHub.apk` 附件上传，并与本地及 VPS SHA256 比对一致。
 
 ---
 
-## 7. 红线与已知坑（务必读）
+## 5. 红线与关键技术约定（切勿破坏）
 
-### 7.1 SSH 报 `Unable to connect to relay host, errno=10061`
-`~/.ssh/config` 的 `ProxyCommand` 走 `127.0.0.1:30808`。**不要手动开 v2rayN**——直接确认 Clash Verge 已在跑，并让 30808 有监听：
-
-```bash
-netstat -ano | grep LISTENING | grep 30808
-# 没有输出就临时走 Clash 的 7897 直连一次：
-ssh -o ProxyCommand='E:/PlatformIO/git/ucrt64/bin/connect.exe -S 127.0.0.1:7897 %h %p' nzlab.online
-```
-
-直连 22 端口是不通的（Cloudflare 挡了），别去掉代理。
-
-### 7.2 白屏（最高频事故）
-**根因**：漏了 `VITE_BASE=/schedule/`，`index.html` 引用 `/assets/index-xxx.js` 而线上实际在 `/schedule/assets/`。
-**自查四连**：
-```bash
-curl -s https://nzlab.online/schedule/ | grep -oE 'src="[^"]+"'          # 必须以 /schedule/ 开头
-curl -s -o /dev/null -w "%{http_code}\n" https://nzlab.online/schedule/assets/index-XXX.js   # 200
-curl -s https://nzlab.online/schedule/api/version                        # 2.9.0
-ssh nzlab.online 'ls /var/www/schedule/frontend/assets/'
-```
-修法：重新带 `VITE_BASE` 构建 + 重部署。用户侧再 `Ctrl+F5` / 重开 PWA。
-
-### 7.3 APK 安装报 `PackageInfoIsNull`
-`/schedule/CampusHub.apk` 必须有 nginx **精确 location**（`alias` 到 `/var/www/schedule/CampusHub.apk`）。若被 `location /schedule/` 的 `try_files` 兜底成 `index.html`，下载器存下的就是 HTML。替换 `frontend` 目录时别删这个文件。
-
-### 7.4 实例不同步 / 数据被旧缓存冲掉
-删除操作一律先写本地**墓碑**（`campushub.deleted_event_ids.v1`），后台 refresh、离线回写、周课表重载都要过墓碑过滤。新增改删逻辑必须复用这套机制，否则会出现「删了 2 秒后自己回来」。
-用户手动改过的条目走 **Local-Wins**：上传失败时不允许被服务端旧数据覆盖。
-
-### 7.5 课程重复出现两次
-历史遗留的两套 event id 体系（学期同步 `hash(tju_schedule + "…w9:d2:p3-4:A202")` vs 直连导入 `hash(tju_schedule + "学期:课程:…")`）。已用前端内容去重收口：`web/src/utils/dedupe.js`，键 = 开始时间 + 标题 + 地点。**渲染/合并的任何新入口都要经过 `dedupeEvents()`**，不要再造第三套 id。
-
-### 7.6 「无截止」逻辑是分离的两套
-- 无截止待办（`is_undated=true`）：只在「可办事项」页由 `TodoQuickAdd.vue` 创建（只填标题+备注），**时间线 / DDL 列表 / 周课表 / ICS 全部排除**。
-- 日程编辑器（`EventEditor.vue`）**不得**再出现「无截止」选项。加回会重新把两套逻辑搅在一起。
-
-### 7.7 离线模式的边界
-离线 = **不做账号云同步**，不是断网。`api.js` 的 `OFFLINE_ALLOWED = ['/version','/health','/tju/jw/local']`，其余请求直接短路。
-课表导入走 `/api/tju/jw/local/captcha` + `/api/tju/jw/local/import`：服务器只代登一次教务、解析成事件数组返回，**不建账号、不落库、不存密码**，前端换算成本机事件。
-附件在离线模式下存 data URL 到 localStorage：单文件 ≤2MB、合计 ≤4MB，不走 `/api/upload`。
-
-### 7.8 其他约定
-- **节数禁止按 `时长/45` 估算**，必须用 `EventOut.periods=[起,止]`（含课间的 4 节 = 210 分钟 ≈ 5 节，估算必错）。
-- **教务周次位图第 1 位是报到周**，真实教学周 = 位次 − 1。
-- **磨砂玻璃默认关闭且不在 UI 暴露开关**；主题色必须全系统联动（含课表日程块）。
-- **窄列卡片地点不放 emoji 图钉**；顶底栏用紧凑纯图标。
-- **附件卡片不显示文件大小/多余说明**；日程编辑器底部不放存储位置说明。
-- **后台静默刷新不得覆盖用户当前正在编辑的内容**。
-- 服务器 `.env` 含会话密钥/凭据加密密钥/微软客户端密钥，**永远不要把内容打印到终端或写进文档**。`.env.example` 里的值全是占位符。
+1. **`VITE_BASE=/schedule/` 严禁遗漏**：否则线上访问 `/schedule/` 时资源加载 404 白屏。
+2. **Android 端数据持久化走双写通道（`dualStorage.js` + `MainActivity.writeNativeStore`）**：任何新增持久化本地缓存字段或修改保存流程，必须同步更新 `ALLOWED_STORE_KEYS` 与双写函数，不要退回纯 `localStorage` + `setTimeout` 延迟提交（Android WebView 被划掉时 Chromium LevelDB 缓冲可能尚未落盘）。
+3. **自建日程确定性主键与单调 LWW**：前端创建时直接通过 `makeCustomEventId(sourceId)` 生成与后端一致的 32 位主键，并携带 `client_id` / `client_updated_at` 提交；`GET /api/events` 默认传入 `include_hidden=true` 供客户端按 ID + 时间戳合并墓碑，**不要去掉 `include_hidden` 或在 `dedupe.js` 中对不同正式 ID 的 `custom` 日程按标题合并**。
+4. **教务抓取链路**：海外 VPS 直连天大 CAS 会超时（TCP timeout）；Android 客户端（无论在线还是离线模式）在 `TjuConnect.vue` 中统一优先走 `runNativeImport` 手机直连抓取 + `/api/tju/jw/local/parse`（+ 在线模式下 `POST /api/tju/import`），不要把在线模式切回纯服务端抓取。
+5. **课表交互与布局约定**：
+   - `WeekView.vue` 采用 JS 单轴锁定（水平切换列 vs 竖直浏览 0:00–24:00），不要随意加回 `snap-x` CSS 或 `touch-action: none`（会与触摸锁定及点击触发冲突）。
+   - 课表无外层 `.card` 包裹、背景全屏高斯模糊；默认视图模式为「本周视图（周一在第一列）」，可选「今天在第三列」，入口位于「设置 → 外观与壁纸」。
+   - DDL 实线热区（24px）需保持高于普通课程块（`z-20`）且可点击打开 `ClassDetail.vue` 进行编辑与划掉完成。
+6. **「无截止」可办事项与普通日程分离**：`is_undated=true` 仅由 `TodoQuickAdd.vue` 管理，禁止加回 `EventEditor.vue`。
 
 ---
 
-## 8. 当前状态与下一步建议
+## 6. 给下一任 Agent 的接续建议
 
-**已完成到 v2.9.0 的能力**：天大教务一键导入（在线/离线）、多源待办同步（MS To Do）、ICS 订阅、PWA + 离线缓存、Android 内嵌离线开屏、自然语言识别建日程、重复日程、课程去重、可办事项独立成页、本地附件、外观主题/壁纸/磨砂。
-
-**已知欠账（适合接手第一件事）**：
-1. 真实学号完整教务导入未在交接环境实跑过（缺教务处密码），只跑了解析链的固定样本；
-2. 浏览器自动化 UI 冒烟测试不稳定，建议补 Playwright + 真实登录态；
-3. `store.js` 已是单体大文件，后续改动建议先按领域拆分再动逻辑。
-
----
-
-*任何一步卡住：先按 §7 对应条目自查，再 `journalctl -u campushub-sync -n 100` 看后端日志。*
+1. **真实手机端到端真机回归（推荐优先）**：
+   - 用 Android 真机（`adb logcat` + Chrome `chrome://inspect`）安装 `CampusHub.apk` v3.0.0 实测：
+     - 新建日程后立即划掉后台多任务重启 App，确认 `files/<pkg>/campushub_store/events_cache.json` 与 `sync_queue.json` 毫秒级生效且重启不丢失；
+     - 实测课表斜向滑动与快速甩动的手感阈值（当前死区 `6px`、惯性衰减 `0.94`）；
+     - 用真实天大学号密码分别测试离线/在线一键导课表。
+2. **线上浏览器完整登录态冒烟测试**：当前生产静态页与接口已自动检查，可补充带上测试账号的 Playwright 线上全流程验收，顺便检验 `v3.0.0` 应用内更新弹窗在旧版客户端的弹出效果。
+3. **`TodayWidgetProvider.java` 桌面小部件数据源升级**：当前桌面小部件仍通过 HTTP 请求接口，后续可考虑复用到 `campushub_store/events_cache.json` 做更快的离线渲染。
+4. **`store.js` 模块化拆分**：随着业务增长（当前约 2200 行），建议拆分为 `stores/events.js`、`stores/auth.js`、`stores/appearance.js`、`stores/tju.js` 以降低单文件维护成本。

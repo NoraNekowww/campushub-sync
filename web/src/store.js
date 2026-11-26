@@ -23,13 +23,23 @@ import {
   ensureWallpapersCached,
   getInstantWallpaperSrc,
 } from './utils/wallpaperCache'
+import {
+  clearNativeStoreAll,
+  readCompletedOverridesDual,
+  readDeletedIdsDual,
+  readDualJson,
+  readEventsCacheDual,
+  readSyncQueueDual,
+  removeDualKey,
+  writeDualJson,
+} from './utils/dualStorage'
 
 const nextMutationIso = (existingEvent = null) =>
   computeNextMutationIso(existingEvent, getServerClockOffsetMs())
 
 const THEME_KEY = 'campushub.theme'
 const GRID_STYLE_KEY = 'campushub.week_grid_style'
-const WEEK_ANCHOR_KEY = 'campushub.week_anchor_mode'
+const WEEK_ANCHOR_KEY = 'campushub.week_anchor_mode.v2'
 const FROSTED_GLASS_KEY = 'campushub.frosted_glass_style'
 const EVENTS_CACHE_KEY = 'campushub.events_cache.v1'
 const WEEK_CACHE_KEY = 'campushub.week_cache.v1'
@@ -91,7 +101,7 @@ export function toggleImportantEvent(event) {
     if (!String(id).startsWith('local_')) {
       api.patchEvent(id, { priority: event.priority, client_updated_at: nowIso })
         .then(() => removeSyncQueueItem(qid))
-        .catch(() => {})
+        .catch(() => flushSyncQueue().catch(() => {}))
     }
   }
 
@@ -132,14 +142,9 @@ export function isMobileNativeApp() {
 
 function readInitialEvents() {
   try {
-    if (typeof localStorage !== 'undefined') {
-      const raw = localStorage.getItem('campushub.events_cache.v1')
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        if (Array.isArray(parsed?.items) && parsed.items.length > 0) {
-          return dedupeEvents(parsed.items.filter((it) => it && !it.hidden))
-        }
-      }
+    const dual = readEventsCacheDual(EVENTS_CACHE_KEY)
+    if (Array.isArray(dual.items) && dual.items.length > 0) {
+      return dedupeEvents(dual.items.filter((it) => it && !it.hidden))
     }
   } catch (e) {}
   return []
@@ -147,13 +152,13 @@ function readInitialEvents() {
 
 function readInitialUser() {
   try {
-    if (typeof localStorage !== 'undefined') {
-      const raw = localStorage.getItem('campushub.user_cache.v1')
-      return raw ? JSON.parse(raw) : null
-    }
+    const { value } = readDualJson('user_cache', USER_CACHE_KEY, null)
+    if (value && typeof value === 'object') return value
   } catch (e) {}
   return null
 }
+
+const initialEventsList = readInitialEvents()
 
 export const state = reactive({
   // 进去之后默认显示课程表（WeekView）
@@ -166,8 +171,8 @@ export const state = reactive({
   lastUpdated: null,
   online: typeof navigator === 'undefined' ? true : navigator.onLine,
   offlineSince: null,
-  events: readInitialEvents(),
-  total: readInitialEvents().length,
+  events: initialEventsList,
+  total: initialEventsList.length,
   filter: 'all', // all | class | deadline
   source: 'all',
   /* 搜索框：课程名 / 老师 / 地点 / 备注 / DDL 标题里命中哪个字都算 */
@@ -185,13 +190,13 @@ export const state = reactive({
       return 'grid'
     }
   })(),
-  /* 课表列对齐偏好：默认 'today_second'（今天固定在第二列，昨天在第一列），可选 'monday_first'（周一至周日整周） */
+  /* 默认课表显示模式：默认 'monday_first'（本周视图），可选 'today_third'（今天固定在第三列） */
   weekAnchorMode: (function () {
     try {
-      const saved = localStorage.getItem('campushub.week_anchor_mode')
-      return saved === 'monday_first' ? 'monday_first' : 'today_second'
+      const saved = localStorage.getItem(WEEK_ANCHOR_KEY)
+      return saved === 'today_third' ? 'today_third' : 'monday_first'
     } catch (e) {
-      return 'today_second'
+      return 'monday_first'
     }
   })(),
   /* 设置二级子菜单路由（null = 设置首页一级菜单） */
@@ -312,7 +317,7 @@ export function setWeekGridStyle(style) {
 }
 
 export function setWeekAnchorMode(mode) {
-  const m = mode === 'monday_first' ? 'monday_first' : 'today_second'
+  const m = mode === 'today_third' || mode === 'today_second' ? 'today_third' : 'monday_first'
   state.weekAnchorMode = m
   try {
     localStorage.setItem(WEEK_ANCHOR_KEY, m)
@@ -522,43 +527,36 @@ export function autoExpireEndedCustomTasks() {
 
 function loadCachedData() {
   try {
-    const rawEvents = localStorage.getItem(EVENTS_CACHE_KEY)
-    if (rawEvents) {
-      const parsed = JSON.parse(rawEvents)
-      if (Array.isArray(parsed?.items) && parsed.items.length > 0) {
-        state.events = parsed.items
-        state.total = parsed.total ?? parsed.items.length
-        if (parsed.timestamp) {
-          state.lastUpdated = new Date(parsed.timestamp)
-        }
+    const dualEvents = readEventsCacheDual(EVENTS_CACHE_KEY)
+    if (Array.isArray(dualEvents.items) && dualEvents.items.length > 0) {
+      state.events = dedupeEvents(dualEvents.items.filter((it) => it && !it.hidden))
+      state.total = state.events.length
+      if (dualEvents.timestamp) {
+        state.lastUpdated = new Date(dualEvents.timestamp)
       }
+      // 自愈：把双层核对合并后的最新缓存回写两层，保证退出前哪怕只落在其中一层也能立刻补齐
+      saveEventsCache(state.events, state.total)
     }
   } catch (e) {
     /* ignore */
   }
 
   try {
-    const rawUser = localStorage.getItem(USER_CACHE_KEY)
-    if (rawUser) {
-      const parsedUser = JSON.parse(rawUser)
-      if (parsedUser && typeof parsedUser === 'object') {
-        state.user = parsedUser
-      }
+    const { value: parsedUser } = readDualJson('user_cache', USER_CACHE_KEY, null)
+    if (parsedUser && typeof parsedUser === 'object') {
+      state.user = parsedUser
     }
   } catch (e) {
     /* ignore */
   }
 
   try {
-    const rawConfig = localStorage.getItem(CONFIG_CACHE_KEY)
-    if (rawConfig) {
-      const parsedConfig = JSON.parse(rawConfig)
-      if (parsedConfig && typeof parsedConfig === 'object') {
-        state.config = parsedConfig
-        state.viewerAdmin = Boolean(parsedConfig?.viewer?.admin)
-        if (parsedConfig?.accounts) {
-          state.accounts = { ...(state.accounts || {}), ...parsedConfig.accounts }
-        }
+    const { value: parsedConfig } = readDualJson('config_cache', CONFIG_CACHE_KEY, null)
+    if (parsedConfig && typeof parsedConfig === 'object') {
+      state.config = parsedConfig
+      state.viewerAdmin = Boolean(parsedConfig?.viewer?.admin)
+      if (parsedConfig?.accounts) {
+        state.accounts = { ...(state.accounts || {}), ...parsedConfig.accounts }
       }
     }
   } catch (e) {
@@ -579,26 +577,17 @@ function loadCachedData() {
 }
 
 function saveEventsCache(items, total) {
-  try {
-    localStorage.setItem(
-      EVENTS_CACHE_KEY,
-      JSON.stringify({
-        items,
-        total,
-        timestamp: Date.now(),
-      })
-    )
-  } catch (e) {
-    /* ignore storage quota errors */
-  }
+  writeDualJson('events_cache', EVENTS_CACHE_KEY, {
+    items,
+    total,
+    timestamp: Date.now(),
+  })
 }
 
 function saveConfigCache(config) {
-  try {
-    if (config) {
-      localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(config))
-    }
-  } catch (e) {}
+  if (config) {
+    writeDualJson('config_cache', CONFIG_CACHE_KEY, config)
+  }
 }
 
 function saveStatusCache(status) {
@@ -609,28 +598,13 @@ function saveStatusCache(status) {
   } catch (e) {}
 }
 
-/** 已在本地明确删除的任务 ID 墓碑集合（携带单调删除时间戳，保留 30 天防多端往返冲撞复活） */
+/** 已在本地明确删除的任务 ID 墓碑集合（双写本机文件与 localStorage，保留 30 天防多端往返冲撞复活） */
 function getDeletedEventIds() {
-  try {
-    const raw = localStorage.getItem(DELETED_IDS_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw)
-    const now = Date.now()
-    const valid = {}
-    for (const [id, ts] of Object.entries(parsed || {})) {
-      const num = Number(ts) || 0
-      if (num > 0 && now - num < 30 * 86400000) valid[id] = num
-    }
-    return valid
-  } catch {
-    return {}
-  }
+  return readDeletedIdsDual(DELETED_IDS_KEY, 30 * 86400000)
 }
 
 function saveDeletedEventIdsMap(map) {
-  try {
-    localStorage.setItem(DELETED_IDS_KEY, JSON.stringify(map || {}))
-  } catch {}
+  writeDualJson('deleted_ids', DELETED_IDS_KEY, map || {})
 }
 
 export function isEventDeleted(id) {
@@ -655,34 +629,17 @@ function unrecordDeletedEventId(id) {
 }
 
 /**
- * 本地完成态（划掉）覆盖保护机制：
- * 针对网络延迟、上传失败或离线时，用户在客户端划掉的任务，
- * 即使服务器尚未同步成功、返回旧数据，也坚决以本地划掉状态为准，彻底根治「回光返照」。
+ * 本地完成态（划掉）覆盖保护机制（双写保护，彻底根治「回光返照」）。
  */
 function getCompletedOverrides() {
-  try {
-    const raw = localStorage.getItem(COMPLETED_OVERRIDES_KEY)
-    if (!raw) return {}
-    const map = JSON.parse(raw)
-    const now = Date.now()
-    const valid = {}
-    // 保留 7 天以内的本地完成状态覆盖
-    for (const [id, item] of Object.entries(map)) {
-      if (item && typeof item === 'object' && item.status && now - (item.timestamp || 0) < 7 * 86400000) {
-        valid[id] = item
-      }
-    }
-    return valid
-  } catch {
-    return {}
-  }
+  return readCompletedOverridesDual(COMPLETED_OVERRIDES_KEY, 7 * 86400000)
 }
 
 function recordCompletedOverride(id, status, timestamp = Date.now()) {
   try {
     const map = getCompletedOverrides()
     map[id] = { status, timestamp }
-    localStorage.setItem(COMPLETED_OVERRIDES_KEY, JSON.stringify(map))
+    writeDualJson('completed_overrides', COMPLETED_OVERRIDES_KEY, map)
   } catch {}
 }
 
@@ -690,17 +647,20 @@ function unrecordCompletedOverride(id) {
   try {
     const map = getCompletedOverrides()
     delete map[id]
-    localStorage.setItem(COMPLETED_OVERRIDES_KEY, JSON.stringify(map))
+    writeDualJson('completed_overrides', COMPLETED_OVERRIDES_KEY, map)
   } catch {}
 }
 
-/** 离线待同步操作队列管理 */
+/** 离线待同步操作队列管理（双写至 Android 原生原子文件，退应用绝不丢失） */
 function getSyncQueue() {
-  try {
-    const raw = localStorage.getItem(SYNC_QUEUE_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
+  return readSyncQueueDual(SYNC_QUEUE_KEY)
+}
+
+function saveSyncQueue(queue) {
+  if (Array.isArray(queue) && queue.length > 0) {
+    writeDualJson('sync_queue', SYNC_QUEUE_KEY, queue)
+  } else {
+    clearSyncQueue()
   }
 }
 
@@ -713,7 +673,7 @@ function appendSyncQueue(action) {
       _qid,
       timestamp: Date.now(),
     })
-    localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue))
+    saveSyncQueue(queue)
     return _qid
   } catch {
     return ''
@@ -724,8 +684,7 @@ function removeSyncQueueItem(qid) {
   if (!qid) return
   try {
     const next = getSyncQueue().filter((q) => q._qid !== qid)
-    if (next.length) localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(next))
-    else clearSyncQueue()
+    saveSyncQueue(next)
   } catch {}
 }
 
@@ -745,9 +704,7 @@ function getPendingSyncIdSet(queue = getSyncQueue()) {
 }
 
 function clearSyncQueue() {
-  try {
-    localStorage.removeItem(SYNC_QUEUE_KEY)
-  } catch {}
+  removeDualKey('sync_queue', SYNC_QUEUE_KEY)
 }
 
 let activeFlushPromise = null
@@ -864,11 +821,7 @@ export async function flushSyncQueue() {
             .filter((q) => !q._qid || !processedQids.has(q._qid))
             .map((q) => (q.id && tempIdMap.has(q.id) ? { ...q, id: tempIdMap.get(q.id) } : q))
           const nextQueue = [...remaining, ...newlyAppended]
-          if (nextQueue.length) {
-            localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(nextQueue))
-          } else {
-            clearSyncQueue()
-          }
+          saveSyncQueue(nextQueue)
           if (newlyAppended.length > 0) {
             flushAgainRequested = true
           }
@@ -882,14 +835,10 @@ export async function flushSyncQueue() {
 }
 
 function saveUserCache(user) {
-  try {
-    if (user) {
-      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user))
-    } else {
-      localStorage.removeItem(USER_CACHE_KEY)
-    }
-  } catch (e) {
-    /* ignore */
+  if (user) {
+    writeDualJson('user_cache', USER_CACHE_KEY, user)
+  } else {
+    removeDualKey('user_cache', USER_CACHE_KEY)
   }
 }
 
@@ -937,12 +886,14 @@ export async function refresh({ silent = false } = {}) {
     saveDeletedEventIdsMap(nextDeletedMap)
     state.events = dedupeEvents(activeEvents)
 
-    // 对历史遗留未同步至云端的 local_ 临时日程自动加入补推同步队列
+    // 对本地未同步至云端的自建日程（_pending_create 或历史 local_）自动加入补推同步队列
+    let enqueuedMissing = false
     for (const local of state.events) {
-      if (local.id && String(local.id).startsWith('local_')) {
+      if (local.id && (local._pending_create || String(local.id).startsWith('local_'))) {
         const alreadyQueued = queuedSnapshot.some(
           (item) =>
             item.temp_id === local.id ||
+            item.id === local.id ||
             (Array.isArray(item.temp_ids) && item.temp_ids.includes(local.id)),
         )
         if (!alreadyQueued) {
@@ -953,14 +904,24 @@ export async function refresh({ silent = false } = {}) {
             clear_end_time,
             duration_hours,
             _endTs,
+            _pending_create,
             ...cleanPayload
           } = local
-          appendSyncQueue({ type: 'create', temp_id: local.id, payload: cleanPayload })
+          appendSyncQueue({
+            type: 'create',
+            temp_id: local.id,
+            payload: {
+              ...cleanPayload,
+              client_id: local.source_id || undefined,
+              client_updated_at: local.client_updated_at || local.updated_at,
+            },
+          })
+          enqueuedMissing = true
         }
       }
     }
-    if (state.events.some((l) => l.id && String(l.id).startsWith('local_'))) {
-      setTimeout(() => flushSyncQueue().catch(() => {}), 500)
+    if (enqueuedMissing || getSyncQueue().length > 0) {
+      flushSyncQueue().catch(() => {})
     }
 
     state.total = state.events.length
@@ -1039,6 +1000,42 @@ export async function bootstrap() {
   // 1. 毫秒级闪存恢复全部状态：课表、日程、配置、用户信息全部就绪，0 延迟
   loadCachedData()
 
+  // 1.5 若存在未完成云端落库的自建日程，立即补入待同步队列
+  if (!state.offlineMode) {
+    const queuedSnapshot = getSyncQueue()
+    for (const local of state.events || []) {
+      if (local?.id && (local._pending_create || String(local.id).startsWith('local_'))) {
+        const alreadyQueued = queuedSnapshot.some(
+          (item) =>
+            item.temp_id === local.id ||
+            item.id === local.id ||
+            (Array.isArray(item.temp_ids) && item.temp_ids.includes(local.id)),
+        )
+        if (!alreadyQueued) {
+          const {
+            repeat_frequency,
+            repeat_interval,
+            repeat_count,
+            clear_end_time,
+            duration_hours,
+            _endTs,
+            _pending_create,
+            ...cleanPayload
+          } = local
+          appendSyncQueue({
+            type: 'create',
+            temp_id: local.id,
+            payload: {
+              ...cleanPayload,
+              client_id: local.source_id || undefined,
+              client_updated_at: local.client_updated_at || local.updated_at,
+            },
+          })
+        }
+      }
+    }
+  }
+
   // 2. 检查定时段任务是否已到期，到期自动划掉归档并持久化至服务器
   autoExpireEndedCustomTasks()
   if (typeof window !== 'undefined' && !window.__autoExpireTimer) {
@@ -1057,13 +1054,13 @@ export async function bootstrap() {
   const hasLocalData = state.events && state.events.length > 0
 
   if (isMobile && hasLocalData) {
-    // 移动端在后台静默同步离线队列并按 ID + LWW 对齐云端最新状态，不阻塞首屏 UI 渲染
-    setTimeout(async () => {
+    // 移动端在后台立刻冲刷离线队列并按 ID + LWW 对齐云端最新状态，不阻塞首屏 UI 渲染
+    Promise.resolve().then(async () => {
       try {
         await flushSyncQueue()
         await Promise.all([refresh({ silent: true }), loadConfig()])
       } catch {}
-    }, 800)
+    })
     return
   }
 
@@ -1399,7 +1396,7 @@ export async function saveCustomEvent(payload) {
     const qid = appendSyncQueue({ type: 'patch', id: existing.id, payload: patchPayload })
     if (isMobileNativeApp()) {
       notify('已更新日程', 'ok')
-      setTimeout(() => flushSyncQueue().catch(() => {}), 300)
+      flushSyncQueue().catch(() => {})
       return targetResult
     }
 
@@ -1483,6 +1480,7 @@ export async function saveCustomEvent(payload) {
       status: 'pending',
       hidden: false,
       local_override: true,
+      _pending_create: !state.offlineMode,
       created_at: nowIso,
       updated_at: nowIso,
       client_updated_at: nowIso,
@@ -1532,7 +1530,7 @@ export async function saveCustomEvent(payload) {
 
   if (isMobileNativeApp()) {
     notify('日程已添加', 'ok')
-    setTimeout(() => flushSyncQueue().catch(() => {}), 300)
+    flushSyncQueue().catch(() => {})
     return targetResult
   }
 
@@ -1610,7 +1608,7 @@ export async function removeCustomEvent(id, options = {}) {
 
   const qid = appendSyncQueue({ type: 'delete', id, options: deleteOpts })
   if (isMobileNativeApp()) {
-    setTimeout(() => flushSyncQueue().catch(() => {}), 300)
+    flushSyncQueue().catch(() => {})
     notify(`已移除${target ? `「${target.title}」` : '这条日程'}${scopeNote}`, 'info', {
       action: { label: '撤销', run: () => restoreEvent(id, target?.title || '', target) },
       duration: 6000,
@@ -1699,7 +1697,7 @@ export async function removeEvent(event) {
 
   const qid = appendSyncQueue({ type: 'delete', id: event.id, options: deleteOpts })
   if (isMobileNativeApp()) {
-    setTimeout(() => flushSyncQueue().catch(() => {}), 300)
+    flushSyncQueue().catch(() => {})
     notify(removedText(event), 'info', {
       action: { label: '撤销', run: () => restoreEvent(event.id, event.title, snapshot) },
       duration: 6000,
@@ -1789,6 +1787,7 @@ export function clearAllLocalData() {
     localStorage.clear()
     sessionStorage.clear()
   } catch (e) {}
+  clearNativeStoreAll()
   setSessionToken('')
   state.events = []
   state.total = 0
@@ -1917,9 +1916,7 @@ export async function toggleCompleted(event) {
 
   // 临时本地 id 尚未落库时，走队列串行等待 create 返回真实 id 后再回写 PATCH
   if (String(target.id || '').startsWith('local_')) {
-    setTimeout(() => {
-      flushSyncQueue().catch(() => {})
-    }, 300)
+    flushSyncQueue().catch(() => {})
     return
   }
 
@@ -2185,10 +2182,24 @@ export function initConnectivity() {
   window.addEventListener('online', () => {
     state.online = true
     notify('网络已恢复，正在刷新', 'ok')
-    refresh({ silent: true })
+    flushSyncQueue()
+      .then(() => refresh({ silent: true }))
+      .catch(() => refresh({ silent: true }))
   })
   window.addEventListener('offline', () => {
     state.online = false
     notify('已离线，显示缓存数据', 'warn')
   })
+  const persistOnLeave = () => {
+    saveEventsCache(state.events, state.total)
+    if (!state.offlineMode) {
+      flushSyncQueue().catch(() => {})
+    }
+  }
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') persistOnLeave()
+    })
+  }
+  window.addEventListener('pagehide', persistOnLeave)
 }

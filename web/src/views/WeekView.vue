@@ -3,7 +3,7 @@
     <div
       ref="scroller"
       data-testid="week-scroller"
-      class="w-full overflow-auto no-scrollbar snap-x snap-proximity"
+      class="w-full overflow-auto no-scrollbar"
       :style="scrollerViewportStyle"
       @scroll.passive="onScrollerScroll"
     >
@@ -214,6 +214,7 @@ import {
   upsertServerEventsIntoStore,
 } from '../store'
 import { dayKey, minutesOfDay, timeLabel, todayKey, weekWindow } from '../utils/datetime'
+import { projectColumnSnap, resolveScrollAxis } from '../utils/scrollLock'
 
 /* 全天可滚动范围：00:00 - 24:00；默认首屏可视锚定范围：08:00 - 22:00（完整涵盖 8:00 至晚 21:40 第12节） */
 const FULL_DAY_START = 0
@@ -324,10 +325,11 @@ let hasAlignedInitial = false
 
 function getAnchorColIndex() {
   const todayIdx = days.value.findIndex((day) => day.isToday)
-  if (state.weekAnchorMode !== 'monday_first') {
-    // 默认把「今天」放在第二列（第一列为昨天）
-    return todayIdx >= 0 ? Math.max(0, todayIdx - 1) : 0
+  if (state.weekAnchorMode === 'today_third') {
+    // 「今天在第三列」：第一列前天、第二列昨天、第三列今天
+    return todayIdx >= 0 ? Math.max(0, todayIdx - 2) : 0
   }
+  // 默认「本周视图」：本周一在第一列（周一至周日）
   const mondayIdx = days.value.findIndex((day) => day.weekOffset === 0 && day.isMonday)
   return mondayIdx >= 0 ? mondayIdx : Math.max(0, todayIdx)
 }
@@ -417,8 +419,8 @@ function onScrollerScroll() {
     const anchorCol = getAnchorColIndex()
     isAtAnchorCol.value = Math.abs(firstCol - anchorCol) === 0
 
-    // 在「今天在第二列」模式下取第二列（firstCol + 1）计算周次，保证周一时（首列为上周日）顶栏仍显示本周周次
-    const refOffsetInViewport = state.weekAnchorMode !== 'monday_first' ? 1 : 3
+    // 在「今天在第三列」模式下取第三列（firstCol + 2）计算周次，避免周一/周二时前两列属于上周导致周数误跳
+    const refOffsetInViewport = state.weekAnchorMode === 'today_third' ? 2 : 3
     const refIndex = Math.max(0, Math.min(days.value.length - 1, firstCol + refOffsetInViewport))
     const refDay = days.value[refIndex]
     if (refDay && refDay.weekOffset !== centeredWeekOffset.value) {
@@ -642,11 +644,143 @@ async function loadWeek(force = false) {
 
 const handleGlobalFocusToday = () => focusToday('smooth', { resetVertical: true })
 
+/* 单轴意图锁定滑动引擎：根据初始滑动手势方向锁定纯水平或纯竖直，绝不斜向漂移 */
+let lockedAxis = null
+let touchStartX = 0
+let touchStartY = 0
+let touchStartLeft = 0
+let touchStartTop = 0
+let touchSamples = []
+let inertiaRaf = null
+
+function cancelInertia() {
+  if (inertiaRaf) {
+    cancelAnimationFrame(inertiaRaf)
+    inertiaRaf = null
+  }
+}
+
+function recordTouchSample(x, y) {
+  const nowTs = typeof performance !== 'undefined' ? performance.now() : Date.now()
+  touchSamples.push({ t: nowTs, x, y })
+  const cutoff = nowTs - 120
+  while (touchSamples.length > 5 || (touchSamples.length > 1 && touchSamples[0].t < cutoff)) {
+    touchSamples.shift()
+  }
+}
+
+function onTouchStart(e) {
+  cancelInertia()
+  const el = scroller.value
+  if (!el || e.touches.length !== 1) {
+    lockedAxis = null
+    return
+  }
+  const t = e.touches[0]
+  touchStartX = t.clientX
+  touchStartY = t.clientY
+  touchStartLeft = el.scrollLeft
+  touchStartTop = el.scrollTop
+  lockedAxis = null
+  touchSamples = []
+  recordTouchSample(t.clientX, t.clientY)
+}
+
+function onTouchMove(e) {
+  const el = scroller.value
+  if (!el || e.touches.length !== 1) return
+  const t = e.touches[0]
+  const dx = t.clientX - touchStartX
+  const dy = t.clientY - touchStartY
+  if (!lockedAxis) {
+    lockedAxis = resolveScrollAxis(dx, dy, 6)
+    if (!lockedAxis) return
+  }
+  e.preventDefault()
+  recordTouchSample(t.clientX, t.clientY)
+  if (lockedAxis === 'x') {
+    const maxLeft = Math.max(0, el.scrollWidth - el.clientWidth)
+    el.scrollLeft = Math.max(0, Math.min(maxLeft, touchStartLeft - dx))
+    el.scrollTop = touchStartTop
+  } else {
+    const maxTop = Math.max(0, el.scrollHeight - el.clientHeight)
+    el.scrollTop = Math.max(0, Math.min(maxTop, touchStartTop - dy))
+    el.scrollLeft = touchStartLeft
+  }
+}
+
+function onTouchEnd() {
+  const el = scroller.value
+  const axis = lockedAxis
+  lockedAxis = null
+  if (!el || !axis) return
+
+  let vx = 0
+  let vy = 0
+  if (touchSamples.length >= 2) {
+    const first = touchSamples[0]
+    const last = touchSamples[touchSamples.length - 1]
+    const dt = Math.max(1, last.t - first.t)
+    vx = (last.x - first.x) / dt
+    vy = (last.y - first.y) / dt
+  }
+
+  if (axis === 'x') {
+    const targetLeft = projectColumnSnap(el.scrollLeft, vx, colWidth.value, days.value.length)
+    el.scrollTo({ left: targetLeft, top: touchStartTop, behavior: 'smooth' })
+  } else if (Math.abs(vy) > 0.08) {
+    let v = -vy // 手指向上滑（vy < 0）对应 scrollTop 增加
+    let prevTs = typeof performance !== 'undefined' ? performance.now() : Date.now()
+    const maxTop = Math.max(0, el.scrollHeight - el.clientHeight)
+    const step = (nowTs) => {
+      const curEl = scroller.value
+      if (!curEl) {
+        inertiaRaf = null
+        return
+      }
+      const dt = Math.min(32, Math.max(1, nowTs - prevTs))
+      prevTs = nowTs
+      const nextTop = Math.max(0, Math.min(maxTop, curEl.scrollTop + v * dt))
+      curEl.scrollTop = nextTop
+      curEl.scrollLeft = touchStartLeft
+      v *= Math.pow(0.94, dt / 16)
+      if (Math.abs(v) < 0.03 || nextTop <= 0 || nextTop >= maxTop) {
+        inertiaRaf = null
+        return
+      }
+      inertiaRaf = requestAnimationFrame(step)
+    }
+    inertiaRaf = requestAnimationFrame(step)
+  }
+}
+
+function onWheel(e) {
+  const el = scroller.value
+  if (!el) return
+  if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) > 0) {
+    e.preventDefault()
+    const maxLeft = Math.max(0, el.scrollWidth - el.clientWidth)
+    el.scrollLeft = Math.max(0, Math.min(maxLeft, el.scrollLeft + e.deltaX))
+  } else if (Math.abs(e.deltaY) > 0) {
+    e.preventDefault()
+    const maxTop = Math.max(0, el.scrollHeight - el.clientHeight)
+    el.scrollTop = Math.max(0, Math.min(maxTop, el.scrollTop + e.deltaY))
+  }
+}
+
 onMounted(() => {
   loadWeek()
   if (typeof ResizeObserver !== 'undefined' && scroller.value) {
     resizeObserver = new ResizeObserver(() => measureViewport())
     resizeObserver.observe(scroller.value)
+  }
+  const el = scroller.value
+  if (el) {
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd, { passive: true })
+    el.addEventListener('touchcancel', onTouchEnd, { passive: true })
+    el.addEventListener('wheel', onWheel, { passive: false })
   }
   nowTimer = setInterval(() => {
     now.value = new Date()
@@ -657,6 +791,15 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  cancelInertia()
+  const el = scroller.value
+  if (el) {
+    el.removeEventListener('touchstart', onTouchStart)
+    el.removeEventListener('touchmove', onTouchMove)
+    el.removeEventListener('touchend', onTouchEnd)
+    el.removeEventListener('touchcancel', onTouchEnd)
+    el.removeEventListener('wheel', onWheel)
+  }
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null

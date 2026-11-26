@@ -149,19 +149,17 @@ def create_app() -> FastAPI:
     async def app_version() -> JSONResponse:
         return JSONResponse(
             content={
-                "version": "2.9.8",
-                "tag": "v2.9.8",
-                "title": "CampusHub Android v2.9.8",
+                "version": "3.0.0",
+                "tag": "v3.0.0",
+                "title": "CampusHub Android v3.0.0",
                 "download_url": "https://nzlab.online/schedule/CampusHub.apk",
                 "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
                 "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
                 "features": [
-                    "壁纸自动写入软件本地缓存并内置默认高清壁纸，进入应用首帧即刻呈现背景图",
-                    "课表取消外层卡片改为全屏沉浸渲染，背景启用全高斯模糊；默认把「今天」放在第二列（可在设置切换按自然周）",
-                    "课表保持 8:00–21:00 默认可视范围，上下滑动可自由拓展浏览 0:00–24:00 全天时段",
-                    "课表内支持直接点击 DDL 截止线打开详情卡片，一键编辑或划掉完成",
-                    "设置页升级为二级菜单架构，并对已导入课表用户自动隐藏新手接入引导",
-                    "重构日程数据库同步引擎：客户端与云端共享确定性主键与单调时间戳（LWW + 软删除墓碑），彻底根治日程消失、划掉复活及修改后新老并存问题",
+                    "课表滑动升级为单轴方向锁定：根据初始滑动意图自动锁定纯水平切换或纯竖直 0:00–24:00 浏览，告别斜向漂移",
+                    "新增 Android 原生原子文件双写存储引擎（fsync 落盘 + 退出前强制刷盘 + 0ms 队列直传），彻底解决创建日程退出重进后丢失的问题",
+                    "默认课表显示提供「本周视图（默认）」与「今天在第三列」两种模式，选择入口移至「设置 → 外观与壁纸」",
+                    "汇总 v2.9.x 重大体验升级：本地壁纸缓存秒开、全屏高斯模糊课表、课表内点击 DDL 实线查看/编辑/划掉、设置页二级菜单、确定性主键与单调 LWW 同步架构",
                 ],
             },
             headers={
