@@ -20,6 +20,7 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -75,6 +76,7 @@ public class MainActivity extends AppCompatActivity {
             "sync_queue",
             "deleted_ids",
             "completed_overrides",
+            "important_ids",
             "config_cache",
             "user_cache",
             "prefs"
@@ -89,6 +91,7 @@ public class MainActivity extends AppCompatActivity {
     private final ExecutorService nativeHttpExecutor = Executors.newCachedThreadPool();
     private final ExecutorService nativeStoreDiskExecutor = Executors.newSingleThreadExecutor();
     private final ConcurrentHashMap<String, String> nativeStoreMemCache = new ConcurrentHashMap<>();
+    private final Set<String> pendingDiskWriteKeys = ConcurrentHashMap.newKeySet();
     private File nativeStoreDir;
     private final ConcurrentHashMap<String, java.net.CookieManager> casCookieJars = new ConcurrentHashMap<>();
 
@@ -135,9 +138,8 @@ public class MainActivity extends AppCompatActivity {
         // 彻底根治登录态丢失：启用 CookieManager 并配置强持久化
         setupCookiePersistence();
 
-        // 背景色设为透明并让硬件加速生效，消除深蓝/黑屏过渡层
+        // 背景色设为透明，由 Manifest android:hardwareAccelerated="true" 统一硬件加速，避免冗余全屏 FBO 图层开销
         webView.setBackgroundColor(Color.TRANSPARENT);
-        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -476,6 +478,22 @@ public class MainActivity extends AppCompatActivity {
                     "})();";
             view.evaluateJavascript(backupScript, null);
         }
+
+        @Override
+        public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+            boolean didCrash = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && detail != null && detail.didCrash();
+            Log.e(TAG, "WebView render process gone (didCrash=" + didCrash + "), reloading gracefully");
+            if (view != null) {
+                try {
+                    view.reload();
+                    return true;
+                } catch (Exception e) {
+                    Log.w(TAG, "WebView reload after render process gone failed, recreating activity", e);
+                }
+            }
+            runOnUiThread(() -> recreate());
+            return true;
+        }
     }
 
     public class AuthBridge {
@@ -696,7 +714,15 @@ public class MainActivity extends AppCompatActivity {
             if (key == null || !ALLOWED_STORE_KEYS.contains(key)) return false;
             final String safeVal = value != null ? value : "";
             nativeStoreMemCache.put(key, safeVal);
-            nativeStoreDiskExecutor.execute(() -> writeStoreFileAtomic(key, safeVal));
+            if (pendingDiskWriteKeys.add(key)) {
+                nativeStoreDiskExecutor.execute(() -> {
+                    pendingDiskWriteKeys.remove(key);
+                    String latest = nativeStoreMemCache.get(key);
+                    if (latest != null) {
+                        writeStoreFileAtomic(key, latest);
+                    }
+                });
+            }
             return true;
         }
 

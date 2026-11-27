@@ -67,9 +67,9 @@ function releaseSwipe(closer) {
     <div class="swipe-pane rounded-2xl overflow-hidden" :style="allowDelete ? cardStyle : null" data-testid="event-swipe-pane">
       <article
         ref="cardEl"
-        class="card relative overflow-hidden rounded-2xl transition-all"
+        class="card relative overflow-hidden rounded-2xl transition-[border-color,background-color,box-shadow] duration-150"
         :class="[
-          isImportant ? 'border-amber-300/80 bg-amber-50/40 dark:border-amber-500/40 dark:bg-amber-950/20 shadow-xs' : ''
+          isImportant ? 'is-important border-amber-300/80 bg-amber-50/40 dark:border-amber-500/40 dark:bg-amber-950/20 shadow-xs' : ''
         ]"
         data-testid="event-card"
         :data-kind="event.is_deadline ? 'deadline' : 'class'"
@@ -292,7 +292,7 @@ import {
   Trash2,
 } from 'lucide-vue-next'
 import { api } from '../api'
-import { countdown, durationLabel, periodLabel, periodsShort, timeLabel } from '../utils/datetime'
+import { countdown, durationLabel, formatMonthDayTime, periodLabel, periodsShort, timeLabel } from '../utils/datetime'
 import { splitNoteLocation } from '../utils/note'
 import { isImportantEvent, openCustomEditor, toggleImportantEvent } from '../store'
 import { useBackHandler } from '../utils/backNavigation'
@@ -390,6 +390,7 @@ const cardStyle = computed(() => ({
    那一次点击会被 swallowClick 吃掉（拖过之后不该再触发按钮）。 */
 const GESTURE_BLOCKERS = 'input, textarea, select'
 let moveRaf = null
+let pendingOffset = 0
 
 function onPointerDown(event) {
   if (busy.value) return
@@ -426,11 +427,11 @@ function onPointerMove(event) {
   let next = baseOffset + dx
   if (next > MAX) next = MAX + (next - MAX) * 0.25
   if (next < -MAX) next = -MAX + (next + MAX) * 0.25
-  const rounded = Math.round(next)
+  pendingOffset = Math.round(next)
   if (!moveRaf) {
     moveRaf = requestAnimationFrame(() => {
       moveRaf = null
-      offset.value = rounded
+      offset.value = pendingOffset
     })
   }
 }
@@ -544,18 +545,7 @@ const tickable = computed(
     props.event.source === 'custom',
 )
 
-const deadlineLabel = computed(() => {
-  const date = new Date(props.event.start_time)
-  if (Number.isNaN(date.getTime())) return '—'
-  return new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai',
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(date)
-})
+const deadlineLabel = computed(() => formatMonthDayTime(props.event.start_time) || '—')
 
 // 是否为带时间跨度/定期发生的时间段任务（如带结束时间、或者有节次安排的任务）
 const isRangeTask = computed(() => {
@@ -572,16 +562,8 @@ const isPointDeadline = computed(() => Boolean(props.event.is_deadline) && !isRa
 /* 无截止时间待办：没有「什么时候要交」，卡片上改成显示它是哪天记下来的 */
 const undatedLabel = computed(() => {
   const raw = props.event.created_at || props.event.start_time
-  const date = new Date(raw)
-  if (Number.isNaN(date.getTime())) return '无截止时间'
-  const text = new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai',
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(date)
+  const text = formatMonthDayTime(raw)
+  if (!text) return '无截止时间'
   return `无截止 · 建立于 ${text}`
 })
 

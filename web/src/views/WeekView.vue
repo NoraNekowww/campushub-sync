@@ -11,8 +11,8 @@
         <!-- 顶部吸顶星期栏：上下滑动浏览 0:00–24:00 时固定在顶栏下方，左右滑动与列完美硬件同步 -->
         <div
           ref="dayHeaderEl"
-          class="sticky top-0 z-30 grid border-b border-white/45 bg-white/40 backdrop-blur-2xl
-                 dark:border-white/10 dark:bg-slate-950/55"
+          class="sticky top-0 z-30 grid border-b border-white/45 bg-white/35 backdrop-blur-xl
+                 dark:border-white/10 dark:bg-slate-950/45"
           :style="gridStyle"
         >
           <div
@@ -63,12 +63,36 @@
         </div>
 
         <!-- 00:00 – 24:00 全天可上下拓展网格（默认视口自动锚定 08:00–21:xx 日间核心区） -->
-        <div class="grid" :style="gridStyle">
+        <div class="relative grid" :style="gridStyle">
+          <!-- 单层全宽度水平整点参考线（避免 63 列重复挂载上千 DOM 节点） -->
           <div
-            v-for="day in days"
+            v-if="state.weekGridStyle !== 'blank'"
+            class="pointer-events-none absolute inset-0 z-0"
+          >
+            <template v-for="hour in hours" :key="`line-${hour}`">
+              <div
+                class="absolute inset-x-0 border-t"
+                :class="
+                  hour === 8 || hour === 22
+                    ? 'border-slate-300/70 dark:border-slate-700/80'
+                    : 'border-slate-200/50 dark:border-slate-800/55'
+                "
+                :style="{ top: pct(hour * 60) + '%' }"
+              />
+              <div
+                v-if="state.weekGridStyle === 'subgrid'"
+                class="absolute inset-x-0 border-t border-dashed border-slate-200/35 dark:border-slate-800/40"
+                :style="{ top: pct(hour * 60 + 30) + '%' }"
+              />
+            </template>
+          </div>
+
+          <div
+            v-for="(day, colIdx) in days"
             :key="`col-${day.key}`"
             class="relative week-day-col snap-start"
             :class="[
+              colIdx >= visibleStartCol - 5 && colIdx <= visibleStartCol + 12 ? 'week-col-in-view' : '',
               state.weekGridStyle === 'blank'
                 ? day.isMonday
                   ? 'border-l-2 border-white/30 dark:border-white/10'
@@ -80,26 +104,6 @@
             ]"
             :style="{ height: `${gridHeight}px` }"
           >
-            <!-- 水平整点与细分参考线（覆盖 00:00 - 24:00 全天 24 小时） -->
-            <template v-if="state.weekGridStyle !== 'blank'">
-              <template v-for="hour in hours" :key="`line-${day.key}-${hour}`">
-                <div
-                  class="pointer-events-none absolute inset-x-0 border-t"
-                  :class="
-                    hour === 8 || hour === 22
-                      ? 'border-slate-300/70 dark:border-slate-700/80'
-                      : 'border-slate-200/50 dark:border-slate-800/55'
-                  "
-                  :style="{ top: pct(hour * 60) + '%' }"
-                />
-                <div
-                  v-if="state.weekGridStyle === 'subgrid'"
-                  class="pointer-events-none absolute inset-x-0 border-t border-dashed border-slate-200/35 dark:border-slate-800/40"
-                  :style="{ top: pct(hour * 60 + 30) + '%' }"
-                />
-              </template>
-            </template>
-
             <!-- 当前时间红线（全天 00:00–24:00 实时精准定位） -->
             <div
               v-if="day.isToday && isNowVisible"
@@ -119,17 +123,17 @@
                 data-testid="class-block"
                 :data-day="day.key"
                 class="absolute inset-x-0 overflow-hidden rounded-lg px-px py-1
-                       text-left text-[10px] leading-tight text-slate-800 transition-all hover:scale-[1.01]
+                       text-left text-[10px] leading-tight text-slate-800 transition-[transform,box-shadow,border-color] duration-150 hover:scale-[1.01]
                        dark:text-slate-100"
                 :class="[
                   item.event.is_deadline
                     ? 'border-amber-300/80 bg-amber-100/80 text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/20 dark:text-amber-100'
                     : '',
                   isImportantEvent(item.event) ? 'is-important' : '',
-                  isItemPastEntirely(day.key, item) ? 'is-past-entirely' : '',
+                  itemProgress(day, item) >= 100 ? 'is-past-entirely' : '',
                   item.hasConflict ? 'animate-breathe-alternate' : '',
                 ]"
-                :style="blockStyle(item)"
+                :style="item.blockStyle"
                 :aria-pressed="selectedEvent?.id === item.event.id"
                 @click="toggleSelect(item.event)"
               >
@@ -138,20 +142,20 @@
                   {{ item.event.title }}
                 </span>
                 <span class="block whitespace-nowrap text-[8px] leading-[10px] font-mono font-medium tracking-tight opacity-90">
-                  {{ timeLabel(item.event.start_time) }}-{{ timeLabel(item.event.end_time) }}
+                  {{ item.timeText }}
                 </span>
                 <span
-                  v-if="item.event.location"
+                  v-if="item.shortLocation"
                   data-testid="class-block-location"
                   class="block truncate text-[8.5px] leading-[10px] font-semibold text-brand-700 dark:text-brand-300"
                   :title="item.event.location"
                 >
-                  {{ formatShortLocation(item.event.location) }}
+                  {{ item.shortLocation }}
                 </span>
                 <div
-                  v-if="getItemPastProgress(day.key, item) > 0"
+                  v-if="itemProgress(day, item) > 0"
                   class="class-past-overlay"
-                  :style="pastOverlayStyle(day.key, item)"
+                  :style="pastOverlayStyleForProgress(itemProgress(day, item))"
                 />
               </button>
 
@@ -163,7 +167,7 @@
                 :data-day="day.key"
                 class="group absolute inset-x-0 z-20 -translate-y-1/2 h-6 text-left pointer-events-auto cursor-pointer focus:outline-none"
                 :class="item.hasConflict ? 'animate-breathe-alternate' : ''"
-                :style="lineStyle(item)"
+                :style="item.lineStyle"
                 :aria-pressed="selectedEvent?.id === item.event.id"
                 @click.stop="toggleSelect(item.event)"
               >
@@ -278,6 +282,8 @@ const multiWeekWindow = computed(() => {
         weekday: WEEKDAYS[idx],
         dayNum: Number(key.slice(8, 10)),
         isToday: key === today,
+        isPast: key < today,
+        isFuture: key > today,
         isMonday: idx === 0,
         weekOffset: w,
         weekLabel: w === 0 ? '本周' : w === 1 ? '下周' : w === -1 ? '上周' : `第 ${w > 0 ? '+' : ''}${w} 周`,
@@ -287,26 +293,48 @@ const multiWeekWindow = computed(() => {
   return allDays
 })
 
-/* 统一以全局唯一事件库 state.events 渲染，彻底根治双缓存不同步、修改后新老并存及复活问题 */
+/* 统一以全局唯一事件库 state.events 单趟分桶渲染，O(N) 避免 63×N 重复过滤与模板期重复计算 */
 const days = computed(() => {
   const sourceEvents = Array.isArray(state.events) ? state.events : []
+  const buckets = new Map()
+  for (const event of sourceEvents) {
+    if (!event || event.hidden || event.is_undated) continue
+    if (event.is_deadline && event.status === 'completed') continue
+    if (!matchesQuery(event)) continue
+    const k = dayKey(event.start_time)
+    if (!k) continue
+    const start = minutesOfDay(event.start_time)
+    if (start === null) continue
+    let bucket = buckets.get(k)
+    if (!bucket) {
+      bucket = []
+      buckets.set(k, bucket)
+    }
+    bucket.push({
+      event,
+      start,
+      end: minutesOfDay(event.end_time),
+      timeText: '',
+      shortLocation: '',
+      blockStyle: null,
+      lineStyle: null,
+    })
+  }
+
   return multiWeekWindow.value.map((d) => {
-    const items = sourceEvents
-      .filter(
-        (event) =>
-          !event.hidden &&
-          dayKey(event.start_time) === d.key &&
-          matchesQuery(event) &&
-          !event.is_undated &&
-          !(event.is_deadline && event.status === 'completed'),
-      )
-      .map((event) => ({
-        event,
-        start: minutesOfDay(event.start_time),
-        end: minutesOfDay(event.end_time),
-      }))
-      .filter((item) => item.start !== null)
-    layoutItems(items)
+    const items = buckets.get(d.key) || []
+    if (items.length > 0) {
+      layoutItems(items)
+      for (const item of items) {
+        if (item.end !== null) {
+          item.timeText = `${timeLabel(item.event.start_time)}-${timeLabel(item.event.end_time)}`
+          item.shortLocation = item.event.location ? formatShortLocation(item.event.location) : ''
+          item.blockStyle = blockStyle(item)
+        } else {
+          item.lineStyle = lineStyle(item)
+        }
+      }
+    }
     return {
       ...d,
       items,
@@ -316,6 +344,7 @@ const days = computed(() => {
 
 /* 自适应列宽：一屏正好容纳完整 7 列，左右边缘对齐整数格 */
 const colWidth = ref(56)
+const visibleStartCol = ref(14)
 const gridStyle = computed(() => ({
   gridTemplateColumns: `repeat(${days.value.length}, ${colWidth.value}px)`,
 }))
@@ -349,6 +378,7 @@ function measureViewport({ resetPosition = false } = {}) {
     colWidth.value = nextWidth
     if (!resetPosition && prevWidth > 0 && hasAlignedInitial) {
       const firstCol = Math.round(el.scrollLeft / prevWidth)
+      visibleStartCol.value = firstCol
       el.scrollLeft = Math.max(0, Math.round(firstCol * nextWidth))
     }
   }
@@ -416,6 +446,7 @@ function onScrollerScroll() {
     const el = scroller.value
     if (!el || !colWidth.value) return
     const firstCol = Math.round(el.scrollLeft / colWidth.value)
+    visibleStartCol.value = firstCol
     const anchorCol = getAnchorColIndex()
     isAtAnchorCol.value = Math.abs(firstCol - anchorCol) === 0
 
@@ -441,6 +472,7 @@ function focusToday(behavior = 'smooth', { resetVertical = true } = {}) {
     colWidth.value = nextWidth
   }
   const targetIdx = getAnchorColIndex()
+  visibleStartCol.value = targetIdx
   const left = Math.max(0, Math.round(targetIdx * colWidth.value))
   const defaultTop = Math.max(0, Math.round(DEFAULT_START_HOUR * hourHeight.value))
 
@@ -463,7 +495,10 @@ onMounted(() => nextTick(() => measureViewport({ resetPosition: true })))
 watch(
   () => state.view,
   (view) => {
-    if (view === 'week') nextTick(() => measureViewport({ resetPosition: true }))
+    if (view === 'week') {
+      now.value = new Date()
+      nextTick(() => measureViewport({ resetPosition: true }))
+    }
   },
 )
 
@@ -543,35 +578,45 @@ function layoutItems(items) {
   return sorted
 }
 
-function getItemPastProgress(dayKeyVal, item) {
-  const today = todayKey()
-  if (dayKeyVal < today) return 100
-  if (dayKeyVal > today) return 0
+const FULL_PAST_OVERLAY_STYLE = { top: '-1px', height: 'calc(100% + 2px)' }
+
+function computeTodayItemProgress(item, curMinutes) {
   if (item.end === null) return 0
   const startMin = Math.min(Math.max(item.start, FULL_DAY_START), FULL_DAY_END)
   let endMin = Math.min(Math.max(item.end, FULL_DAY_START), FULL_DAY_END)
   if (endMin <= startMin) endMin = Math.min(startMin + LINE_MINUTES, FULL_DAY_END)
-  const cur = nowMinutes.value
-  if (cur >= endMin) return 100
-  if (cur <= startMin) return 0
-  const pctVal = ((cur - startMin) / (endMin - startMin)) * 100
+  if (curMinutes >= endMin) return 100
+  if (curMinutes <= startMin) return 0
+  const pctVal = ((curMinutes - startMin) / (endMin - startMin)) * 100
   return Math.min(100, Math.max(0, Number(pctVal.toFixed(2))))
 }
 
-function pastOverlayStyle(dayKeyVal, item) {
-  const pctVal = getItemPastProgress(dayKeyVal, item)
-  if (pctVal >= 100) {
-    return { top: '-1px', height: 'calc(100% + 2px)' }
+const todayProgressMap = computed(() => {
+  const map = new Map()
+  const todayDay = days.value.find((d) => d.isToday)
+  if (!todayDay || !todayDay.items.length) return map
+  const cur = nowMinutes.value
+  for (const item of todayDay.items) {
+    if (item.end === null) continue
+    map.set(item.event.id, computeTodayItemProgress(item, cur))
   }
+  return map
+})
+
+function itemProgress(day, item) {
+  if (item.end === null) return 0
+  if (day.isPast) return 100
+  if (day.isFuture) return 0
+  return todayProgressMap.value.get(item.event.id) || 0
+}
+
+function pastOverlayStyleForProgress(pctVal) {
+  if (pctVal >= 100) return FULL_PAST_OVERLAY_STYLE
   const borderCompPx = ((2 * pctVal) / 100).toFixed(2)
   return {
     top: '-1px',
     height: `calc(${pctVal}% + ${borderCompPx}px)`,
   }
-}
-
-function isItemPastEntirely(dayKeyVal, item) {
-  return getItemPastProgress(dayKeyVal, item) >= 100
 }
 
 function blockStyle(item) {
@@ -650,6 +695,8 @@ let touchStartX = 0
 let touchStartY = 0
 let touchStartLeft = 0
 let touchStartTop = 0
+let touchMaxLeft = 0
+let touchMaxTop = 0
 let touchSamples = []
 let inertiaRaf = null
 
@@ -681,6 +728,8 @@ function onTouchStart(e) {
   touchStartY = t.clientY
   touchStartLeft = el.scrollLeft
   touchStartTop = el.scrollTop
+  touchMaxLeft = Math.max(0, el.scrollWidth - el.clientWidth)
+  touchMaxTop = Math.max(0, el.scrollHeight - el.clientHeight)
   lockedAxis = null
   touchSamples = []
   recordTouchSample(t.clientX, t.clientY)
@@ -699,13 +748,11 @@ function onTouchMove(e) {
   e.preventDefault()
   recordTouchSample(t.clientX, t.clientY)
   if (lockedAxis === 'x') {
-    const maxLeft = Math.max(0, el.scrollWidth - el.clientWidth)
-    el.scrollLeft = Math.max(0, Math.min(maxLeft, touchStartLeft - dx))
-    el.scrollTop = touchStartTop
+    el.scrollLeft = Math.max(0, Math.min(touchMaxLeft, touchStartLeft - dx))
+    if (el.scrollTop !== touchStartTop) el.scrollTop = touchStartTop
   } else {
-    const maxTop = Math.max(0, el.scrollHeight - el.clientHeight)
-    el.scrollTop = Math.max(0, Math.min(maxTop, touchStartTop - dy))
-    el.scrollLeft = touchStartLeft
+    el.scrollTop = Math.max(0, Math.min(touchMaxTop, touchStartTop - dy))
+    if (el.scrollLeft !== touchStartLeft) el.scrollLeft = touchStartLeft
   }
 }
 
@@ -768,6 +815,12 @@ function onWheel(e) {
   }
 }
 
+function refreshNowIfVisible() {
+  if (state.view === 'week' && (typeof document === 'undefined' || document.visibilityState === 'visible')) {
+    now.value = new Date()
+  }
+}
+
 onMounted(() => {
   loadWeek()
   if (typeof ResizeObserver !== 'undefined' && scroller.value) {
@@ -782,9 +835,10 @@ onMounted(() => {
     el.addEventListener('touchcancel', onTouchEnd, { passive: true })
     el.addEventListener('wheel', onWheel, { passive: false })
   }
-  nowTimer = setInterval(() => {
-    now.value = new Date()
-  }, 30000)
+  nowTimer = setInterval(refreshNowIfVisible, 30000)
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', refreshNowIfVisible)
+  }
   if (typeof window !== 'undefined') {
     window.addEventListener('campushub:focus-today', handleGlobalFocusToday)
   }
@@ -805,6 +859,9 @@ onUnmounted(() => {
     resizeObserver = null
   }
   if (nowTimer) clearInterval(nowTimer)
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', refreshNowIfVisible)
+  }
   if (scrollRaf) cancelAnimationFrame(scrollRaf)
   if (typeof window !== 'undefined') {
     window.removeEventListener('campushub:focus-today', handleGlobalFocusToday)

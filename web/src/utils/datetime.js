@@ -5,8 +5,19 @@
  */
 export const TZ = 'Asia/Shanghai'
 
-const dateFmt = (options) =>
-  new Intl.DateTimeFormat('zh-CN', { timeZone: TZ, ...options })
+const FMT_TIME = new Intl.DateTimeFormat('zh-CN', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+const FMT_WEEKDAY = new Intl.DateTimeFormat('zh-CN', { timeZone: TZ, weekday: 'short' })
+const FMT_MONTH_DAY = new Intl.DateTimeFormat('zh-CN', { timeZone: TZ, month: 'numeric', day: 'numeric' })
+const FMT_MONTH_DAY_TIME = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: TZ,
+  month: 'numeric',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+})
+const FMT_DAY_KEY = new Intl.DateTimeFormat('en-CA', { timeZone: TZ })
+const FMT_EN_WEEKDAY = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' })
 
 const DAY_MS = 86400000
 
@@ -45,13 +56,30 @@ export function formatShanghaiIso(value) {
 }
 
 export function timeLabel(value) {
+  if (!value) return ''
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    const hasTz = /[Zz]$|[+-]\d{2}:?\d{2}$/.test(trimmed)
+    const isShanghaiTz = /\+08:?00$/.test(trimmed)
+    if (!hasTz || isShanghaiTz) {
+      const match = trimmed.match(/[T\s](\d{1,2}):(\d{2})/)
+      if (match) {
+        return `${match[1].padStart(2, '0')}:${match[2]}`
+      }
+    }
+  }
   const date = toDate(value)
-  return date ? dateFmt({ hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date) : ''
+  return date ? FMT_TIME.format(date) : ''
+}
+
+export function formatMonthDayTime(value) {
+  const date = toDate(value)
+  return date ? FMT_MONTH_DAY_TIME.format(date) : ''
 }
 
 export function weekdayLabel(value) {
   const date = toDate(value)
-  return date ? dateFmt({ weekday: 'short' }).format(date) : ''
+  return date ? FMT_WEEKDAY.format(date) : ''
 }
 
 /** Local (Asia/Shanghai) calendar day key: YYYY-MM-DD. */
@@ -76,7 +104,7 @@ export function dayKey(value) {
   const cached = dayKeyCache.get(time)
   if (cached) return cached
   // en-CA renders ISO-like YYYY-MM-DD
-  const res = new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(date)
+  const res = FMT_DAY_KEY.format(date)
   if (dayKeyCache.size > 200) dayKeyCache.clear()
   dayKeyCache.set(time, res)
   return res
@@ -99,7 +127,7 @@ export function dayLabel(value) {
   const today = todayKey()
   const tomorrow = dayKey(new Date(Date.now() + DAY_MS))
   const date = toDate(value)
-  const month = dateFmt({ month: 'numeric', day: 'numeric' }).format(date)
+  const month = date ? FMT_MONTH_DAY.format(date) : ''
   if (key === today) return `今天 · ${weekdayLabel(date)} ${month}`
   if (key === tomorrow) return `明天 · ${weekdayLabel(date)} ${month}`
   // Calendar weeks (Monday-based), not "the next 6 days": the week grid uses the
@@ -153,7 +181,7 @@ export function minutesOfDay(value) {
   }
   const date = toDate(value)
   if (!date) return null
-  const parts = dateFmt({ hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date)
+  const parts = FMT_TIME.formatToParts(date)
   const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? 0)
   const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? 0)
   return hour * 60 + minute
@@ -268,7 +296,7 @@ export function isEventEnded(event, now = Date.now()) {
 /** Monday-based week window (Asia/Shanghai) used by the week grid + fetches. */
 export function weekWindow(reference = new Date()) {
   const key = dayKey(reference)
-  const weekday = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(toDate(reference))
+  const weekday = FMT_EN_WEEKDAY.format(toDate(reference))
   const order = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 }
   const offset = order[weekday] ?? 0
   const start = new Date(new Date(`${key}T00:00:00Z`).getTime() - offset * DAY_MS)

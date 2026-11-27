@@ -71,7 +71,7 @@ export function setSessionToken(value) {
 }
 
 function detectBase() {
-  const explicit = import.meta.env.VITE_API_BASE
+  const explicit = import.meta.env?.VITE_API_BASE
   if (explicit) return explicit.replace(/\/$/, '')
   // 如果运行在 Android 原生客户端壳中（无论本地虚拟域还是同源拦截），API 必须严格走绝对 HTTPS 远程后端地址
   if (
@@ -85,7 +85,7 @@ function detectBase() {
   ) {
     return 'https://nzlab.online/schedule/api'
   }
-  const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
+  const base = (import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
   return `${base}/api`
 }
 

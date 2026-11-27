@@ -10,7 +10,7 @@
       <img
         :src="activeBgUrl"
         alt=""
-        class="absolute inset-0 h-full w-full object-cover transition-[filter,transform] duration-300 ease-out"
+        class="absolute inset-0 h-full w-full object-cover"
         :style="bgLayerStyle"
         referrerpolicy="no-referrer"
         loading="eager"
@@ -25,7 +25,7 @@
     <!-- 关闭壁纸时，课表全屏模式仍保持柔和弥散高斯底衬 -->
     <div
       v-else-if="state.view === 'week'"
-      class="pointer-events-none fixed inset-0 z-0 bg-gradient-to-br from-brand-50/70 via-slate-100/90 to-indigo-50/70 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950/40"
+      class="pointer-events-none fixed inset-0 z-0 bg-gradient-to-br from-slate-200/90 via-slate-200/85 to-brand-100/80 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950/40"
       aria-hidden="true"
     />
 
@@ -114,24 +114,24 @@ const activeBgUrl = computed(() => getCachedActiveBgUrl())
 const bgLayerStyle = computed(() => {
   const cfg = state.backgroundConfig || {}
   const isWeek = state.view === 'week'
-  const rawOpacity = Number(cfg.opacity ?? 35) / 100
-  const opacity = (isWeek ? Math.max(0.58, rawOpacity) : rawOpacity).toFixed(2)
-  // 课表全屏模式下背景强制启用全高斯模糊（>= 28px），消除卡片边框后依然温润通透不刺眼
-  const blurPx = isWeek ? Math.max(28, Number(cfg.blur ?? 0)) : Number(cfg.blur ?? 0)
+  const rawOpacity = Number(cfg.opacity ?? 75) / 100
+  const opacity = (isWeek ? Math.max(0.62, rawOpacity) : Math.max(0.75, rawOpacity)).toFixed(2)
+  // 课表全屏模式下背景启用高斯模糊（>= 20px），非课表页保持背景清晰锐利（由配置 blur 决定，默认 0）
+  const blurPx = isWeek ? Math.max(20, Number(cfg.blur ?? 0)) : Number(cfg.blur ?? 0)
   return {
     opacity,
-    filter: blurPx > 0 ? `blur(${blurPx}px) saturate(125%)` : undefined,
-    transform: blurPx > 0 ? 'scale(1.08)' : undefined,
+    filter: blurPx > 0 ? `blur(${blurPx}px)` : undefined,
+    transform: blurPx > 0 ? 'translateZ(0) scale(1.08)' : 'translateZ(0)',
   }
 })
 
 const bgOverlayClass = computed(() => {
   if (state.view === 'week') {
     return state.isDarkTheme
-      ? 'bg-slate-950/45 backdrop-blur-xl'
-      : 'bg-white/30 backdrop-blur-xl'
+      ? 'bg-slate-950/45 backdrop-blur-md'
+      : 'bg-slate-900/[0.14] backdrop-blur-md'
   }
-  return state.isDarkTheme ? 'bg-slate-950/35' : 'bg-slate-900/5'
+  return state.isDarkTheme ? 'bg-slate-950/30' : 'bg-slate-900/[0.06]'
 })
 
 const toastClass = computed(() => {

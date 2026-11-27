@@ -152,13 +152,13 @@ html.has-custom-bg {
   /* 纯净高斯模糊核：全平台硬件加速，杜绝复合滤镜导致的 GPU 着色器崩溃丢弃 */
   --phys-glass-blur: blur(24px);
 
-  /* 物理漫透射亚克力雾化基底：高透晶莹磨砂玻璃（昼间浅透 0.35，深色 0.40），高斯模糊拉满 */
-  --phys-glass-bg-light: rgba(255, 255, 255, 0.35);
-  --phys-glass-bg-dark: rgba(15, 23, 42, 0.40);
+  /* 物理漫透射亚克力雾化基底：真正通透清澈的物理磨砂玻璃，实时折射底层清晰壁纸 */
+  --phys-glass-bg-light: rgba(255, 255, 255, 0.22);
+  --phys-glass-bg-dark: rgba(15, 23, 42, 0.34);
 
   /* 菲涅尔切线边界（Fresnel Rim）：微米级晶体高光边界 */
-  --phys-glass-border-light: rgba(255, 255, 255, 0.50);
-  --phys-glass-border-dark: rgba(255, 255, 255, 0.16);
+  --phys-glass-border-light: rgba(255, 255, 255, 0.65);
+  --phys-glass-border-dark: rgba(255, 255, 255, 0.18);
 
   /* 物理光照模型：
      1. 顶部迎光面镜面高光 (Specular Rim): inset 0 1px 0 0 rgba(...)
@@ -167,65 +167,90 @@ html.has-custom-bg {
      4. 环境光遮蔽与悬浮漫散射阴影 (Ambient Occlusion): 0 12px 32px -8px rgba(...)
   */
   --phys-glass-shadow-light:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.70),
-    inset 0 0 20px 0 rgba(255, 255, 255, 0.08),
-    0 1px 2px 0 rgba(0, 0, 0, 0.03),
-    0 12px 32px -8px rgba(0, 0, 0, 0.06);
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.88),
+    inset 0 0 20px 0 rgba(255, 255, 255, 0.16),
+    0 1px 2px 0 rgba(0, 0, 0, 0.04),
+    0 12px 32px -8px rgba(15, 23, 42, 0.10);
 
   --phys-glass-shadow-dark:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.25),
-    inset 0 0 20px 0 rgba(255, 255, 255, 0.03),
+    inset 0 0 20px 0 rgba(255, 255, 255, 0.04),
     0 1px 2px 0 rgba(0, 0, 0, 0.35),
     0 14px 38px -6px rgba(0, 0, 0, 0.55);
 }
 
 /* 顶栏物理磨砂通透悬浮梁 */
-html.frosted-glass-active header {
+html.frosted-glass-active header,
+html.has-custom-bg header {
   background-color: var(--phys-glass-bg-light) !important;
   backdrop-filter: var(--phys-glass-blur) !important;
   -webkit-backdrop-filter: var(--phys-glass-blur) !important;
   border-bottom: 1px solid var(--phys-glass-border-light) !important;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
 }
-html.dark.frosted-glass-active header {
+html.dark.frosted-glass-active header,
+html.dark.has-custom-bg header {
   background-color: var(--phys-glass-bg-dark) !important;
   border-bottom: 1px solid var(--phys-glass-border-dark) !important;
   box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.25);
 }
 
 /* 底栏物理悬浮亚克力 Dock 岛 */
-html.frosted-glass-active nav {
+html.frosted-glass-active nav,
+html.has-custom-bg nav {
   background-color: var(--phys-glass-bg-light) !important;
   backdrop-filter: var(--phys-glass-blur) !important;
   -webkit-backdrop-filter: var(--phys-glass-blur) !important;
   border-top: 1px solid var(--phys-glass-border-light) !important;
   box-shadow: var(--phys-glass-shadow-light) !important;
 }
-html.dark.frosted-glass-active nav {
+html.dark.frosted-glass-active nav,
+html.dark.has-custom-bg nav {
   background-color: var(--phys-glass-bg-dark) !important;
   border-top: 1px solid var(--phys-glass-border-dark) !important;
   box-shadow: var(--phys-glass-shadow-dark) !important;
 }
 
-/* 物理亚克力悬浮晶体卡片与横向日期胶囊卡片 */
+/* 物理亚克力悬浮晶体卡片与日程卡片（高透实时磨砂玻璃，折射底层清晰背景，拒绝死白） */
 html.frosted-glass-active .card,
 html.has-custom-bg .card,
 html.frosted-glass-active article[data-testid="event-card"],
 html.has-custom-bg article[data-testid="event-card"] {
-  background-color: var(--phys-glass-bg-light) !important;
-  backdrop-filter: blur(24px) !important;
-  -webkit-backdrop-filter: blur(24px) !important;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.14) 60%, rgba(255, 255, 255, 0.22) 100%) !important;
+  backdrop-filter: var(--phys-glass-blur) !important;
+  -webkit-backdrop-filter: var(--phys-glass-blur) !important;
   border: 1px solid var(--phys-glass-border-light) !important;
   box-shadow: var(--phys-glass-shadow-light) !important;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.45);
   transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 html.dark.frosted-glass-active .card,
 html.dark.has-custom-bg .card,
 html.dark.frosted-glass-active article[data-testid="event-card"],
 html.dark.has-custom-bg article[data-testid="event-card"] {
-  background-color: var(--phys-glass-bg-dark) !important;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.42) 0%, rgba(15, 23, 42, 0.28) 100%) !important;
   border: 1px solid var(--phys-glass-border-dark) !important;
   box-shadow: var(--phys-glass-shadow-dark) !important;
+  text-shadow: none;
+}
+
+/* 重点日程列表卡片：统一琥珀暖金高透磨砂玻璃（与普通卡片共享同一单核模糊，避免切换着色器卡顿） */
+html.frosted-glass-active article[data-testid="event-card"].is-important,
+html.has-custom-bg article[data-testid="event-card"].is-important {
+  background: linear-gradient(135deg, rgba(254, 243, 199, 0.42) 0%, rgba(251, 191, 36, 0.20) 100%) !important;
+  border: 1px solid rgba(251, 191, 36, 0.65) !important;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.88),
+    inset 0 0 18px 0 rgba(255, 255, 255, 0.14),
+    0 6px 20px -4px rgba(245, 158, 11, 0.22) !important;
+}
+html.dark.frosted-glass-active article[data-testid="event-card"].is-important,
+html.dark.has-custom-bg article[data-testid="event-card"].is-important {
+  background: linear-gradient(135deg, rgba(120, 53, 15, 0.38) 0%, rgba(15, 23, 42, 0.32) 100%) !important;
+  border: 1px solid rgba(251, 191, 36, 0.38) !important;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.18),
+    0 8px 24px -6px rgba(0, 0, 0, 0.50) !important;
 }
 
 /* 确保日程滑动父级容器背景透明，不阻碍卡片磨砂透光 */
@@ -236,36 +261,39 @@ html.has-custom-bg .swipe-pane {
   background-color: transparent !important;
 }
 
-/* 周课表普通课程卡片 (class-block) 纯物理光学高级磨砂玻璃材质：
-   1. 高透水晶磨砂玻璃：极浅透明度（昼间白雾降至 0.08，结合 30% 主题色透光漫射），彻底告别塑料感；
+/* 仅对可视视口及邻近周列启用 GPU backdrop-filter，远端离屏列零模糊开销 */
+.week-col-in-view [data-testid="class-block"] {
+  backdrop-filter: blur(22px) !important;
+  -webkit-backdrop-filter: blur(22px) !important;
+}
+
+/* 周课表普通课程卡片 (class-block) 纯物理光学高透磨砂玻璃材质：
+   1. 高透水晶玻璃：以斜向镜面高光与次表面内发光维持日间通透亮度，玻璃本体保持 14%-36% 透光，拒绝死白；
    2. 菲涅尔物理切线高光反射微倒角白边 (Fresnel Rim)；
    3. 顶部迎光面镜面反射 (Specular Rim)；
-   4. 硬件高斯模糊 (Backdrop Blur: 24px)；
-   5. 文字无矩形底框、高反差锐利渲染（无晕影矩形） */
+   4. 单一纯净高斯模糊核 (blur(22px))，杜绝复合 saturate 导致 GPU 着色器崩溃 */
 [data-testid="class-block"]:not(.border-amber-300\/80):not(.is-important) {
-  backdrop-filter: blur(24px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
   background:
-    linear-gradient(135deg, rgba(var(--brand-400), 0.28) 0%, rgba(var(--brand-500), 0.18) 100%),
-    rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.70) !important;
+    linear-gradient(135deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0.15) 55%, rgba(255, 255, 255, 0.25) 100%),
+    linear-gradient(135deg, rgb(var(--brand-300) / 0.28) 0%, rgb(var(--brand-500) / 0.14) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.80) !important;
   box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.85),
-    0 4px 16px -2px rgba(var(--brand-900), 0.06) !important;
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.96),
+    inset 0 0 18px 0 rgba(255, 255, 255, 0.24),
+    0 4px 16px -2px rgba(15, 23, 42, 0.12) !important;
   color: #0f172a !important;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.90);
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.85);
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
 }
 [data-testid="class-block"]:not(.border-amber-300\/80):not(.is-important):hover {
   box-shadow:
     inset 0 1px 0 0 rgba(255, 255, 255, 1),
-    0 6px 20px -2px rgba(var(--brand-500), 0.35) !important;
+    inset 0 0 20px 0 rgba(255, 255, 255, 0.28),
+    0 6px 20px -2px rgb(var(--brand-500) / 0.35) !important;
 }
 html.dark [data-testid="class-block"]:not(.border-amber-300\/80):not(.is-important) {
-  backdrop-filter: blur(24px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
   background:
-    linear-gradient(135deg, rgba(var(--brand-500), 0.28) 0%, rgba(var(--brand-600), 0.18) 100%),
+    linear-gradient(135deg, rgb(var(--brand-500) / 0.28) 0%, rgb(var(--brand-600) / 0.18) 100%),
     rgba(15, 23, 42, 0.20) !important;
   border: 1px solid rgba(255, 255, 255, 0.18) !important;
   box-shadow:
@@ -277,23 +305,21 @@ html.dark [data-testid="class-block"]:not(.border-amber-300\/80):not(.is-importa
 html.dark [data-testid="class-block"]:not(.border-amber-300\/80):not(.is-important):hover {
   box-shadow:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.35),
-    0 6px 20px -2px rgba(var(--brand-500), 0.45) !important;
+    0 6px 20px -2px rgb(var(--brand-500) / 0.45) !important;
 }
 
-/* 课程表自定义日程 / 待办 / 实验等带时段卡片 (border-amber-300/80)：
-   同样应用极致高透微晶磨砂玻璃 (Backdrop Blur: 24px) */
+/* 课程表自定义日程 / 待办 / 实验等带时段卡片 (border-amber-300/80) */
 [data-testid="class-block"].border-amber-300\/80:not(.is-important) {
-  backdrop-filter: blur(24px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
   background:
-    linear-gradient(135deg, rgba(251, 191, 36, 0.25) 0%, rgba(245, 158, 11, 0.15) 100%),
-    rgba(255, 255, 255, 0.10) !important;
-  border: 1px solid rgba(245, 158, 11, 0.50) !important;
+    linear-gradient(135deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.14) 55%, rgba(255, 255, 255, 0.22) 100%),
+    linear-gradient(135deg, rgba(251, 191, 36, 0.26) 0%, rgba(245, 158, 11, 0.14) 100%) !important;
+  border: 1px solid rgba(251, 191, 36, 0.62) !important;
   box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.85),
-    0 4px 16px -2px rgba(245, 158, 11, 0.15) !important;
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.92),
+    inset 0 0 16px 0 rgba(255, 255, 255, 0.18),
+    0 4px 16px -2px rgba(245, 158, 11, 0.16) !important;
   color: #78350f !important;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.90);
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.85);
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
 }
 html.dark [data-testid="class-block"].border-amber-300\/80:not(.is-important) {
@@ -308,17 +334,19 @@ html.dark [data-testid="class-block"].border-amber-300\/80:not(.is-important) {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.90);
 }
 
-/* 重点课程 / 重点日程块 (is-important)：变色为高贵璀璨的琥珀暖金水晶玻璃卡片 */
+/* 重点课程 / 重点日程块 (is-important)：统一使用 .week-col-in-view 的 blur(22px)，高透琥珀金晶质感 */
 [data-testid="class-block"].is-important {
-  backdrop-filter: blur(16px) !important;
-  -webkit-backdrop-filter: blur(16px) !important;
-  background: linear-gradient(135deg, rgba(251, 191, 36, 0.46) 0%, rgba(245, 158, 11, 0.32) 100%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.95) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0.14) 55%, rgba(255, 255, 255, 0.22) 100%),
+    linear-gradient(135deg, rgba(251, 191, 36, 0.44) 0%, rgba(245, 158, 11, 0.28) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.92) !important;
   box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 1),
-    0 4px 14px -2px rgba(245, 158, 11, 0.38) !important;
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.98),
+    inset 0 0 18px 0 rgba(255, 255, 255, 0.22),
+    0 4px 16px -2px rgba(245, 158, 11, 0.34) !important;
   color: #78350f !important;
-  transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.85);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
 }
 [data-testid="class-block"].is-important:hover {
   box-shadow:
@@ -332,9 +360,10 @@ html.dark [data-testid="class-block"].is-important {
     inset 0 1px 0 0 rgba(255, 255, 255, 0.20),
     0 4px 14px -2px rgba(0, 0, 0, 0.45) !important;
   color: #fef3c7 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.90);
 }
 
-/* 课程已过部分 / 正在上一半的过去进度遮罩层：变灰并附带高雅 45° 细腻斜纹 */
+/* 课程已过部分 / 正在上一半的过去进度遮罩层：纯半透斜纹，避免嵌套 backdrop-filter 叠加 */
 .class-past-overlay {
   position: absolute;
   top: 0;
@@ -342,7 +371,7 @@ html.dark [data-testid="class-block"].is-important {
   right: 0;
   pointer-events: none;
   z-index: 2;
-  background-color: rgba(148, 163, 184, 0.28);
+  background-color: rgba(148, 163, 184, 0.34);
   background-image: repeating-linear-gradient(
     -45deg,
     rgba(100, 116, 139, 0.22) 0px,
@@ -351,15 +380,13 @@ html.dark [data-testid="class-block"].is-important {
     transparent 6px
   );
   border-bottom: 1.5px dashed rgba(100, 116, 139, 0.45);
-  backdrop-filter: grayscale(80%) contrast(90%);
-  -webkit-backdrop-filter: grayscale(80%) contrast(90%);
   border-top-left-radius: 0.5rem;
   border-top-right-radius: 0.5rem;
   transition: height 0.3s ease;
 }
 
 html.dark .class-past-overlay {
-  background-color: rgba(15, 23, 42, 0.48);
+  background-color: rgba(15, 23, 42, 0.54);
   background-image: repeating-linear-gradient(
     -45deg,
     rgba(255, 255, 255, 0.12) 0px,
@@ -368,14 +395,11 @@ html.dark .class-past-overlay {
     transparent 6px
   );
   border-bottom: 1.5px dashed rgba(255, 255, 255, 0.25);
-  backdrop-filter: grayscale(80%) contrast(85%);
-  -webkit-backdrop-filter: grayscale(80%) contrast(85%);
 }
 
-/* 已经完全上完过去的整节课程卡片：黑白灰阶淡雅收敛 */
+/* 已经完全上完过去的整节课程卡片：降不透明度柔和退隐（不叠加 filter:grayscale 以防与 backdrop-filter 冲突） */
 [data-testid="class-block"].is-past-entirely {
-  opacity: 0.65 !important;
-  filter: grayscale(85%) !important;
+  opacity: 0.62 !important;
 }
 [data-testid="class-block"].is-past-entirely .class-past-overlay {
   border-bottom: none !important;
@@ -388,8 +412,8 @@ html.has-custom-bg [data-testid="day-group"] > header,
 html.frosted-glass-active [data-testid="history-day-group"] > header,
 html.has-custom-bg [data-testid="history-day-group"] > header {
   background-color: var(--phys-glass-bg-light) !important;
-  backdrop-filter: blur(24px) !important;
-  -webkit-backdrop-filter: blur(24px) !important;
+  backdrop-filter: var(--phys-glass-blur) !important;
+  -webkit-backdrop-filter: var(--phys-glass-blur) !important;
   border: 1px solid var(--phys-glass-border-light) !important;
   box-shadow: var(--phys-glass-shadow-light) !important;
   border-radius: 0.75rem !important;
@@ -408,23 +432,23 @@ html.dark.has-custom-bg [data-testid="history-day-group"] > header {
 button[data-testid="fab-new-event"] {
   box-shadow:
     inset 0 1px 1px 0 rgba(255, 255, 255, 0.6),
-    0 8px 24px -4px rgba(var(--brand-500), 0.40) !important;
+    0 8px 24px -4px rgb(var(--brand-500) / 0.40) !important;
   transition: transform 0.18s ease, box-shadow 0.18s ease !important;
 }
 button[data-testid="fab-new-event"]:hover {
   box-shadow:
     inset 0 1px 1px 0 rgba(255, 255, 255, 0.75),
-    0 12px 28px -4px rgba(var(--brand-500), 0.50) !important;
+    0 12px 28px -4px rgb(var(--brand-500) / 0.50) !important;
 }
 html.frosted-glass-active button[data-testid="fab-new-event"] {
-  backdrop-filter: blur(16px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
 }
 
 /* 弹窗与抽屉物理光学景深散焦 */
 html.frosted-glass-active .modal-backdrop,
 html.frosted-glass-active [data-testid="custom-event-editor"] > div:first-child,
 html.frosted-glass-active [data-testid="class-detail-backdrop"] {
-  backdrop-filter: blur(18px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(180%) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
 }

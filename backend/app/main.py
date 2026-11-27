@@ -149,17 +149,16 @@ def create_app() -> FastAPI:
     async def app_version() -> JSONResponse:
         return JSONResponse(
             content={
-                "version": "3.0.0",
-                "tag": "v3.0.0",
-                "title": "CampusHub Android v3.0.0",
+                "version": "3.0.2",
+                "tag": "v3.0.2",
+                "title": "CampusHub Android v3.0.2",
                 "download_url": "https://nzlab.online/schedule/CampusHub.apk",
                 "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
                 "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
                 "features": [
-                    "课表滑动升级为单轴方向锁定：根据初始滑动意图自动锁定纯水平切换或纯竖直 0:00–24:00 浏览，告别斜向漂移",
-                    "新增 Android 原生原子文件双写存储引擎（fsync 落盘 + 退出前强制刷盘 + 0ms 队列直传），彻底解决创建日程退出重进后丢失的问题",
-                    "默认课表显示提供「本周视图（默认）」与「今天在第三列」两种模式，选择入口移至「设置 → 外观与壁纸」",
-                    "汇总 v2.9.x 重大体验升级：本地壁纸缓存秒开、全屏高斯模糊课表、课表内点击 DDL 实线查看/编辑/划掉、设置页二级菜单、确定性主键与单调 LWW 同步架构",
+                    "修复将日程或课程标为重点时发生卡顿、队列膨胀与闪退的问题（细粒度响应字典、原生双写落盘合并、移除导致 GPU 着色器崩溃的复合滤镜与渲染进程异常自恢复）",
+                    "升级全局实时物理磨砂玻璃质感：非课表页背景保持高清清晰，卡片呈现高透镜面磨砂折射（告别死白）；日间模式课表背景微暗化并保留嵌套玻璃景深，课表卡片保持通透亮度",
+                    "全面优化运行流畅性：单层课表网格参考线（减少上千 DOM 节点）、可视区域动态作用域模糊、O(N) 单趟事件分桶、缓存 Intl.DateTimeFormat 单例与无回流触控滑动",
                 ],
             },
             headers={

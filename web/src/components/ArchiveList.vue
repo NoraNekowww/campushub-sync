@@ -64,7 +64,6 @@ import { CheckCircle2 } from 'lucide-vue-next'
 import EventCard from './EventCard.vue'
 import SkeletonList from './SkeletonList.vue'
 import { fetchHistoryEvents, matchesQuery, removeEvent, state, toggleCompleted } from '../store'
-import { dedupeEvents } from '../utils/dedupe'
 import { dayDiff, dayKey, dayLabel, isEventEnded, toDate, todayKey } from '../utils/datetime'
 
 // 进入历史归档视图时主动从服务器全量拉取已完成归档记录，确保换设备/清缓存后 100% 留存不丢失
@@ -81,8 +80,7 @@ onMounted(() => {
  */
 const completedEvents = computed(() => {
   const nowTs = Date.now()
-  // 同一节课在时间线里出现过两次时，归档里也会跟着出现两次——统一按内容去重
-  return dedupeEvents(state.events || [])
+  return (state.events || [])
     .filter((event) => {
       // 核心：彻底排除天大课表自带课程
       if (event.source === 'tju_schedule') return false

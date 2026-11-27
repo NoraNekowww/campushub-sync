@@ -2,7 +2,7 @@
  * Global reactive store — deliberately dependency-free (no Pinia) because the
  * app state is small: one event list, one status blob, a few UI flags.
  */
-import { reactive } from 'vue'
+import { reactive, toRaw } from 'vue'
 import { api, ApiError, getServerClockOffsetMs, getSessionToken, getToken, isAuthError, isOfflineMode, noteServerTime, setOfflineMode as persistOfflineMode, setSessionToken, setToken } from './api'
 import { dayKey, formatShanghaiIso, isEventEnded, toDate, todayKey } from './utils/datetime'
 import { applyThemeColor, getSavedThemeColor } from './utils/themeColors'
@@ -29,6 +29,7 @@ import {
   readDeletedIdsDual,
   readDualJson,
   readEventsCacheDual,
+  readImportantIdsDual,
   readSyncQueueDual,
   removeDualKey,
   writeDualJson,
@@ -54,22 +55,23 @@ const BACKGROUND_CONFIG_KEY = 'campushub.background_config.v1'
 const LOOKBACK_DAYS = 60
 const LOOKAHEAD_DAYS = 180
 
-function readInitialImportantIds() {
+function readInitialImportantMap() {
+  const map = {}
   try {
-    if (typeof localStorage !== 'undefined') {
-      const raw = localStorage.getItem(IMPORTANT_IDS_KEY)
-      return raw ? new Set(JSON.parse(raw)) : new Set()
+    const ids = readImportantIdsDual(IMPORTANT_IDS_KEY)
+    for (const id of ids) {
+      if (id) map[id] = true
     }
   } catch (e) {}
-  return new Set()
+  return map
 }
 
-const importantEventIds = reactive(readInitialImportantIds())
+const importantEventMap = reactive(readInitialImportantMap())
 
 export function isImportantEvent(eventOrId) {
   if (!eventOrId) return false
   const id = typeof eventOrId === 'string' ? eventOrId : eventOrId?.id
-  if (id && importantEventIds.has(id)) return true
+  if (id && importantEventMap[id]) return true
   if (typeof eventOrId === 'object' && eventOrId?.priority === 1) return true
   return false
 }
@@ -77,31 +79,39 @@ export function isImportantEvent(eventOrId) {
 export function toggleImportantEvent(event) {
   if (!event || !event.id) return false
   const id = event.id
-  const currentlyImportant = isImportantEvent(event)
+  const target = (state.events || []).find((e) => e.id === id) || event
+  const currentlyImportant = isImportantEvent(target) || isImportantEvent(event)
   const nextImportant = !currentlyImportant
 
   if (nextImportant) {
-    importantEventIds.add(id)
+    importantEventMap[id] = true
   } else {
-    importantEventIds.delete(id)
+    delete importantEventMap[id]
   }
 
-  try {
-    localStorage.setItem(IMPORTANT_IDS_KEY, JSON.stringify([...importantEventIds]))
-  } catch (e) {}
+  writeDualJson('important_ids', IMPORTANT_IDS_KEY, Object.keys(importantEventMap))
 
   // 若为自定义事件或待办，同步向服务端持久化 priority 字段 (1=高优先级重点，5=普通)
-  const nowIso = nextMutationIso(event)
-  event.priority = nextImportant ? 1 : 5
-  event.updated_at = nowIso
-  event.client_updated_at = nowIso
+  const nowIso = nextMutationIso(target)
+  target.priority = nextImportant ? 1 : 5
+  target.updated_at = nowIso
+  target.client_updated_at = nowIso
+  if (event !== target) {
+    event.priority = target.priority
+    event.updated_at = nowIso
+    event.client_updated_at = nowIso
+  }
   saveEventsCache(state.events, state.total)
-  if (!state.offlineMode && event.source === 'custom') {
-    const qid = appendSyncQueue({ type: 'patch', id, payload: { priority: event.priority, client_updated_at: nowIso } })
+  if (!state.offlineMode && target.source === 'custom') {
+    const qid = replaceQueuedPriorityPatch(id, { priority: target.priority, client_updated_at: nowIso })
     if (!String(id).startsWith('local_')) {
-      api.patchEvent(id, { priority: event.priority, client_updated_at: nowIso })
+      api.patchEvent(id, { priority: target.priority, client_updated_at: nowIso })
         .then(() => removeSyncQueueItem(qid))
-        .catch(() => flushSyncQueue().catch(() => {}))
+        .catch((err) => {
+          if (err instanceof ApiError && (err.status === 400 || err.status === 404 || err.status === 422)) {
+            removeSyncQueueItem(qid)
+          }
+        })
     }
   }
 
@@ -116,7 +126,7 @@ function readInitialBackgroundConfig() {
     lightUrl: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=1920&q=85',
     darkUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=85',
     wallpaperTitle: '轨道地球与夜色灯火',
-    opacity: 35, // 0 - 100%
+    opacity: 75, // 0 - 100%
     blur: 0,    // 0 - 20px
   }
   try {
@@ -526,6 +536,9 @@ export function autoExpireEndedCustomTasks() {
 }
 
 function loadCachedData() {
+  syncQueueCache = null
+  deletedIdsCache = null
+  completedOverridesCache = null
   try {
     const dualEvents = readEventsCacheDual(EVENTS_CACHE_KEY)
     if (Array.isArray(dualEvents.items) && dualEvents.items.length > 0) {
@@ -576,9 +589,13 @@ function loadCachedData() {
   }
 }
 
+function unwrapEventsForStorage(items) {
+  return Array.isArray(items) ? items.map((it) => toRaw(it)) : []
+}
+
 function saveEventsCache(items, total) {
   writeDualJson('events_cache', EVENTS_CACHE_KEY, {
-    items,
+    items: unwrapEventsForStorage(items),
     total,
     timestamp: Date.now(),
   })
@@ -586,25 +603,33 @@ function saveEventsCache(items, total) {
 
 function saveConfigCache(config) {
   if (config) {
-    writeDualJson('config_cache', CONFIG_CACHE_KEY, config)
+    writeDualJson('config_cache', CONFIG_CACHE_KEY, toRaw(config))
   }
 }
 
 function saveStatusCache(status) {
   try {
     if (status) {
-      localStorage.setItem(STATUS_CACHE_KEY, JSON.stringify(status))
+      localStorage.setItem(STATUS_CACHE_KEY, JSON.stringify(toRaw(status)))
     }
   } catch (e) {}
 }
 
+let syncQueueCache = null
+let deletedIdsCache = null
+let completedOverridesCache = null
+
 /** 已在本地明确删除的任务 ID 墓碑集合（双写本机文件与 localStorage，保留 30 天防多端往返冲撞复活） */
 function getDeletedEventIds() {
-  return readDeletedIdsDual(DELETED_IDS_KEY, 30 * 86400000)
+  if (!deletedIdsCache) {
+    deletedIdsCache = readDeletedIdsDual(DELETED_IDS_KEY, 30 * 86400000)
+  }
+  return deletedIdsCache
 }
 
 function saveDeletedEventIdsMap(map) {
-  writeDualJson('deleted_ids', DELETED_IDS_KEY, map || {})
+  deletedIdsCache = map ? { ...map } : {}
+  writeDualJson('deleted_ids', DELETED_IDS_KEY, deletedIdsCache)
 }
 
 export function isEventDeleted(id) {
@@ -632,13 +657,17 @@ function unrecordDeletedEventId(id) {
  * 本地完成态（划掉）覆盖保护机制（双写保护，彻底根治「回光返照」）。
  */
 function getCompletedOverrides() {
-  return readCompletedOverridesDual(COMPLETED_OVERRIDES_KEY, 7 * 86400000)
+  if (!completedOverridesCache) {
+    completedOverridesCache = readCompletedOverridesDual(COMPLETED_OVERRIDES_KEY, 7 * 86400000)
+  }
+  return completedOverridesCache
 }
 
 function recordCompletedOverride(id, status, timestamp = Date.now()) {
   try {
     const map = getCompletedOverrides()
     map[id] = { status, timestamp }
+    completedOverridesCache = map
     writeDualJson('completed_overrides', COMPLETED_OVERRIDES_KEY, map)
   } catch {}
 }
@@ -647,18 +676,23 @@ function unrecordCompletedOverride(id) {
   try {
     const map = getCompletedOverrides()
     delete map[id]
+    completedOverridesCache = map
     writeDualJson('completed_overrides', COMPLETED_OVERRIDES_KEY, map)
   } catch {}
 }
 
 /** 离线待同步操作队列管理（双写至 Android 原生原子文件，退应用绝不丢失） */
 function getSyncQueue() {
-  return readSyncQueueDual(SYNC_QUEUE_KEY)
+  if (!syncQueueCache) {
+    syncQueueCache = readSyncQueueDual(SYNC_QUEUE_KEY)
+  }
+  return [...syncQueueCache]
 }
 
 function saveSyncQueue(queue) {
   if (Array.isArray(queue) && queue.length > 0) {
-    writeDualJson('sync_queue', SYNC_QUEUE_KEY, queue)
+    syncQueueCache = [...queue]
+    writeDualJson('sync_queue', SYNC_QUEUE_KEY, syncQueueCache)
   } else {
     clearSyncQueue()
   }
@@ -670,6 +704,30 @@ function appendSyncQueue(action) {
     const _qid = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     queue.push({
       ...action,
+      _qid,
+      timestamp: Date.now(),
+    })
+    saveSyncQueue(queue)
+    return _qid
+  } catch {
+    return ''
+  }
+}
+
+function isPriorityOnlyPatch(item, id) {
+  if (!item || item.type !== 'patch' || item.id !== id || !item.payload) return false
+  const keys = Object.keys(item.payload)
+  return keys.length > 0 && keys.every((k) => k === 'priority' || k === 'client_updated_at')
+}
+
+function replaceQueuedPriorityPatch(id, payload) {
+  try {
+    const queue = getSyncQueue().filter((q) => !isPriorityOnlyPatch(q, id))
+    const _qid = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    queue.push({
+      type: 'patch',
+      id,
+      payload,
       _qid,
       timestamp: Date.now(),
     })
@@ -704,6 +762,7 @@ function getPendingSyncIdSet(queue = getSyncQueue()) {
 }
 
 function clearSyncQueue() {
+  syncQueueCache = []
   removeDualKey('sync_queue', SYNC_QUEUE_KEY)
 }
 
@@ -1788,6 +1847,11 @@ export function clearAllLocalData() {
     sessionStorage.clear()
   } catch (e) {}
   clearNativeStoreAll()
+  Object.keys(importantEventMap).forEach((k) => delete importantEventMap[k])
+  removeDualKey('important_ids', IMPORTANT_IDS_KEY)
+  syncQueueCache = null
+  deletedIdsCache = null
+  completedOverridesCache = null
   setSessionToken('')
   state.events = []
   state.total = 0
@@ -2056,7 +2120,7 @@ export async function jwImport(payload) {
 export function importLocalEventsBatch(fresh, { courses = 0, source = 'local', semester = {}, termStart = '' } = {}) {
   const incoming = Array.isArray(fresh) ? fresh : []
   const keep = (state.events || []).filter((event) => event.source !== 'tju_schedule')
-  state.events = [...keep, ...incoming]
+  state.events = dedupeEvents([...keep, ...incoming])
   state.total = state.events.length
 
   state.config = {

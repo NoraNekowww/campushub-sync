@@ -1085,7 +1085,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '3.0.0'
+  return '3.0.2'
 })
 
 const appVersionDisplay = clientAppVersion
@@ -1511,7 +1511,7 @@ const bgForm = reactive({
   lightUrl: state.backgroundConfig?.lightUrl || '',
   darkUrl: state.backgroundConfig?.darkUrl || '',
   wallpaperTitle: state.backgroundConfig?.wallpaperTitle || '',
-  opacity: Number(state.backgroundConfig?.opacity ?? 35),
+  opacity: Number(state.backgroundConfig?.opacity ?? 75),
   blur: Number(state.backgroundConfig?.blur ?? 0),
 })
 
@@ -1524,7 +1524,7 @@ watch(
     bgForm.lightUrl = val.lightUrl || ''
     bgForm.darkUrl = val.darkUrl || ''
     bgForm.wallpaperTitle = val.wallpaperTitle || ''
-    bgForm.opacity = Number(val.opacity ?? 35)
+    bgForm.opacity = Number(val.opacity ?? 75)
     bgForm.blur = Number(val.blur ?? 0)
   },
   { deep: true },
@@ -1574,7 +1574,7 @@ function resetBgConfig() {
   bgForm.lightUrl = ''
   bgForm.darkUrl = ''
   bgForm.wallpaperTitle = ''
-  bgForm.opacity = 35
+  bgForm.opacity = 75
   bgForm.blur = 0
   updateBgConfig()
   notify('已重置并清空背景图', 'ok')

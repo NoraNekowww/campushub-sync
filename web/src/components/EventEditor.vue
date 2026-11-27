@@ -2,13 +2,13 @@
   <Teleport to="body">
     <div
       v-if="state.customEditor.open"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md animate-fade-in"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/35 backdrop-blur-md animate-fade-in"
       @click.self="close"
     >
       <form
-        class="max-h-[90vh] w-full max-w-lg space-y-3.5 overflow-y-auto rounded-3xl p-5 shadow-2xl transition-all
-               border border-white/60 bg-white/80 dark:border-white/10 dark:bg-slate-900/85
-               backdrop-blur-2xl [transform:translateZ(0)]"
+        class="max-h-[90vh] w-full max-w-lg space-y-3.5 overflow-y-auto rounded-3xl p-5
+               border border-white/70 bg-white/65 dark:border-white/15 dark:bg-slate-900/68
+               backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.88),0_24px_60px_-12px_rgba(15,23,42,0.35)] [transform:translateZ(0)]"
         data-testid="custom-event-editor"
         @submit.prevent="submit"
       >

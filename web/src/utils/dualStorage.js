@@ -176,3 +176,16 @@ export function readCompletedOverridesDual(lsKey, maxAgeMs = 7 * 86400000) {
   }
   return merged
 }
+
+/** Union important/starred event IDs across localStorage and Android native store. */
+export function readImportantIdsDual(lsKey) {
+  const { lsVal, nativeVal } = readDualJson('important_ids', lsKey, [])
+  const out = new Set()
+  for (const src of [nativeVal, lsVal]) {
+    if (!Array.isArray(src)) continue
+    for (const id of src) {
+      if (typeof id === 'string' && id) out.add(id)
+    }
+  }
+  return [...out]
+}

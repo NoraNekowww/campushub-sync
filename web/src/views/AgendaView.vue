@@ -3,7 +3,7 @@
     <!-- 列表模式切换：仅 DDL / 仅日程 / 含课表 / 历史归档（四等分铺满整行） -->
     <div class="pt-1">
       <div
-        class="flex items-center gap-0.5 rounded-xl border border-slate-200/60 bg-slate-100/90 p-0.5 text-xs shadow-2xs backdrop-blur-md dark:border-slate-700/60 dark:bg-slate-800/80"
+        class="flex items-center gap-0.5 rounded-xl border border-white/55 bg-white/30 p-0.5 text-xs shadow-2xs backdrop-blur-xl dark:border-white/15 dark:bg-slate-900/40"
         role="tablist"
         aria-label="日程展示模式"
       >
@@ -153,7 +153,6 @@ import ArchiveList from '../components/ArchiveList.vue'
 import EventCard from '../components/EventCard.vue'
 import SkeletonList from '../components/SkeletonList.vue'
 import { filterEvents, notify, openCustomEditor, openSettingsSubpage, refresh, removeEvent, state, toggleCompleted } from '../store'
-import { dedupeEvents } from '../utils/dedupe'
 import { groupByDay, todayKey, dayKey } from '../utils/datetime'
 
 const today = todayKey()
@@ -196,7 +195,7 @@ const AGENDA_TABS = [
 ]
 
 const visible = computed(() => {
-  const list = dedupeEvents(filterEvents(undefined, { include_undated: false }))
+  const list = filterEvents(undefined, { include_undated: false })
   if (agendaMode.value === 'ddl') {
     return list.filter((event) => event.is_deadline && !isRangeTask(event))
   }
