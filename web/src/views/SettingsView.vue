@@ -1085,7 +1085,7 @@ const clientAppVersion = computed(() => {
       if (v) return String(v).trim().replace(/^v/i, '')
     } catch (e) {}
   }
-  return '3.0.2'
+  return '3.0.3'
 })
 
 const appVersionDisplay = clientAppVersion

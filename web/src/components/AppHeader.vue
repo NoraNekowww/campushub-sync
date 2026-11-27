@@ -1,5 +1,6 @@
 <template>
   <header
+    data-testid="app-header"
     class="sticky top-0 z-20 border-b border-white/60 bg-white/70 backdrop-blur-xl
            dark:border-white/10 dark:bg-slate-950/70 [transform:translateZ(0)]"
   >

@@ -1,17 +1,17 @@
 <template>
   <div
     data-testid="auth-gate"
-    class="flex min-h-screen flex-col items-center justify-center gap-4 px-5 py-10"
+    class="relative z-10 flex min-h-screen flex-col items-center justify-center gap-4 px-5 py-10"
   >
-    <div class="text-center">
-      <div class="text-2xl font-semibold tracking-tight">{{ appName }}</div>
-      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+    <div class="rounded-2xl bg-white/75 px-5 py-3 text-center shadow-xs backdrop-blur-md dark:bg-slate-900/75">
+      <div class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">{{ appName }}</div>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
         课表与截止日期聚合 · 需要账号访问
       </p>
     </div>
 
     <form
-      class="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+      class="w-full max-w-sm rounded-2xl border border-slate-200/80 bg-white/92 p-5 shadow-lg backdrop-blur-xl dark:border-slate-700/80 dark:bg-slate-900/92"
       @submit.prevent="submit"
     >
       <div class="mb-4 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 text-sm dark:bg-slate-800">
@@ -164,7 +164,7 @@
 
     <!-- 离线模式：不登录、不联网，数据只保存在本机 -->
     <div
-      class="w-full max-w-sm rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-center dark:border-slate-700"
+      class="w-full max-w-sm rounded-2xl border border-dashed border-slate-300/90 bg-white/85 px-4 py-3 text-center backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/85"
     >
       <button
         type="button"

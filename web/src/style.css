@@ -179,33 +179,33 @@ html.has-custom-bg {
     0 14px 38px -6px rgba(0, 0, 0, 0.55);
 }
 
-/* 顶栏物理磨砂通透悬浮梁 */
-html.frosted-glass-active header,
-html.has-custom-bg header {
+/* 顶栏物理磨砂通透悬浮梁（严格限定仅作用于主顶栏，防止误伤弹窗/卡片内嵌 header） */
+html.frosted-glass-active header[data-testid="app-header"],
+html.has-custom-bg header[data-testid="app-header"] {
   background-color: var(--phys-glass-bg-light) !important;
   backdrop-filter: var(--phys-glass-blur) !important;
   -webkit-backdrop-filter: var(--phys-glass-blur) !important;
   border-bottom: 1px solid var(--phys-glass-border-light) !important;
   box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
 }
-html.dark.frosted-glass-active header,
-html.dark.has-custom-bg header {
+html.dark.frosted-glass-active header[data-testid="app-header"],
+html.dark.has-custom-bg header[data-testid="app-header"] {
   background-color: var(--phys-glass-bg-dark) !important;
   border-bottom: 1px solid var(--phys-glass-border-dark) !important;
   box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.25);
 }
 
-/* 底栏物理悬浮亚克力 Dock 岛 */
-html.frosted-glass-active nav,
-html.has-custom-bg nav {
+/* 底栏物理悬浮亚克力 Dock 岛（严格限定仅作用于主底栏） */
+html.frosted-glass-active nav[data-testid="bottom-nav"],
+html.has-custom-bg nav[data-testid="bottom-nav"] {
   background-color: var(--phys-glass-bg-light) !important;
   backdrop-filter: var(--phys-glass-blur) !important;
   -webkit-backdrop-filter: var(--phys-glass-blur) !important;
   border-top: 1px solid var(--phys-glass-border-light) !important;
   box-shadow: var(--phys-glass-shadow-light) !important;
 }
-html.dark.frosted-glass-active nav,
-html.dark.has-custom-bg nav {
+html.dark.frosted-glass-active nav[data-testid="bottom-nav"],
+html.dark.has-custom-bg nav[data-testid="bottom-nav"] {
   background-color: var(--phys-glass-bg-dark) !important;
   border-top: 1px solid var(--phys-glass-border-dark) !important;
   box-shadow: var(--phys-glass-shadow-dark) !important;

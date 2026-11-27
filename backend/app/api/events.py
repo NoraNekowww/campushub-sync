@@ -143,6 +143,29 @@ def _upsert_custom_event(
         ev_id = make_event_id(Source.custom, sid)
         existing = session.get(Event, ev_id)
 
+    if existing is None:
+        cutoff = utcnow() - timedelta(seconds=120)
+        cand_stmt = select(Event).where(
+            Event.user_id == user_id,
+            Event.source == Source.custom.value,
+            Event.hidden == False,  # noqa: E712
+            Event.title == payload.title.strip(),
+            Event.start_time == cur_start,
+            Event.is_deadline == payload.is_deadline,
+            Event.is_undated == payload.is_undated,
+        )
+        for cand in session.exec(cand_stmt).all():
+            cand_created = as_aware(cand.created_at or cand.updated_at)
+            if cand_created is None or cand_created < cutoff:
+                continue
+            if (
+                as_aware(cand.end_time) == as_aware(cur_end)
+                and (cand.location or "") == (payload.location or "")
+                and (cand.description or "") == (payload.description or "")
+            ):
+                existing = cand
+                break
+
     attachments_json = json.dumps(payload.attachments, ensure_ascii=False) if payload.attachments else None
     if existing is not None:
         # 幂等去重 + LWW：重试队列重复投递同一 client_id 时，按最后修改时间裁决而不重复插新行

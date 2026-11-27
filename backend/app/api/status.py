@@ -30,16 +30,16 @@ _STARTED_AT = time.time()
 async def app_version() -> JSONResponse:
     return JSONResponse(
         content={
-            "version": "3.0.2",
-            "tag": "v3.0.2",
-            "title": "CampusHub Android v3.0.2",
+            "version": "3.0.3",
+            "tag": "v3.0.3",
+            "title": "CampusHub Android v3.0.3",
             "download_url": "https://nzlab.online/schedule/CampusHub.apk",
             "github_download_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest/download/CampusHub.apk",
             "release_url": "https://github.com/NoraNekowww/campushub-sync/releases/latest",
             "features": [
-                "修复将日程或课程标为重点时发生卡顿、队列膨胀与闪退的问题（细粒度响应字典、原生双写落盘合并、移除导致 GPU 着色器崩溃的复合滤镜与渲染进程异常自恢复）",
-                "升级全局实时物理磨砂玻璃质感：非课表页背景保持高清清晰，卡片呈现高透镜面磨砂折射（告别死白）；日间模式课表背景微暗化并保留嵌套玻璃景深，课表卡片保持通透亮度",
-                "全面优化运行流畅性：单层课表网格参考线（减少上千 DOM 节点）、可视区域动态作用域模糊、O(N) 单趟事件分桶、缓存 Intl.DateTimeFormat 单例与无回流触控滑动",
+                "修复详情弹窗、设置卡片内部标题出现异常方形磨砂框的问题（严格限定顶栏与底栏玻璃样式作用域）",
+                "修复首次打开登录页被背景模糊层遮挡导致看不清的问题（修正登录页层级并关闭登录态背景模糊）",
+                "清理服务端历史重复自建日程并增加短时防重入校验，解决标为重点后出现一标一未标两条日程的问题",
             ],
         },
         headers={

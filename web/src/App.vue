@@ -24,7 +24,7 @@
     </div>
     <!-- 关闭壁纸时，课表全屏模式仍保持柔和弥散高斯底衬 -->
     <div
-      v-else-if="state.view === 'week'"
+      v-else-if="state.view === 'week' && !showGate"
       class="pointer-events-none fixed inset-0 z-0 bg-gradient-to-br from-slate-200/90 via-slate-200/85 to-brand-100/80 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950/40"
       aria-hidden="true"
     />
@@ -113,10 +113,10 @@ const activeBgUrl = computed(() => getCachedActiveBgUrl())
 
 const bgLayerStyle = computed(() => {
   const cfg = state.backgroundConfig || {}
-  const isWeek = state.view === 'week'
+  const isWeek = state.view === 'week' && !showGate.value
   const rawOpacity = Number(cfg.opacity ?? 75) / 100
   const opacity = (isWeek ? Math.max(0.62, rawOpacity) : Math.max(0.75, rawOpacity)).toFixed(2)
-  // 课表全屏模式下背景启用高斯模糊（>= 20px），非课表页保持背景清晰锐利（由配置 blur 决定，默认 0）
+  // 课表全屏模式下背景启用高斯模糊（>= 20px），登录页及非课表页保持背景清晰锐利（由配置 blur 决定，默认 0）
   const blurPx = isWeek ? Math.max(20, Number(cfg.blur ?? 0)) : Number(cfg.blur ?? 0)
   return {
     opacity,
@@ -126,7 +126,7 @@ const bgLayerStyle = computed(() => {
 })
 
 const bgOverlayClass = computed(() => {
-  if (state.view === 'week') {
+  if (state.view === 'week' && !showGate.value) {
     return state.isDarkTheme
       ? 'bg-slate-950/45 backdrop-blur-md'
       : 'bg-slate-900/[0.14] backdrop-blur-md'

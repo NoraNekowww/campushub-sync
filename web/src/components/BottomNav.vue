@@ -1,5 +1,6 @@
 <template>
   <nav
+    data-testid="bottom-nav"
     class="fixed inset-x-0 bottom-0 z-30 border-t border-white/60 bg-white/70 backdrop-blur-xl
            dark:border-white/10 dark:bg-slate-950/70 [transform:translateZ(0)]"
     style="padding-bottom: env(safe-area-inset-bottom)"

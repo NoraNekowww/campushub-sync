@@ -178,15 +178,22 @@ await check('static CSS and template checks enforce GPU crash fixes & light-mode
   const cardVue = readFileSync(join(ROOT, 'src/components/EventCard.vue'), 'utf8')
   const detailVue = readFileSync(join(ROOT, 'src/components/ClassDetail.vue'), 'utf8')
   const editorVue = readFileSync(join(ROOT, 'src/components/EventEditor.vue'), 'utf8')
+  const authVue = readFileSync(join(ROOT, 'src/components/AuthGate.vue'), 'utf8')
 
   assert(!/backdrop-filter:[^;]*saturate\(/i.test(styleCss), 'style.css must not use compound saturate() in backdrop-filter')
   const pastOverlayBlock = styleCss.match(/\.class-past-overlay\s*\{[\s\S]*?\}/)?.[0] || ''
   assert(!/backdrop-filter/i.test(pastOverlayBlock), '.class-past-overlay must not nest backdrop-filter')
   assert(!/filter:\s*grayscale/i.test(styleCss), 'must not stack filter:grayscale on backdrop-filtered class-block')
+  assert(styleCss.includes('header[data-testid="app-header"]'), 'header glass must scope to data-testid="app-header"')
+  assert(styleCss.includes('nav[data-testid="bottom-nav"]'), 'nav glass must scope to data-testid="bottom-nav"')
+  assert(!/(?:frosted-glass-active|has-custom-bg)\s+(?:header|nav)\s*[,{]/m.test(styleCss), 'must not apply glass to unscoped header/nav')
   assert(styleCss.includes('.week-col-in-view [data-testid="class-block"]'), 'blur must be viewport-scoped via .week-col-in-view')
   assert(styleCss.includes('backdrop-filter: blur(22px)'), 'timetable glass cards must use blur(22px)')
   assert(styleCss.includes('rgba(255, 255, 255, 0.36)'), 'light-mode normal frosted card specular gradient missing')
   assert(styleCss.includes('rgba(255, 255, 255, 0.34)'), 'light-mode event card translucent specular gradient missing')
+
+  assert(appVue.includes('!showGate.value'), 'App.vue must disable week-view blur while AuthGate is visible')
+  assert(authVue.includes('relative z-10'), 'AuthGate must sit above global-bg-layer (z-10 > z-0)')
 
   assert(appVue.includes("bg-slate-900/[0.14] backdrop-blur-md"), 'App.vue must dim light-mode week background with nested blur')
   assert(appVue.includes("bg-slate-900/[0.06]"), 'App.vue non-week light background must stay crisp and unblurred')

@@ -1,11 +1,11 @@
-# CampusHub Sync — Agent 交接手册（v3.0.2）
+# CampusHub Sync — Agent 交接手册（v3.0.3）
 
 > **给接手开发的同学 / Agent**：这份文档是唯一入口。先确认环境（§0），再按 §4–§6 开发发布，动手前务必读完 §7「红线与已知坑」。
 >
 > | 项 | 值 |
 > |---|---|
-> | 当前版本 | `v3.0.2`（Android `versionCode 103`，`sw.js` `campushub-v103`） |
-> | 下一版 | `v3.0.3`（versionCode `104`） |
+> | 当前版本 | `v3.0.3`（Android `versionCode 104`，`sw.js` `campushub-v104`） |
+> | 下一版 | `v3.0.4`（versionCode `105`） |
 > | 生产地址 | `https://nzlab.online/schedule/` |
 > | APK 直链 | `https://nzlab.online/schedule/CampusHub.apk` |
 > | 源码仓库 | `https://github.com/NoraNekowww/campushub-sync`（分支 `main`） |
